@@ -53,6 +53,10 @@ Cada regla es una función pura: recibe el documento normalizado y el parámetro
 - Si no → reporte agrupado por categoría (márgenes, tipografía, estructura, citas, etc.), con opción de vista simple (cartel) o detallada.
 - Por cada `RuleResult` fallido, genera un bloque "cómo preguntar a la IA" con el prompt armado y referencia textual a la directiva del reglamento correspondiente.
 
+### 5. API HTTP (FastAPI)
+
+Endpoint `POST /validar` que recibe un `.docx` y devuelve el reporte en JSON. Ver [`docs/CONTRATO_API.md`](docs/CONTRATO_API.md) para el contrato completo y [`docs/FLUJO_API.md`](docs/FLUJO_API.md) para el diagrama de flujo.
+
 ## Generación del esquema de reglas a partir del reglamento oficial (tiempo de diseño)
 
 Proceso puntual, no parte del flujo de producción:
@@ -156,4 +160,6 @@ python scripts/eval_contra_plantillas.py unt_format_rules_schema.yaml ruta/a/pla
 
 ## Estado actual
 
-Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba y contra las 5 plantillas oficiales (25/32 mecanizadas PASS). Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista. Aún no hay API (FastAPI) ni frontend React conectados. Próximos pasos: exponer el motor vía `POST /validar` en FastAPI y conectar el frontend en React.
+Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba y contra las 5 plantillas oficiales (25/32 mecanizadas PASS). Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista.
+
+**API implementada** (semana 2-3): `POST /validar` en FastAPI, contrato v1.1.0 "Implementado". Ver [`docs/CONTRATO_API.md`](docs/CONTRATO_API.md) para el contrato completo y [`docs/FLUJO_API.md`](docs/FLUJO_API.md) para el diagrama de flujo. Frontend React pendiente de conexión.
