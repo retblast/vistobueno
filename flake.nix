@@ -78,6 +78,6 @@
             pytest tests/ -v
             touch $out
           '';
-        }
+        };
       });
 }
