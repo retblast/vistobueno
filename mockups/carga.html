@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VistoBueno — Cargar tesis</title>
+  <style>
+    :root {
+      --verde: #2e7d32;
+      --verde-osc: #1b5e20;
+      --rojo: #c62828;
+      --ambar: #b26a00;
+      --gris-fondo: #f4f6f8;
+      --gris-borde: #cfd8dc;
+      --tinta: #212121;
+      --gris-texto: #616161;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--gris-fondo);
+      color: var(--tinta);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Encabezado ───────────────────────────── */
+    header {
+      background: linear-gradient(90deg, var(--verde-osc), var(--verde));
+      color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,.15);
+    }
+    header .escudo {
+      width: 46px; height: 46px;
+      background: #fff; color: var(--verde-osc);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 1.2rem;
+    }
+    header h1 { font-size: 1.3rem; line-height: 1.1; }
+    header .sub { font-size: .78rem; opacity: .9; }
+
+    /* ── Contenido ────────────────────────────── */
+    main { flex: 1; max-width: 760px; width: 100%; margin: 2rem auto; padding: 0 1rem; }
+    .card {
+      background: #fff;
+      border: 1px solid var(--gris-borde);
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .card h2 { font-size: 1.15rem; margin-bottom: .4rem; }
+    .card .intro { color: var(--gris-texto); font-size: .9rem; margin-bottom: 1.5rem; }
+
+    /* Zona de carga */
+    .dropzone {
+      border: 2px dashed var(--verde);
+      border-radius: 12px;
+      background: #f1f8f1;
+      padding: 3rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: background .2s, border-color .2s;
+    }
+    .dropzone:hover, .dropzone.drag {
+      background: #e3f2e3;
+      border-color: var(--verde-osc);
+    }
+    .dropzone .icono { font-size: 2.6rem; }
+    .dropzone .txt-principal { font-weight: 600; margin-top: .5rem; }
+    .dropzone .txt-sec { color: var(--gris-texto); font-size: .85rem; margin-top: .3rem; }
+    .btn-select {
+      display: inline-block;
+      margin-top: 1rem;
+      background: var(--verde);
+      color: #fff;
+      border: none;
+      padding: .65rem 1.4rem;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-select:hover { background: var(--verde-osc); }
+
+    .nota-formatos {
+      margin-top: .6rem;
+      font-size: .78rem;
+      color: var(--gris-texto);
+      text-align: center;
+    }
+
+    /* Archivo seleccionado */
+    .archivo { display: none; margin-top: 1.2rem; border: 1px solid var(--gris-borde); border-radius: 8px; padding: .9rem 1rem; }
+    .archivo .fila { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .archivo .meta { display: flex; align-items: center; gap: .8rem; }
+    .archivo .ext {
+      background: var(--verde); color: #fff;
+      font-weight: 700; padding: .3rem .5rem; border-radius: 6px; font-size: .8rem;
+    }
+    .archivo .nombre { font-weight: 600; }
+    .archivo .detalle { color: var(--gris-texto); font-size: .8rem; }
+
+    .btn-validar {
+      background: var(--verde-osc);
+      color: #fff; border: none;
+      padding: .75rem 2rem;
+      border-radius: 8px;
+      font-weight: 700; font-size: 1rem;
+      cursor: pointer;
+    }
+    .btn-validar:hover { filter: brightness(1.1); }
+
+    /* Mensajes de error (estado oculto, se muestra con clase .visible) */
+    .aviso { display: none; margin-top: 1rem; padding: .85rem 1rem; border-radius: 8px; font-size: .9rem; }
+    .aviso.error { background: #fdecea; border: 1px solid var(--rojo); color: var(--rojo); }
+    .aviso.visible { display: block; }
+    .aviso .ejemplos { display: block; margin-top: .3rem; font-size: .8rem; opacity: .9; }
+
+    /* ── Footer ───────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 1.2rem;
+      color: var(--gris-texto);
+      font-size: .78rem;
+      border-top: 1px solid var(--gris-borde);
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="escudo">VB</div>
+    <div>
+      <h1>VistoBueno</h1>
+      <div class="sub">Validación de formato de tesis — FECyC · Universidad Nacional de Trujillo</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>Sube tu tesis</h2>
+      <p class="intro">Adjunta tu documento en formato <strong>DOCX</strong> o <strong>PDF</strong> y recibe un reporte automático de cumplimiento con las directivas de formato de la UNT.</p>
+
+      <!-- Zona de carga -->
+      <div class="dropzone" id="dropzone">
+        <div class="icono">📄</div>
+        <div class="txt-principal">Arrastra tu archivo aquí</div>
+        <div class="txt-sec">o selecciónalo desde tu computadora</div>
+        <button class="btn-select" type="button" id="btnSelect">Seleccionar archivo</button>
+        <div class="nota-formatos">Formatos permitidos: .docx, .pdf · Tamaño máximo: 25 MB</div>
+      </div>
+
+      <!-- Archivo seleccionado -->
+      <div class="archivo" id="archivo">
+        <div class="fila">
+          <div class="meta">
+            <span class="ext" id="ext">DOCX</span>
+            <div>
+              <div class="nombre" id="nombre">mi_tesis.docx</div>
+              <div class="detalle" id="detalle">1.2 MB</div>
+            </div>
+          </div>
+          <button class="btn-validar" type="button" id="btnValidar">Validar ✦</button>
+        </div>
+      </div>
+
+      <!-- Mensajes de error (simulados; se muestran con el botón de validar) -->
+      <div class="aviso error" id="aviso">
+        <strong>No pudimos procesar tu archivo.</strong>
+        <span class="ejemplos">Casos simulados: archivo corrupto / formato no soportado / archivo demasiado grande.</span>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Sistema VistoBueno — Practicante · Biblioteca FECyC · UNT
+  </footer>
+
+  <script>
+    // Wireframe estático: interacción mínima para visualizar la pantalla.
+    const dropzone = document.getElementById('dropzone');
+    const btnSelect = document.getElementById('btnSelect');
+    const archivo = document.getElementById('archivo');
+    const btnValidar = document.getElementById('btnValidar');
+    const aviso = document.getElementById('aviso');
+
+    function mostrarArchivo(nombre, tamanio) {
+      const ext = nombre.split('.').pop().toUpperCase();
+      document.getElementById('ext').textContent = ext;
+      document.getElementById('nombre').textContent = nombre;
+      document.getElementById('detalle').textContent = tamanio;
+      aviso.classList.remove('visible');
+      archivo.style.display = 'block';
+    }
+
+    // Simular selección de un archivo de ejemplo al hacer clic.
+    function simularSeleccion() {
+      // Alternamos entre un archivo válido y un caso de error para explorar el diseño.
+      if (Math.random() < 0.7) {
+        mostrarArchivo('tesis_estudiante.docx', '1.2 MB');
+        dropzone.style.display = 'none'; // en el diseño final la zona se reemplaza por la tarjeta
+      } else {
+        mostrarArchivo('tesis_estud.pdf', '38 MB');
+        aviso.classList.add('visible');
+      }
+    }
+
+    btnSelect.addEventListener('click', function (e) {
+      e.preventDefault();
+      simularSeleccion();
+    });
+    dropzone.addEventListener('click', simularSeleccion);
+    dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.classList.add('drag'); });
+    dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('drag'); });
+
+    // El botón Validar navega al mockup de reporte.
+    btnValidar.addEventListener('click', function () {
+      window.location.href = 'reporte.html';
+    });
+  </script>
+
+</body>
+</html>
