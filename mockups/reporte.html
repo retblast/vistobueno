@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VistoBueno — Reporte de validación</title>
+  <style>
+    :root {
+      --verde: #2e7d32;
+      --verde-osc: #1b5e20;
+      --rojo: #c62828;
+      --ambar: #b26a00;
+      --gris-fondo: #f4f6f8;
+      --gris-borde: #d7dee3;
+      --tinta: #212121;
+      --gris-texto: #616161;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--gris-fondo);
+      color: var(--tinta);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: linear-gradient(90deg, var(--verde-osc), var(--verde));
+      color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 6px rgba(0,0,0,.15);
+    }
+    header .izq { display: flex; align-items: center; gap: .9rem; }
+    header .escudo {
+      width: 40px; height: 40px; background: #fff; color: var(--verde-osc);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 800;
+    }
+    header h1 { font-size: 1.15rem; }
+    header .sub { font-size: .75rem; opacity: .9; }
+    header .volver { color: #fff; text-decoration: none; font-size: .9rem; border-bottom: 1px solid rgba(255,255,255,.6); }
+
+    main { flex: 1; max-width: 820px; width: 100%; margin: 1.6rem auto; padding: 0 1rem; }
+    .card { background: #fff; border: 1px solid var(--gris-borde); border-radius: 12px; padding: 1.6rem; box-shadow: 0 2px 8px rgba(0,0,0,.06); margin-bottom: 1.4rem; }
+
+    /* ── Semáforo ─────────────────────────────── */
+    .semaforo { display: flex; align-items: center; gap: 1.2rem; }
+    .luz { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #fff; flex-shrink: 0; }
+    .luz.verde { background: var(--verde); }
+    .luz.rojo { background: var(--rojo); }
+    .semaforo .titulo { font-size: 1.4rem; font-weight: 800; }
+    .semaforo .desc { color: var(--gris-texto); font-size: .9rem; margin-top: .2rem; }
+
+    /* ── Resumen ──────────────────────────────── */
+    .resumen { display: flex; gap: 1rem; margin-top: 1.2rem; flex-wrap: wrap; }
+    .kpi { flex: 1; min-width: 120px; text-align: center; padding: .9rem; border: 1px solid var(--gris-borde); border-radius: 10px; background: #fafcfc; }
+    .kpi .num { font-size: 1.7rem; font-weight: 800; }
+    .kpi.rojo .num { color: var(--rojo); }
+    .kpi.ambar .num { color: var(--ambar); }
+    .kpi .lbl { font-size: .78rem; color: var(--gris-texto); }
+
+    /* ── Controles (filtro severidad + vista) ─── */
+    .controles { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .filtro { display: flex; gap: .4rem; }
+    .chip { border: 1px solid var(--gris-borde); background: #fff; border-radius: 20px; padding: .4rem 1rem; font-size: .85rem; cursor: pointer; color: var(--gris-texto); }
+    .chip.on { background: var(--verde); border-color: var(--verde); color: #fff; font-weight: 600; }
+    .toggle-vista { display: flex; gap: .4rem; }
+    .btn-vista { border: 1px solid var(--gris-borde); background: #fff; padding: .4rem .9rem; border-radius: 8px; font-size: .85rem; cursor: pointer; }
+    .btn-vista.on { background: var(--verde-osc); color: #fff; border-color: var(--verde-osc); }
+
+    /* ── Checklist por categoría ──────────────── */
+    .categoria { border: 1px solid var(--gris-borde); border-radius: 10px; margin-top: 1rem; overflow: hidden; }
+    .cat-head { padding: .8rem 1rem; background: #fafcfc; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-bottom: 1px solid var(--gris-borde); }
+    .cat-head .der { display: flex; align-items: center; gap: .7rem; }
+    .count { font-size: .78rem; padding: .15rem .5rem; border-radius: 12px; }
+    .count.err { background: #fdecea; color: var(--rojo); }
+    .count.warn { background: #fff3e0; color: var(--ambar); }
+    .count.ok { background: #e8f5e9; color: var(--verde); }
+    .flecha { transition: transform .2s; }
+    .categoria.abierta .flecha { transform: rotate(90deg); }
+    .cat-body { display: none; padding: .4rem 0; }
+    .categoria.abierta .cat-body { display: block; }
+
+    .resultado { padding: .7rem 1rem; border-bottom: 1px solid #eef2f4; display: flex; gap: .8rem; align-items: flex-start; }
+    .resultado:last-child { border-bottom: none; }
+    .estado { font-size: 1.1rem; font-weight: 800; width: 22px; text-align: center; flex-shrink: 0; }
+    .estado.ok { color: var(--verde); }
+    .estado.fail { color: var(--rojo); }
+    .estado.warn { color: var(--ambar); }
+    .resultado .info { flex: 1; }
+    .resultado .msg { font-size: .92rem; }
+    .badge { font-size: .68rem; text-transform: uppercase; font-weight: 700; padding: .1rem .45rem; border-radius: 4px; color: #fff; vertical-align: middle; }
+    .badge.error { background: var(--rojo); }
+    .badge.warning { background: var(--ambar); }
+    .resultado .esperado { font-size: .8rem; color: var(--gris-texto); margin-top: .2rem; }
+    .resultado .esperado .etq { color: #37474f; font-weight: 600; }
+
+    /* ── Vista simple ─────────────────────────── */
+    .vista-simple { display: none; }
+    .pendientes { margin-top: .8rem; }
+    .pendiente { display: flex; align-items: center; gap: .6rem; padding: .5rem 0; font-size: .9rem; }
+    .pendiente .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .dot.error { background: var(--rojo); }
+    .dot.warning { background: var(--ambar); }
+
+    /* ── Cómo preguntar a una IA ─────────────── */
+    .ia-cards { margin-top: 1rem; display: flex; flex-direction: column; gap: .8rem; }
+    .ia-card { border: 1px solid var(--gris-borde); border-left: 4px solid var(--verde); border-radius: 8px; padding: .9rem 1rem; }
+    .ia-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .4rem; }
+    .ia-card .rule { font-size: .75rem; color: var(--gris-texto); background: #eef2f4; padding: .1rem .4rem; border-radius: 4px; }
+    .ia-card pre { white-space: pre-wrap; font-family: inherit; font-size: .82rem; color: #37474f; background: #f8fafb; padding: .7rem; border-radius: 6px; line-height: 1.4; }
+    .btn-copiar { background: var(--verde); color: #fff; border: none; padding: .35rem .8rem; border-radius: 6px; font-size: .8rem; cursor: pointer; }
+    .btn-copiar:hover { background: var(--verde-osc); }
+
+    footer { text-align: center; padding: 1.2rem; color: var(--gris-texto); font-size: .78rem; border-top: 1px solid var(--gris-borde); background: #fff; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="izq">
+      <div class="escudo">VB</div>
+      <div>
+        <h1>Reporte de validación</h1>
+        <div class="sub">FECyC · Universidad Nacional de Trujillo</div>
+      </div>
+    </div>
+    <a class="volver" href="carga.html">← Validar otro archivo</a>
+  </header>
+
+  <main>
+    <!-- Semáforo -->
+    <div class="card">
+      <div class="semaforo" id="semaforo">
+        <div class="luz rojo" id="luz">✕</div>
+        <div>
+          <div class="titulo" id="tituloSemaforo">Revisa antes de entregar</div>
+          <div class="desc" id="descSemaforo">Se detectaron errores de formato que bloquean la entrega conforme a las directivas UNT.</div>
+        </div>
+      </div>
+
+      <!-- Resumen -->
+      <div class="resumen">
+        <div class="kpi"><div class="num" id="kTotal">31</div><div class="lbl">Reglas evaluadas</div></div>
+        <div class="kpi rojo"><div class="num" id="kErr">3</div><div class="lbl">Errores</div></div>
+        <div class="kpi ambar"><div class="num" id="kWarn">2</div><div class="lbl">Advertencias</div></div>
+      </div>
+    </div>
+
+    <!-- Controles -->
+    <div class="card">
+      <div class="controles">
+        <div class="filtro" id="filtro">
+          <button class="chip on" data-f="todos">Todos</button>
+          <button class="chip" data-f="error">Errores</button>
+          <button class="chip" data-f="warning">Advertencias</button>
+        </div>
+        <div class="toggle-vista">
+          <button class="btn-vista on" data-v="detallada">Vista detallada</button>
+          <button class="btn-vista" data-v="simple">Vista simple</button>
+        </div>
+      </div>
+
+      <!-- Vista simple -->
+      <div class="vista-simple" id="vistaSimple">
+        <p style="font-size:.9rem;color:var(--gris-texto);margin-top:.9rem;"><strong>Resumen de pendientes:</strong> corrige estos puntos para obtener el visto bueno.</p>
+        <div class="pendientes" id="pendientes"></div>
+      </div>
+
+      <!-- Vista detallada: checklist por categoría -->
+      <div id="vistaDetallada"></div>
+    </div>
+
+    <!-- Cómo preguntar a una IA -->
+    <div class="card">
+      <h2 style="font-size:1.1rem;">🤖 Cómo preguntar a una IA</h2>
+      <p style="font-size:.85rem;color:var(--gris-texto);margin-top:.3rem;">Copia y pega estos prompts en cualquier IA (ChatGPT, Claude, etc.) para corregir cada problema detectado.</p>
+      <div class="ia-cards" id="iaCards"></div>
+    </div>
+  </main>
+
+  <footer>Sistema VistoBueno — Practicante · Biblioteca FECyC · UNT</footer>
+
+  <script>
+    // ── Datos de ejemplo que imitan la salida del motor/API (build_report) ──
+    // Campos: rule_id, passed, severity (error|warning), message, expected, found, tipo (categoría)
+    const RESULTADOS = [
+      { rule_id: 'papel_tamano', passed: true,  severity: 'error',   message: 'El tamaño del papel debe ser A4',        expected: '210 x 297 mm',            found: 'cumple',            tipo: 'Papel' },
+      { rule_id: 'fuente_principal', passed: true, severity: 'error', message: 'La fuente del cuerpo debe ser Times New Roman', expected: 'Times New Roman', found: 'cumple', tipo: 'Fuente y tamaño' },
+      { rule_id: 'tamano_cuerpo', passed: true, severity: 'error', message: 'El tamaño de letra del cuerpo debe ser 12pt', expected: '12pt', found: 'cumple', tipo: 'Fuente y tamaño' },
+      { rule_id: 'interlineado', passed: true, severity: 'error', message: 'El interlineado del cuerpo debe ser 1.5', expected: '1.5 líneas', found: 'cumple', tipo: 'Interlineado' },
+      { rule_id: 'margen_superior', passed: true, severity: 'error', message: 'El margen superior debe ser 2.5 cm', expected: '2.5 cm', found: 'cumple', tipo: 'Márgenes' },
+      { rule_id: 'margen_izquierdo', passed: true, severity: 'error', message: 'El margen izquierdo debe ser 3 cm', expected: '3 cm', found: 'cumple', tipo: 'Márgenes' },
+      { rule_id: 'margen_derecho', passed: false, severity: 'warning', message: 'El margen derecho debe ser 2.5 cm', expected: '2.5 cm', found: '2.5 cm aprox. (plantillas usan 708/709)', tipo: 'Márgenes' },
+      { rule_id: 'sangria_parrafo', passed: false, severity: 'warning', message: 'La sangría de primera línea debe ser 1.27 cm', expected: '1.27 cm', found: '1.25 cm (708 twips)', tipo: 'Sangría' },
+      { rule_id: 'numeracion_cuerpo_arabigo', passed: true, severity: 'error', message: 'El cuerpo debe numerarse con arábigos desde la introducción', expected: 'arábigos', found: 'cumple', tipo: 'Numeración de página' },
+      { rule_id: 'numeracion_preliminares_romano', passed: false, severity: 'error', message: 'Los preliminares deben numerarse en romanos', expected: 'romanos (i, ii, iii...)', found: 'arábigos en preliminares', tipo: 'Numeración de página' },
+      { rule_id: 'caratula_universidad_negrita_mayusculas', passed: true, severity: 'error', message: 'El nombre de la universidad debe ir en negrita y mayúsculas', expected: 'negrita + MAYÚS', found: 'cumple', tipo: 'Carátula' },
+      { rule_id: 'caratula_titulo_negrita_mixta', passed: false, severity: 'error', message: 'El título del trabajo debe ir en negrita y mixta', expected: 'negrita + mixta', found: 'todo mayúsculas', tipo: 'Carátula' },
+      { rule_id: 'estructura_tinv_cuantitativo', passed: true, severity: 'error', message: 'Se deben incluir las secciones del diseño cuantitativo', expected: 'secciones obligatorias', found: 'cumple', tipo: 'Estructura' }
+    ];
+
+    // Prompts generados (template del backend, solo para reglas fallidas)
+    const PROMPTS = RESULTADOS
+      .filter(r => !r.passed)
+      .map(r => ({
+        rule_id: r.rule_id,
+        prompt: `Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: ${r.message}\n- Valor esperado según el reglamento: ${r.expected}\n- Lo que encontró el validador: ${r.found}\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?`
+      }));
+
+    const estado = {
+      fallidos_error: RESULTADOS.filter(r => !r.passed && r.severity === 'error').length,
+      fallidos_warning: RESULTADOS.filter(r => !r.passed && r.severity === 'warning').length
+    };
+
+    // ── Estado del semáforo ──
+    const hayErrorBloqueante = estado.fallidos_error > 0;
+    const semaforo = hayErrorBloqueante ? 'rojo' : 'verde';
+    document.getElementById('luz').className = 'luz ' + semaforo;
+    document.getElementById('luz').textContent = semaforo === 'rojo' ? '✕' : '✓';
+    document.getElementById('tituloSemaforo').textContent = semaforo === 'rojo' ? 'Revisa antes de entregar' : '¡Puedes entregar!';
+    document.getElementById('descSemaforo').textContent = semaforo === 'rojo'
+      ? 'Se detectaron errores de formato que bloquean la entrega conforme a las directivas UNT.'
+      : 'Tu documento cumple con las directivas de formato de la UNT.';
+
+    // ── Resumen ──
+    document.getElementById('kTotal').textContent = RESULTADOS.length;
+    document.getElementById('kErr').textContent = estado.fallidos_error;
+    document.getElementById('kWarn').textContent = estado.fallidos_warning;
+
+    // ── Render de categorías agrupadas ──
+    const detallada = document.getElementById('vistaDetallada');
+
+    function agrupar(lista) {
+      const m = {};
+      lista.forEach(r => { (m[r.tipo] = m[r.tipo] || []).push(r); });
+      return m;
+    }
+
+    function icono(r) {
+      if (!r.passed) return r.severity === 'error' ? '✕' : '⚠';
+      return '✓';
+    }
+    function claseIcono(r) {
+      if (!r.passed) return r.severity === 'error' ? 'fail' : 'warn';
+      return 'ok';
+    }
+
+    let filtroActivo = 'todos';
+    function render() {
+      const list = RESULTADOS.filter(r => filtroActivo === 'todos' || r.severity === filtroActivo);
+      const grupos = agrupar(list);
+      let html = '';
+      for (const [cat, items] of Object.entries(grupos)) {
+        const e = items.filter(r => !r.passed && r.severity === 'error').length;
+        const w = items.filter(r => !r.passed && r.severity === 'warning').length;
+        const c = items.filter(r => r.passed).length;
+        let badges = '';
+        if (e) badges += `<span class="count err">${e} err</span>`;
+        if (w) badges += `<span class="count warn">${w} warn</span>`;
+        if (c) badges += `<span class="count ok">${c} ok</span>`;
+        html += `<div class="categoria abierta">
+          <div class="cat-head"><strong>${cat}</strong><span class="der">${badges}<span class="flecha">▶</span></span></div>
+          <div class="cat-body">` + items.map(r => `
+            <div class="resultado">
+              <span class="estado ${claseIcono(r)}">${icono(r)}</span>
+              <div class="info">
+                <div class="msg">${r.message} <span class="badge ${r.severity}">${r.severity === 'error' ? 'error' : 'advertencia'}</span>
+                  ${r.passed ? '' : `<div class="esperado"><span class="etq">Esperado:</span> ${r.expected}<br><span class="etq">Encontrado:</span> ${r.found}</div>`}
+                </div>
+              </div>
+            </div>`).join('') + `</div></div>`;
+      }
+      detallada.innerHTML = html || '<p style="color:var(--gris-texto);font-size:.9rem;margin-top:1rem;">No hay resultados con este filtro.</p>';
+
+      // Vista simple: pendientes
+      const pend = document.getElementById('pendientes');
+      pend.innerHTML = RESULTADOS.filter(r => !r.passed).map(r => `
+        <div class="pendiente"><span class="dot ${r.severity}"></span><span>${r.message}</span></div>
+      `).join('');
+    }
+
+    // ── Filtro por severidad ──
+    document.getElementById('filtro').addEventListener('click', function (e) {
+      const chip = e.target.closest('.chip'); if (!chip) return;
+      document.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+      chip.classList.add('on');
+      filtroActivo = chip.dataset.f;
+      render();
+    });
+
+    // ── Vista simple / detallada ──
+    document.querySelectorAll('.btn-vista').forEach(b => {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.btn-vista').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        const v = b.dataset.v;
+        document.getElementById('vistaSimple').style.display = v === 'simple' ? 'block' : 'none';
+        document.getElementById('vistaDetallada').style.display = v === 'detallada' ? 'block' : 'none';
+      });
+    });
+
+    // ── Colapsar/expandir categorías ──
+    detallada.addEventListener('click', function (e) {
+      const head = e.target.closest('.cat-head'); if (head) head.parentElement.classList.toggle('abierta');
+    });
+
+    // ── Copiar prompts ──
+    const ia = document.getElementById('iaCards');
+    ia.innerHTML = PROMPTS.length ? PROMPTS.map(p => `
+      <div class="ia-card">
+        <div class="head"><span class="rule">${p.rule_id}</span><button class="btn-copiar" data-id="${p.rule_id}">Copiar</button></div>
+        <pre>${p.prompt.replace(/</g, '&lt;')}</pre>
+      </div>`).join('') : '<p style="color:var(--gris-texto);font-size:.9rem;">No hay problemas detectados. ¡Felicidades!</p>';
+
+    ia.addEventListener('click', function (e) {
+      const btn = e.target.closest('.btn-copiar'); if (!btn) return;
+      const card = PROMPTS.find(p => p.rule_id === btn.dataset.id);
+      const pre = btn.parentElement.nextElementSibling;
+      navigator.clipboard && navigator.clipboard.writeText(pre.textContent);
+      const original = btn.textContent;
+      btn.textContent = '¡Copiado!';
+      setTimeout(() => btn.textContent = original, 1200);
+    });
+
+    render();
+  </script>
+
+</body>
+</html>
