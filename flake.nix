@@ -31,6 +31,7 @@
         };
       in
       {
+        # Entorno de desarrollo
         devShells.default = pkgs.mkShell {
           packages = [
             pythonEnv
@@ -40,10 +41,43 @@
           ];
 
           shellHook = ''
-            echo "Entorno listo: Python $(python3 --version)"
-            echo "FastAPI, python-docx, PyMuPDF, pyyaml disponibles."
-            echo "OCR: ocrmypdf, tesseract (spa+eng), pdftotext disponibles."
+            echo "=== VistoBueno — entorno de desarrollo ==="
+            echo "Python: $(python3 --version)"
+            echo ""
+            echo "Comandos disponibles:"
+            echo "  nix run .#test -- tests/ -v                    # ejecutar tests"
+            echo "  nix run .#serve -- validator.api:app --reload  # iniciar API"
+            echo "  nix flake check                                # tests + verificación"
+            echo "  python3 scripts/generate_openapi.py            # regenerar OpenAPI spec"
+            echo "  python3 scripts/eval_contra_plantillas.py recursos/  # evaluar batch"
+            echo ""
           '';
         };
+
+        # Aplicaciones ejecutables con nix run
+        apps = {
+          default = self.apps.${system}.test;
+
+          test = {
+            type = "app";
+            program = "${pythonEnv}/bin/pytest";
+          };
+
+          serve = {
+            type = "app";
+            program = "${pythonEnv}/bin/uvicorn";
+          };
+        };
+
+        # Verificaciones: pytest via nix flake check
+        checks = {
+          default = pkgs.runCommand "vistobueno-tests" {
+            buildInputs = [ pythonEnv ];
+          } ''
+            cp -r ${self}/* .
+            pytest tests/ -v
+            touch $out
+          '';
+        }
       });
 }
