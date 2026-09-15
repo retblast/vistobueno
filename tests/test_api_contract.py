@@ -247,9 +247,11 @@ class TestParidadAPICLI:
         if not PLANTILLA.exists():
             pytest.skip("Plantilla de prueba no disponible")
 
+        from validator.api import REGLAS_YAML_PATH
         from validator.engine import build_report, load_rules, validate_docx
 
-        rules_data = load_rules(str(Path(__file__).resolve().parent.parent / "unt_format_rules_schema.yaml"))
+        # El motor se compara contra el MISMO YAML que carga la API (F5: DSL).
+        rules_data = load_rules(REGLAS_YAML_PATH)
         resultados_motor = validate_docx(str(PLANTILLA), rules_data)
         reporte = build_report(resultados_motor)
 

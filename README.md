@@ -94,13 +94,15 @@ Ambos reglamentos en PDF escaneado estaban pendientes de OCR (ver README anterio
 
 > **Dos formatos de reglas coexisten (ver [`docs/DSL.md`](docs/DSL.md)):**
 > - `unt_format_rules_schema.yaml` — formato **legacy** (checks con
->   `mecanismo_verificable`). **Es el que carga la API** (`validator/api.py`).
+>   `mecanismo_verificable`). Es la fuente histórica (Semana 2); la API ya no lo
+>   carga.
 > - `reglas_unt.yaml` — formato **DSL** (autómatas/analizadores), **41 reglas**:
 >   las 32 legacy migradas (F1) + 9 reglas antes no-deterministas mecanizadas
 >   a mano en la F3 (tokenizer + analizadores de conteo/lista/hipervínculo).
->   **La API todavía NO lo carga**: cambiarla es una fase coordinada. Para las
->   32 reglas compartidas, ambos motores dan resultados idénticos (paridad
->   verificada con `scripts/evaluar_paridad_plantillas.py` contra `recursos/`).
+>   **Es el que carga la API** (`validator/api.py`, desde la **F5**, Semana 4).
+>   Para las 32 reglas compartidas, ambos motores dan resultados idénticos
+>   (paridad verificada con `scripts/evaluar_paridad_plantillas.py` contra
+>   `recursos/`).
 
 ```
 validator/

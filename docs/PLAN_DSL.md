@@ -1,7 +1,7 @@
 # Plan integral: consolidación del motor DSL — VistoBueno
 
-**Estado**: F1, F2, F3, F4 y F6 **cerradas** (25/11/2025… 2026-09-09). Falta F5
-(traza en el reporte — pendiente de coordinar contrato con Integrante 1).
+**Estado**: F1, F2, F3, F4 y F6 **cerradas** (2026-09-07… 2026-09-09, Semana 3). 
+F5 **implementada** (2026-09-15, Semana 4) en el PR #22 — traza embebida en `found` (Opción A, ver `docs/diseno/09_f5_enlace_api_propuesta.md`).
 **Fecha**: 2026-09-09
 > Nota (2026-09-09): se aplicaron las correcciones de revisión del PR #11
 > (Paso 14 de `CAMBIOS_MOTOR_DSL.md`): factory modular, sincronización de
@@ -94,7 +94,7 @@ Ver `docs/CAMBIOS_MOTOR_DSL.md` Paso 13 y `tests/test_f4_ingenieria.py`
 (21 tests). Suite completa: **138 tests** + `PARIDAD: OK`. Tras las
 correcciones de revisión 2026-09-09 (Paso 14): **140 tests**.
 
-### F5 — Traza en el reporte (E)
+### F5 — Traza en el reporte (E) ✅ implementada 2026-09-15 (Semana 4)
 
 - `RuleResult.detalle_traza` (opcional): "reconoció CARÁTULA→INTRODUCCIÓN,
   falta RESULTADOS".
@@ -103,6 +103,12 @@ correcciones de revisión 2026-09-09 (Paso 14): **140 tests**.
   al contrato → subir `CONTRATO_API.md` a v1.1 + coordinar con Integrante 1
   (AGENTS.md). Alternativa sin tocar la API: codificar la traza dentro de
   `encontrado` (ya existe). (decisión 1).
+
+**Implementación (decisión 1, Opción A)**: se embebió la traza dentro de
+`found` (`ruta=__inicio__ -> …`) cuando un autómata falla, **sin** tocar el
+contrato de la API (se mantiene v1.1). El enlace API→DSL quedó activo
+(`REGLAS_YAML_PATH` → `reglas_unt.yaml`, 41 reglas). Detalle en
+`docs/diseno/09_f5_enlace_api_propuesta.md`.
 
 ### F6 — Tests de propiedad (F) ✅ cerrada 2026-09-09
 

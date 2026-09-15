@@ -2,12 +2,13 @@
 # REGLAS UNT EN FORMATO DSL — GENERADO POR scripts/migrar_legacy_a_dsl.py
 # ------------------------------------------------------------
 # Migración de `unt_format_rules_schema.yaml` (formato legacy) al
-# formato declarativo (Fase F1 del PLAN_DSL). Este archivo NO es
-# el que carga la API (`api.py` sigue apuntando al YAML legacy).
-# Se usa para el test de paridad legacy-vs-DSL y como base de
-# las fases siguientes (unificación de YAML, F3).
+# formato declarativo (Fase F1 del PLAN_DSL). Desde la F5 la API
+# (`api.py`) carga ESTE archivo y las reglas F3 mecanizadas a mano.
+# Se usa para el test de paridad legacy-vs-DSL y como base de las
+# fases siguientes (unificación de YAML, F3).
 # ============================================================
 
+version: "2026-09-01"
 namespaces:
   w: http://schemas.openxmlformats.org/wordprocessingml/2006/main
   r: http://schemas.openxmlformats.org/officeDocument/2006/relationships

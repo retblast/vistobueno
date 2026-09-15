@@ -398,6 +398,20 @@ class ReglaCompilada:
     rule: dict
     analizadores: List[Analizador] = field(default_factory=list)
 
+    @staticmethod
+    def _detalle_con_traza(detalle: str, analizador: Analizador) -> str:
+        """Anexa la traza de estados del autómata (F5).
+
+        Los analizadores de autómatas (`AutomataSecuencia`, `AutomataPila`)
+        dejan en `ultima_ruta` la secuencia de estados recorrida por el
+        último `reconocer()`. Solo se anexa al detalle cuando la regla FALLA,
+        para que el usuario sepa dónde se desvió el documento.
+        """
+        ruta = getattr(analizador, "ultima_ruta", None)
+        if ruta:
+            return f"{detalle} ruta={' -> '.join(ruta)}"
+        return detalle
+
     def ejecutar(self, extracted: ExtractedDocx) -> RuleResult:
         fallos: List[str] = []
         for an in self.analizadores:
@@ -406,7 +420,7 @@ class ReglaCompilada:
             except Exception as e:  # noqa:BLE001
                 ok, detalle = False, f"error ejecutando analizador: {type(e).__name__}: {e}"
             if not ok:
-                fallos.append(detalle)
+                fallos.append(self._detalle_con_traza(detalle, an))
 
         esperados = self.rule.get("valor_esperado", "")
         if isinstance(esperados, list):

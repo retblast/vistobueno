@@ -8,9 +8,53 @@
       "message": "El tamaño del papel debe ser A4",
       "expected": "210 x 297 mm",
       "found": "cumple",
-      "location": "Sección \"Formato general\" (párr. 124-125)",
+      "location": "Sección \"Formato general\" (párr. 124-125 para Trabajo de Investigación Cuantitativo; se repite idéntico en párr. 443-444, 593-594 para otros tipos)",
       "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
       "cita": "\"Tamaño A4/papel (210x297 cm)\""
+    },
+    {
+      "rule_id": "fuente_principal",
+      "passed": true,
+      "severity": "error",
+      "message": "La fuente del cuerpo del texto debe ser Times New Roman",
+      "expected": "Times New Roman",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 126-127)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Times New Roman: 12 puntos\""
+    },
+    {
+      "rule_id": "tamano_cuerpo",
+      "passed": true,
+      "severity": "error",
+      "message": "El tamaño de letra del cuerpo del texto debe ser 12 puntos",
+      "expected": "12pt",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 126-127)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Times New Roman: 12 puntos\""
+    },
+    {
+      "rule_id": "caratula_universidad_tamano",
+      "passed": true,
+      "severity": "error",
+      "message": "Tamaño de letra del nombre de la Universidad en carátula",
+      "expected": "18pt",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 174); nota indicativa en párr. 153: \"(Times New Román 18 puntos/13 puntos/13 puntos)\"",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Nombre de la Universidad: Centrado, con negrita y con mayúsculas (tamaño de letra, 18 puntos).\""
+    },
+    {
+      "rule_id": "caratula_facultad_escuela_tamano",
+      "passed": true,
+      "severity": "error",
+      "message": "Tamaño de letra de Facultad y Escuela Profesional en carátula",
+      "expected": "13pt",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 175)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Facultad y Escuela Profesional: Centrado, con negrita y con mayúsculas (tamaño de letra, 13 puntos).\""
     },
     {
       "rule_id": "caratula_titulo_trabajo_tamano",
@@ -19,6 +63,204 @@
       "message": "Tamaño de letra del título del trabajo en carátula",
       "expected": "14pt",
       "found": "@w:val=['26'] esperado=28",
+      "location": "Carátula, especificaciones (párr. 177)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Título del Trabajo de Investigación: Centrado, con negrita y con letras mayúsculas y minúsculas (tamaño de letra, 14 puntos).\""
+    },
+    {
+      "rule_id": "caratula_optar_grado_tamano",
+      "passed": false,
+      "severity": "warning",
+      "message": "Tamaño de letra de la línea \"Trabajo de Investigación para optar el grado de Bachiller en...\"",
+      "expected": "13pt",
+      "found": "@w:val=['24'] esperado=26",
+      "location": "Carátula, especificaciones (párr. 178)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Trabajo de Investigación para optar el grado de Bachiller: Centrado, con negrita y con mayúsculas (tamaño de letra, 13 puntos).\""
+    },
+    {
+      "rule_id": "caratula_autores_tamano",
+      "passed": true,
+      "severity": "error",
+      "message": "Tamaño de letra de autores, asesor, línea de investigación, ciudad y año en carátula",
+      "expected": "12pt",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 161, 168, 179-183)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"(Times New Román 12 puntos)\" para autores; \"Línea de investigación, con letras mayúsculas y minúsculas (tamaño de letra, 12 puntos).\""
+    },
+    {
+      "rule_id": "caratula_logotipo_tamano",
+      "passed": true,
+      "severity": "warning",
+      "message": "Tamaño del logotipo de la Universidad en carátula",
+      "expected": "4.84 cm alto x 6.73 cm ancho",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 176)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Logotipo de la Universidad: Centrado, tamaño: 4.84 cm de alto x 6.73 cm de ancho.\""
+    },
+    {
+      "rule_id": "interlineado",
+      "passed": true,
+      "severity": "error",
+      "message": "El interlineado del cuerpo del texto debe ser 1.5 (1.5 líneas)",
+      "expected": "1.5 (ONE_POINT_FIVE)",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 128-129)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Interlineado: 1.5 puntos\""
+    },
+    {
+      "rule_id": "alineacion_cuerpo",
+      "passed": true,
+      "severity": "error",
+      "message": "El cuerpo del texto debe estar justificado",
+      "expected": "justificada",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 130-131)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Alineación: Justificada\""
+    },
+    {
+      "rule_id": "alineacion_caratula_todos_elementos",
+      "passed": true,
+      "severity": "error",
+      "message": "Todos los elementos de la carátula deben estar centrados",
+      "expected": "centrado",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 174-183)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Nombre de la Universidad: Centrado...\", \"Facultad y Escuela Profesional: Centrado...\", \"Título del Trabajo...: Centrado...\", etc."
+    },
+    {
+      "rule_id": "margen_superior",
+      "passed": true,
+      "severity": "error",
+      "message": "Margen superior del documento",
+      "expected": "2.5 cm",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 132-133)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Superior: 2.5 cm\""
+    },
+    {
+      "rule_id": "margen_inferior",
+      "passed": true,
+      "severity": "error",
+      "message": "Margen inferior del documento",
+      "expected": "2.5 cm",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 132-134)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Inferior: 2.5 cm\""
+    },
+    {
+      "rule_id": "margen_derecho",
+      "passed": true,
+      "severity": "error",
+      "message": "Margen derecho del documento",
+      "expected": "2.5 cm",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 132-135)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Derecho: 2.5 cm\""
+    },
+    {
+      "rule_id": "margen_izquierdo",
+      "passed": true,
+      "severity": "error",
+      "message": "Margen izquierdo del documento",
+      "expected": "3.0 cm",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 132-136)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Izquierdo: 3.0 cm\""
+    },
+    {
+      "rule_id": "sangria_parrafo",
+      "passed": false,
+      "severity": "warning",
+      "message": "La primera línea de cada párrafo debe tener sangría de 1.27 cm",
+      "expected": "1.27 cm (½ pulgada)",
+      "found": "@w:firstLine=['708', '708', '708'] esperado=720",
+      "location": "Sección \"Formato general\" (párr. 141)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Sangría de párrafo: La primera línea de cada párrafo del texto debe tener un sangrado de 1,27 cm (½ pulgada) desde el margen izquierdo.\""
+    },
+    {
+      "rule_id": "numeracion_posicion",
+      "passed": true,
+      "severity": "error",
+      "message": "La numeración de página se ubica en el margen inferior derecho",
+      "expected": "margen inferior derecho",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 137-138)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Numeración de la página: Margen inferior derecho.\""
+    },
+    {
+      "rule_id": "numeracion_preliminares_romano",
+      "passed": true,
+      "severity": "error",
+      "message": "Las páginas preliminares se numeran en romanos minúsculos; la carátula no se enumera pero se cuenta; la Dedicatoria inicia con \"ii\"",
+      "expected": "romanos minúsculos (ii, iii, iv...); carátula = i (sin mostrar)",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 139)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Las páginas preliminares son numeradas en romanos minúscula en orden correlativo; la carátula no se enumera, pero se cuenta y se inicia enumerando la página de Dedicatoria con dos (\"ii\") en romano...\""
+    },
+    {
+      "rule_id": "numeracion_cuerpo_arabigo",
+      "passed": true,
+      "severity": "error",
+      "message": "La numeración en arábigos se inicia en la Introducción, continuando el correlativo desde los romanos",
+      "expected": "arábigos consecutivos desde Introducción",
+      "found": "cumple",
+      "location": "Sección \"Formato general\" (párr. 140)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"La numeración en arábigos se inicia en la introducción contando el número de páginas en romanos (por ejemplo, si la numeración de las páginas preliminares termina en \"xi\", corresponde a la primera página de la Introducción el número 12).\""
+    },
+    {
+      "rule_id": "caratula_no_se_enumera",
+      "passed": true,
+      "severity": "error",
+      "message": "La carátula (página i) no muestra número visible",
+      "expected": "oculta",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 184)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"La página número i, se cuenta, pero no se enumera.\""
+    },
+    {
+      "rule_id": "caratula_universidad_negrita_mayusculas",
+      "passed": true,
+      "severity": "error",
+      "message": "El nombre de la Universidad en carátula debe ser con negrita y mayúsculas",
+      "expected": "negrita + MAYÚSCULAS",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 174)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Nombre de la Universidad: Centrado, con negrita y con mayúsculas (tamaño de letra, 18 puntos).\""
+    },
+    {
+      "rule_id": "caratula_facultad_negrita_mayusculas",
+      "passed": true,
+      "severity": "error",
+      "message": "Facultad y Escuela en carátula: negrita y mayúsculas",
+      "expected": "negrita + MAYÚSCULAS",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 175)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Facultad y Escuela Profesional: Centrado, con negrita y con mayúsculas (tamaño de letra, 13 puntos).\""
+    },
+    {
+      "rule_id": "caratula_titulo_negrita_mixta",
+      "passed": true,
+      "severity": "error",
+      "message": "El título del trabajo en carátula: negrita con mayúsculas y minúsculas (no todo mayúsculas)",
+      "expected": "negrita + Mayúsculas y minúsculas",
+      "found": "cumple",
       "location": "Carátula, especificaciones (párr. 177)",
       "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
       "cita": "\"Título del Trabajo de Investigación: Centrado, con negrita y con letras mayúsculas y minúsculas (tamaño de letra, 14 puntos).\""
@@ -33,17 +275,249 @@
       "location": "Carátula, especificaciones (párr. 179)",
       "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
       "cita": "\"Apellidos y Nombres del autor(a/es/as): Centrado, con letras mayúsculas.\""
+    },
+    {
+      "rule_id": "caratula_asesor_negrita",
+      "passed": true,
+      "severity": "error",
+      "message": "El asesor en carátula: con negrita",
+      "expected": "negrita",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 180)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Apellidos y nombres del/a asesor(a): Centrado, con negrita, con letras mayúsculas y minúsculas...\""
+    },
+    {
+      "rule_id": "caratula_ciudad_pais_negrita",
+      "passed": true,
+      "severity": "error",
+      "message": "Ciudad y país en carátula: centrado, con negrita, mayúsculas y minúsculas",
+      "expected": "negrita + Mayúsculas y minúsculas",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 182)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Ciudad y país: Centrado, con negrita, con mayúsculas y minúsculas (tamaño de letra, 12 puntos).\""
+    },
+    {
+      "rule_id": "caratula_linea_investigacion",
+      "passed": true,
+      "severity": "error",
+      "message": "La Línea de Investigación declarada en carátula debe ser una de las líneas aprobadas por el RCU-N°220-2022/UNT",
+      "expected": "Línea de investigación aprobada (RCU-N°220-2022/UNT)",
+      "found": "cumple",
+      "location": "Carátula, campo \"Línea de Investigación\"",
+      "fuente": "RCU-N-220-2022-UNT-LINEAS DE INVESTIGACION.pdf",
+      "cita": "\"Tabla 1, 2 y 3: Líneas de Investigación de la Universidad Nacional de Trujillo (aprobadas por RCU-N°220-2022/UNT)\""
+    },
+    {
+      "rule_id": "estructura_tinv_cuantitativo",
+      "passed": true,
+      "severity": "error",
+      "message": "Estructura obligatoria del Trabajo de Investigación (Cuantitativo). El orden debe ser exacto.\n",
+      "expected": "Carátula; Dedicatoria (opcional); Jurado evaluador; Agradecimiento (opcional); Índice; Presentación; Resumen; Abstract; Introducción;   El Problema;     Situación problemática;     Enunciado del problema;     Justificación o importancia;   Objetivos;   Variable(s) y operacionalización; MARCO TEÓRICO;   Antecedentes (Estado del arte);   Bases teóricas; METODOLOGÍA;   Población y muestra;   Diseño de investigación;   Instrumento(s) usado(s) en la recolección de datos;   Métodos, técnicas y procedimientos usados en el análisis e interpretación de datos; RESULTADOS; CONCLUSIONES; REFERENCIAS; ANEXOS",
+      "found": "cumple",
+      "location": "Esquema del Trabajo de Investigación Cuantitativo (párr. 275-319)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "Esquema enumerado en párr. 276-319 del manual"
+    },
+    {
+      "rule_id": "estructura_tinv_cualitativo",
+      "passed": false,
+      "severity": "error",
+      "message": "Estructura obligatoria del Trabajo de Investigación (Cualitativo). Diferencia clave: incluye \"Categorías, matriz de categorización y unidad de análisis\" y termina con \"ANÁLISIS Y DISCUSIÓN DE RESULTADOS\" en vez de solo \"RESULTADOS\".\n",
+      "expected": "Carátula; Dedicatoria (opcional); Jurado evaluador; Agradecimiento (opcional); Índice; Presentación; Resumen; Abstract; Introducción;   El Problema;   Objetivos;   Categorías, matriz de categorización y unidad de análisis; MARCO TEÓRICO; METODOLOGÍA;   Participantes;   Diseño;   Instrumentos usados en la recolección de información;   Métodos, técnicas, procedimientos y estrategias usadas en el análisis e interpretación de datos; ANÁLISIS Y DISCUSIÓN DE RESULTADOS; CONCLUSIONES; REFERENCIAS; ANEXOS",
+      "found": "headings=46 faltantes=['  Categorías, matriz de categorización y unidad de análisis', '  Participantes', 'ANÁLISIS Y DISCUSIÓN DE RESULTADOS'] ruta=__inicio__ -> jurado_evaluador -> indice -> presentacion -> resumen -> abstract -> introduccion -> el_problema -> objetivos",
+      "location": "Esquema del Trabajo de Investigación Cualitativo (párr. 380-420)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "Esquema enumerado en párr. 381-420 del manual"
+    },
+    {
+      "rule_id": "estructura_tinv_revision_literatura",
+      "passed": false,
+      "severity": "error",
+      "message": "Estructura obligatoria del Trabajo de Investigación basado en Revisión de la Literatura.\n",
+      "expected": "Carátula; Dedicatoria (opcional); Jurado evaluador; Agradecimiento (opcional); Índice; Presentación; Resumen; Abstract; INTRODUCCIÓN; METODOLOGÍA DE REVISIÓN; DESARROLLO O ANÁLISIS CRÍTICO DE LA LITERATURA; CONCLUSIONES Y RECOMENDACIONES; REFERENCIAS; ANEXOS",
+      "found": "headings=46 faltantes=['DESARROLLO O ANÁLISIS CRÍTICO DE LA LITERATURA'] ruta=__inicio__ -> jurado_evaluador -> indice -> presentacion -> resumen -> abstract -> introduccion -> metodologia_de_revision",
+      "location": "Esquema del Trabajo de Revisión de la Literatura (párr. 536-559)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "Esquema enumerado en párr. 537-559 del manual"
+    },
+    {
+      "rule_id": "indice_subdivisiones",
+      "passed": false,
+      "severity": "warning",
+      "message": "El Índice se subdivide en: índice de contenidos, índice de tablas y índice de figuras; cada uno en página separada",
+      "expected": "índice de contenidos + índice de tablas + índice de figuras, en páginas separadas",
+      "found": "exists 0 nodos; exists 0 nodos; exists 0 nodos",
+      "location": "Sección Índice (párr. 192-196)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Se subdivide: índice de contenidos, tablas y figuras (cada índice debe presentarse en páginas separadas).\""
+    },
+    {
+      "rule_id": "resumen_longitud",
+      "passed": false,
+      "severity": "warning",
+      "message": "El Resumen debe tener una extensión mínima de 159 palabras",
+      "expected": ">= 159 palabras",
+      "found": "palabras=6 minimo=159",
+      "location": "Sección Resumen (párr. 201)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Su extensión mínima 159 y su extensión máxima...\""
+    },
+    {
+      "rule_id": "palabras_clave_minimo",
+      "passed": false,
+      "severity": "error",
+      "message": "Resumen y Abstract deben incluir mínimo 3 palabras clave",
+      "expected": ">= 3 palabras clave",
+      "found": "entradas=1 minimo=3",
+      "location": "Plantilla Resumen (párr. 86 de la plantilla Educación Inicial)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Palabras clave: (mínimo 03 palabras clave)\""
+    },
+    {
+      "rule_id": "referencias_minimo_cuantitativo",
+      "passed": false,
+      "severity": "warning",
+      "message": "Mínimo de referencias bibliográficas para Trabajo de Investigación Cuantitativo",
+      "expected": ">= 20 referencias",
+      "found": "nodos=0 minimo=20",
+      "location": "Sección Referencias del Trabajo Cuantitativo (párr. 271)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Debe haber revisado un mínimo de 20 referencias.\""
+    },
+    {
+      "rule_id": "referencias_minimo_cualitativo",
+      "passed": false,
+      "severity": "warning",
+      "message": "Mínimo de referencias bibliográficas para Trabajo de Investigación Cualitativo",
+      "expected": ">= 30 referencias",
+      "found": "nodos=0 minimo=30",
+      "location": "Sección Referencias del Trabajo Cualitativo (párr. 376)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Debe haber revisado un mínimo de 30 referencias.\""
+    },
+    {
+      "rule_id": "referencias_minimo_revision",
+      "passed": false,
+      "severity": "warning",
+      "message": "Mínimo de referencias bibliográficas para Trabajo de Revisión de la Literatura",
+      "expected": ">= 20 referencias",
+      "found": "nodos=0 minimo=20",
+      "location": "Sección Referencias del Trabajo de Revisión (párr. 532)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Debe haber revisado un mínimo de 20 referencias.\""
+    },
+    {
+      "rule_id": "anexos_minimos_cuantitativo",
+      "passed": false,
+      "severity": "warning",
+      "message": "Anexos obligatorios para Trabajo de Investigación Cuantitativo",
+      "expected": "Matriz de consistencia; Instrumento(s) de recolección de datos; Ficha técnica del instrumento; Consentimiento informado; Base de datos cuantitativa; Reporte de similitud; Carta de autorización institucional; Declaración jurada; Carta de autorización de publicación",
+      "found": "items_obligatorios=9 faltan=['Matriz de consistencia', 'Instrumento(s) de recolección de datos', 'Ficha técnica del instrumento', 'Consentimiento informado', 'Base de datos cuantitativa', 'Reporte de similitud', 'Carta de autorización institucional', 'Declaración jurada']",
+      "location": "Esquema del Trabajo Cuantitativo (párr. 311-319)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "Lista de anexos en párr. 311-319"
+    },
+    {
+      "rule_id": "anexos_minimos_cualitativo",
+      "passed": false,
+      "severity": "warning",
+      "message": "Anexos obligatorios para Trabajo de Investigación Cualitativo",
+      "expected": "Matriz de consistencia; Instrumento(s) de recolección de datos; Consentimiento informado; Juicio de expertos; Base de datos cualitativa; Carta de autorización institucional; Declaración jurada; Carta de autorización de publicación",
+      "found": "items_obligatorios=8 faltan=['Matriz de consistencia', 'Instrumento(s) de recolección de datos', 'Consentimiento informado', 'Juicio de expertos', 'Base de datos cualitativa', 'Carta de autorización institucional', 'Declaración jurada', 'Carta de autorización de publicación']",
+      "location": "Esquema del Trabajo Cualitativo (párr. 413-420)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "Lista de anexos en párr. 413-420"
+    },
+    {
+      "rule_id": "caratula_orcid",
+      "passed": true,
+      "severity": "warning",
+      "message": "El código ORCID del autor y asesor se muestra como hipervínculo, entre paréntesis, debajo del nombre",
+      "expected": "https://orcid.org/XXXXXXXXXXXX",
+      "found": "cumple",
+      "location": "Carátula, especificaciones (párr. 179-180)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"A continuación, se consignará con minúsculas y entre paréntesis el hipervínculo del código ORCID de 16 dígitos...\""
+    },
+    {
+      "rule_id": "proyecto_caratula_texto",
+      "passed": false,
+      "severity": "error",
+      "message": "En la carátula del Proyecto, la línea de tipo dice \"Proyecto de Investigación\" (no \"Trabajo de Investigación para optar...\")",
+      "expected": "Proyecto de Investigación",
+      "found": "sin nodos w:t que evaluar; @w:val=[] esperado=26",
+      "location": "Carátula del Proyecto (párr. 618, 641)",
+      "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+      "cita": "\"Proyecto de Investigación: Centrado, con negrita y con mayúsculas (tamaño de letra, 13 puntos).\""
     }
   ],
   "resumen": {
-    "total": 31,
-    "fallidos_error": 3,
-    "fallidos_warning": 4
+    "total": 41,
+    "fallidos_error": 5,
+    "fallidos_warning": 10
   },
   "como_preguntar_a_una_ia": [
     {
       "rule_id": "caratula_titulo_trabajo_tamano",
       "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Tamaño de letra del título del trabajo en carátula\n- Valor esperado según el reglamento: 14pt\n- Lo que encontró el validador: @w:val=['26'] esperado=28\n- Cita del reglamento: \"Título del Trabajo de Investigación: Centrado, con negrita y con letras mayúsculas y minúsculas (tamaño de letra, 14 puntos).\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "caratula_optar_grado_tamano",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Tamaño de letra de la línea \"Trabajo de Investigación para optar el grado de Bachiller en...\"\n- Valor esperado según el reglamento: 13pt\n- Lo que encontró el validador: @w:val=['24'] esperado=26\n- Cita del reglamento: \"Trabajo de Investigación para optar el grado de Bachiller: Centrado, con negrita y con mayúsculas (tamaño de letra, 13 puntos).\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "sangria_parrafo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: La primera línea de cada párrafo debe tener sangría de 1.27 cm\n- Valor esperado según el reglamento: 1.27 cm (½ pulgada)\n- Lo que encontró el validador: @w:firstLine=['708', '708', '708'] esperado=720\n- Cita del reglamento: \"Sangría de párrafo: La primera línea de cada párrafo del texto debe tener un sangrado de 1,27 cm (½ pulgada) desde el margen izquierdo.\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "caratula_autores_mayusculas_sin_negrita",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Los apellidos y nombres del autor en carátula: mayúsculas, sin negrita\n- Valor esperado según el reglamento: MAYÚSCULAS, sin negrita\n- Lo que encontró el validador: textos=1 incumplen=1\n- Cita del reglamento: \"Apellidos y Nombres del autor(a/es/as): Centrado, con letras mayúsculas.\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "estructura_tinv_cualitativo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Estructura obligatoria del Trabajo de Investigación (Cualitativo). Diferencia clave: incluye \"Categorías, matriz de categorización y unidad de análisis\" y termina con \"ANÁLISIS Y DISCUSIÓN DE RESULTADOS\" en vez de solo \"RESULTADOS\".\n\n- Valor esperado según el reglamento: Carátula; Dedicatoria (opcional); Jurado evaluador; Agradecimiento (opcional); Índice; Presentación; Resumen; Abstract; Introducción;   El Problema;   Objetivos;   Categorías, matriz de categorización y unidad de análisis; MARCO TEÓRICO; METODOLOGÍA;   Participantes;   Diseño;   Instrumentos usados en la recolección de información;   Métodos, técnicas, procedimientos y estrategias usadas en el análisis e interpretación de datos; ANÁLISIS Y DISCUSIÓN DE RESULTADOS; CONCLUSIONES; REFERENCIAS; ANEXOS\n- Lo que encontró el validador: headings=46 faltantes=['  Categorías, matriz de categorización y unidad de análisis', '  Participantes', 'ANÁLISIS Y DISCUSIÓN DE RESULTADOS'] ruta=__inicio__ -> jurado_evaluador -> indice -> presentacion -> resumen -> abstract -> introduccion -> el_problema -> objetivos\n- Cita del reglamento: Esquema enumerado en párr. 381-420 del manual\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "estructura_tinv_revision_literatura",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Estructura obligatoria del Trabajo de Investigación basado en Revisión de la Literatura.\n\n- Valor esperado según el reglamento: Carátula; Dedicatoria (opcional); Jurado evaluador; Agradecimiento (opcional); Índice; Presentación; Resumen; Abstract; INTRODUCCIÓN; METODOLOGÍA DE REVISIÓN; DESARROLLO O ANÁLISIS CRÍTICO DE LA LITERATURA; CONCLUSIONES Y RECOMENDACIONES; REFERENCIAS; ANEXOS\n- Lo que encontró el validador: headings=46 faltantes=['DESARROLLO O ANÁLISIS CRÍTICO DE LA LITERATURA'] ruta=__inicio__ -> jurado_evaluador -> indice -> presentacion -> resumen -> abstract -> introduccion -> metodologia_de_revision\n- Cita del reglamento: Esquema enumerado en párr. 537-559 del manual\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "indice_subdivisiones",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El Índice se subdivide en: índice de contenidos, índice de tablas y índice de figuras; cada uno en página separada\n- Valor esperado según el reglamento: índice de contenidos + índice de tablas + índice de figuras, en páginas separadas\n- Lo que encontró el validador: exists 0 nodos; exists 0 nodos; exists 0 nodos\n- Cita del reglamento: \"Se subdivide: índice de contenidos, tablas y figuras (cada índice debe presentarse en páginas separadas).\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "resumen_longitud",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El Resumen debe tener una extensión mínima de 159 palabras\n- Valor esperado según el reglamento: >= 159 palabras\n- Lo que encontró el validador: palabras=6 minimo=159\n- Cita del reglamento: \"Su extensión mínima 159 y su extensión máxima...\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "palabras_clave_minimo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Resumen y Abstract deben incluir mínimo 3 palabras clave\n- Valor esperado según el reglamento: >= 3 palabras clave\n- Lo que encontró el validador: entradas=1 minimo=3\n- Cita del reglamento: \"Palabras clave: (mínimo 03 palabras clave)\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "referencias_minimo_cuantitativo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Mínimo de referencias bibliográficas para Trabajo de Investigación Cuantitativo\n- Valor esperado según el reglamento: >= 20 referencias\n- Lo que encontró el validador: nodos=0 minimo=20\n- Cita del reglamento: \"Debe haber revisado un mínimo de 20 referencias.\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "referencias_minimo_cualitativo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Mínimo de referencias bibliográficas para Trabajo de Investigación Cualitativo\n- Valor esperado según el reglamento: >= 30 referencias\n- Lo que encontró el validador: nodos=0 minimo=30\n- Cita del reglamento: \"Debe haber revisado un mínimo de 30 referencias.\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "referencias_minimo_revision",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Mínimo de referencias bibliográficas para Trabajo de Revisión de la Literatura\n- Valor esperado según el reglamento: >= 20 referencias\n- Lo que encontró el validador: nodos=0 minimo=20\n- Cita del reglamento: \"Debe haber revisado un mínimo de 20 referencias.\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "anexos_minimos_cuantitativo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Anexos obligatorios para Trabajo de Investigación Cuantitativo\n- Valor esperado según el reglamento: Matriz de consistencia; Instrumento(s) de recolección de datos; Ficha técnica del instrumento; Consentimiento informado; Base de datos cuantitativa; Reporte de similitud; Carta de autorización institucional; Declaración jurada; Carta de autorización de publicación\n- Lo que encontró el validador: items_obligatorios=9 faltan=['Matriz de consistencia', 'Instrumento(s) de recolección de datos', 'Ficha técnica del instrumento', 'Consentimiento informado', 'Base de datos cuantitativa', 'Reporte de similitud', 'Carta de autorización institucional', 'Declaración jurada']\n- Cita del reglamento: Lista de anexos en párr. 311-319\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "anexos_minimos_cualitativo",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: Anexos obligatorios para Trabajo de Investigación Cualitativo\n- Valor esperado según el reglamento: Matriz de consistencia; Instrumento(s) de recolección de datos; Consentimiento informado; Juicio de expertos; Base de datos cualitativa; Carta de autorización institucional; Declaración jurada; Carta de autorización de publicación\n- Lo que encontró el validador: items_obligatorios=8 faltan=['Matriz de consistencia', 'Instrumento(s) de recolección de datos', 'Consentimiento informado', 'Juicio de expertos', 'Base de datos cualitativa', 'Carta de autorización institucional', 'Declaración jurada', 'Carta de autorización de publicación']\n- Cita del reglamento: Lista de anexos en párr. 413-420\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+    },
+    {
+      "rule_id": "proyecto_caratula_texto",
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: En la carátula del Proyecto, la línea de tipo dice \"Proyecto de Investigación\" (no \"Trabajo de Investigación para optar...\")\n- Valor esperado según el reglamento: Proyecto de Investigación\n- Lo que encontró el validador: sin nodos w:t que evaluar; @w:val=[] esperado=26\n- Cita del reglamento: \"Proyecto de Investigación: Centrado, con negrita y con mayúsculas (tamaño de letra, 13 puntos).\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
     }
   ]
 }

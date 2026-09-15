@@ -3,7 +3,10 @@
 **Autor**: IvanSanchezSil (Integrante 3 — Motor de reglas)
 **Fecha**: 2026-09-09
 **Destinatario**: Integrante 1 (Backend / API) y quien revise el PR consolidado #11
-**Estado**: documento informativo/decisión — no propone código escrito aún.
+**Estado**: ✅ **implementada** (2026-09-15, Semana 4, PR #22) — Opción A:
+traza embebida en `found` + `REGLAS_YAML_PATH` → `reglas_unt.yaml`. Esta nota
+documenta la decisión original; el detalle de la implementación está en
+`docs/diseno/09_f5_enlace_api_propuesta.md`.
 
 ---
 
@@ -167,7 +170,10 @@ switch (ver sección 5).
 - `README.md`: el párrafo que dice "La API todavía NO lo carga" queda
   obsoleto → actualizarlo.
 - `metadatos.version_esquema` (hoy `"2026-09-01"`): actualizar la fecha al
-  momento del switch (¿`2026-09-10`?).
+  momento del switch. ✅ Hecho el 2026-09-15 (Semana 4): `reglas_unt.yaml`
+  declara `version: "2026-09-01"` (reglas) y el contrato mantiene
+  `metadatos.version_esquema` = fecha de la versión del esquema (sin cambio
+  al campo en esta iteración F5).
 
 ### 4.7 Verificación (requiere la máquina local)
 

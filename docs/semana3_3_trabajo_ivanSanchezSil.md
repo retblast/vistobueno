@@ -1,8 +1,8 @@
-# Semana 4 — Trabajo realizado (F4 del plan DSL)
+# Semana 3.3 — Trabajo realizado (F4 del plan DSL)
 
 **Integrante**: IvanSanchezSil
 **Rol**: Integrante 3 — Motor de reglas / Procesamiento
-**Semana**: 4 de 14 (09/09/2026)
+**Semana**: 3.3 de 14 (09/09/2026, dentro de la Semana 3 07/09–11/09)
 **Proyecto**: VistoBueno — Validador automático de formato de tesis (UNT FECyC)
 **Rama de trabajo**: `semana4-f4` (PR desde `fork/semana4-f4` hacia master de retblast)
 
@@ -96,7 +96,7 @@ pila vía analizadores).
 | Traza del autómata | `validator/automata.py` (`ruta_estados`), `validator/compilador.py` (`ultima_ruta`) | Lenguajes Formales y Autómatas |
 | Tests F4 | `tests/test_f4_ingenieria.py` (21 tests) | Ingeniería de Software II |
 | Documentación (cambios, decisiones) | `docs/CAMBIOS_MOTOR_DSL.md` (Paso 13), `docs/PLAN_DSL.md` (F4 ✅, decisión 3) | Ingeniería de Software I |
-| Bitácora | `docs/semana4_trabajo_ivanSanchezSil.md` | — |
+| Bitácora | `docs/semana3_3_trabajo_ivanSanchezSil.md` | — |
 
 ---
 

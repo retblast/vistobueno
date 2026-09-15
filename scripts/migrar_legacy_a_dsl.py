@@ -215,6 +215,7 @@ def migrar(rules_data: dict) -> dict:
         reglas.append(_migrar_rule(rule))
 
     return {
+        "version": rules_data.get("version", "desconocido"),
         "namespaces": {
             "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
             "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
@@ -245,10 +246,10 @@ def main() -> None:
         "# REGLAS UNT EN FORMATO DSL — GENERADO POR scripts/migrar_legacy_a_dsl.py\n"
         "# ------------------------------------------------------------\n"
         "# Migración de `unt_format_rules_schema.yaml` (formato legacy) al\n"
-        "# formato declarativo (Fase F1 del PLAN_DSL). Este archivo NO es\n"
-        "# el que carga la API (`api.py` sigue apuntando al YAML legacy).\n"
-        "# Se usa para el test de paridad legacy-vs-DSL y como base de\n"
-        "# las fases siguientes (unificación de YAML, F3).\n"
+        "# formato declarativo (Fase F1 del PLAN_DSL). Desde la F5 la API\n"
+        "# (`api.py`) carga ESTE archivo y las reglas F3 mecanizadas a mano.\n"
+        "# Se usa para el test de paridad legacy-vs-DSL y como base de las\n"
+        "# fases siguientes (unificación de YAML, F3).\n"
         "# ============================================================\n\n",
         encoding="utf-8",
     )

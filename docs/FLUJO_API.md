@@ -130,8 +130,8 @@ El engine acepta dos formatos YAML, ambos producen `List[RuleResult]`:
 
 | Formato | Key raíz | Evaluador | Estado |
 |---------|----------|-----------|--------|
-| Legacy | `rules` | `checks.run_check()` | Activo, estable |
-| DSL | `reglas` | `CompilerDSL` | Activo, semana 3 |
+| Legacy | `rules` | `checks.run_check()` | Activo, estable (no es el que carga la API desde la F5) |
+| DSL | `reglas` | `CompilerDSL` | Activo (Semana 3); **carga la API desde la F5 (Semana 4)** |
 
 Detección automática en `engine.validate_docx()`:
 

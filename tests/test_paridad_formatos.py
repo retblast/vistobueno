@@ -302,10 +302,26 @@ def _verificar_paridad(docx_path: str) -> dict:
         f"El DSL no ejecuta reglas legacy: "
         f"{ids_legacy - set(dsl)}"
     )
+
+    # F5: el DSL anexa la traza `ruta=...` al `found` de las reglas de
+    # autómata fallidas. Para los esquemas de estructura la paridad
+    # observable es solo `passed`; el resto conserva `(passed, found)`
+    # literal (misma razón que en test_propiedad: el contador interno
+    # `headings=N` del found varía ante cambios de cabeceras).
+    solo_passed = {
+        "estructura_tinv_cuantitativo",
+        "estructura_tinv_cualitativo",
+        "estructura_tinv_revision_literatura",
+    }
     diffs = []
     for rid in sorted(legacy):
         l, d = legacy[rid], dsl[rid]
-        if l.passed != d.passed or l.found != d.found:
+        if rid in solo_passed:
+            if l.passed != d.passed:
+                diffs.append(
+                    f"{rid}: legacy(passed={l.passed}) != dsl(passed={d.passed})"
+                )
+        elif l.passed != d.passed or l.found != d.found:
             diffs.append(
                 f"{rid}: legacy(passed={l.passed}, found={l.found!r}) "
                 f"!= dsl(passed={d.passed}, found={d.found!r})"

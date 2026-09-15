@@ -236,6 +236,12 @@ El motor interno (`validator.engine`) devuelve `RuleResult` (dataclass) y `build
 
 ## Changelog
 
+### v1.1.0 (2026-09-15 — Semana 4, nota F5)
+
+- Sin cambios de campos en el contrato (las llamadas son idénticas).
+- Fuente de reglas: la API carga `reglas_unt.yaml` (DSL, 41 reglas) desde la
+  F5, en lugar del YAML legacy `unt_format_rules_schema.yaml`.
+
 ### v1.1.0 (2026-09-09 — Semana 3)
 
 - Estado: **Implementado** (antes: Diseño)
