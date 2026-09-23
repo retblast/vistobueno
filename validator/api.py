@@ -10,8 +10,9 @@ Uso:
     uvicorn validator.api:app --reload
 """
 
-import os
 import tempfile
+import zipfile
+from functools import cache
 from pathlib import Path
 
 from email_validator import EmailNotValidError, validate_email
@@ -49,16 +50,11 @@ TIPOS_ACEPTADOS = {
 
 EXTENSION_ACEPTADA = ".docx"
 
-# Cargar reglas una sola vez al iniciar el módulo
-_rules_data: dict | None = None
 
-
+@cache
 def _get_rules() -> dict:
-    """Carga el YAML de reglas en la primera llamada y lo cachea."""
-    global _rules_data
-    if _rules_data is None:
-        _rules_data = load_rules(REGLAS_YAML_PATH)
-    return _rules_data
+    """Carga el YAML de reglas una sola vez (cacheado en memoria)."""
+    return load_rules(REGLAS_YAML_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +114,10 @@ def _validar_correo(correo: str | None) -> str | None:
     - `None` o cadena vacía → `None` (el frontend puede omitirlo o enviar "").
     - Si se envía, debe tener formato de correo válido; si no, lanza 422
       con mensaje descriptivo en español.
+
+    El endpoint descarta el valor retornado por ahora: la normalización
+    queda como cimientos para la Actividad 6 (notificación por correo),
+    que usará el correo normalizado como destinatario.
     """
     if correo is None:
         return None
@@ -169,7 +169,6 @@ async def validar(
     archivo: UploadFile = File(..., description="Archivo .docx a validar"),
     incluir_prompts_ia: bool = Query(
         default=True,
-        alias="incluir_prompts_ia",
         description="Incluir la sección 'Cómo preguntar a una IA' en la respuesta",
     ),
     correo: str | None = Form(
@@ -211,9 +210,12 @@ async def validar(
     # --- Validación: correo electrónico (opcional) ---
     _validar_correo(correo)
 
-    # --- Leer contenido ---
+    # --- Leer contenido (con tope) ---
+    # Leer a lo sumo TAMANO_MAXIMO_BYTES + 1: evita cargar en memoria
+    # un upload arbitrariamente grande antes de validar el tamaño.
+    # Nota: por eso el 413 no reporta el tamaño exacto recibido.
     try:
-        contenido = await archivo.read()
+        contenido = await archivo.read(TAMANO_MAXIMO_BYTES + 1)
     except Exception as e:
         raise HTTPException(
             status_code=422,
@@ -223,13 +225,9 @@ async def validar(
     # --- Validación: tamaño ---
     tamano = len(contenido)
     if tamano > TAMANO_MAXIMO_BYTES:
-        tamano_mb = round(tamano / (1024 * 1024), 1)
         raise HTTPException(
             status_code=413,
-            detail=(
-                f"El archivo excede el tamaño máximo permitido "
-                f"(10 MB). Tamaño recibido: {tamano_mb} MB."
-            ),
+            detail=("El archivo excede el tamaño máximo permitido (10 MB)."),
         )
 
     if tamano == 0:
@@ -279,47 +277,40 @@ async def validar(
 
     except HTTPException:
         raise
+    except zipfile.BadZipFile as e:
+        # Archivo no es un ZIP válido (truncado, corrupto, etc.)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "No se pudo procesar el archivo DOCX: archivo corrupto o no es un DOCX válido."
+            ),
+        ) from e
+    except KeyError as e:
+        # El ZIP es válido pero falta word/document.xml (u otra parte
+        # esencial del formato DOCX). El extractor lanza KeyError al
+        # intentar leer el archivo interno del paquete OPC.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"El archivo no contiene un documento Word válido: archivo interno faltante ({e})."
+            ),
+        ) from e
+    except ValueError as e:
+        # El extractor no encontró una parte esperada del DOCX
+        # (lanzado por ExtractedDocx.xpath cuando una parte no está
+        # disponible).
+        raise HTTPException(
+            status_code=422,
+            detail=(f"El archivo no contiene un documento Word válido: {e}."),
+        ) from e
     except Exception as e:
-        # Error al abrir/procesar el DOCX (ZIP corrupto, XML inválido, etc.)
-        nombre_tipo = type(e).__name__
-        mensaje_error = str(e)
-
-        # BadZipFile: archivo no es un ZIP válido
-        if nombre_tipo == "BadZipFile" or "zip" in mensaje_error.lower():
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "No se pudo procesar el archivo DOCX: archivo corrupto o no es un DOCX válido."
-                ),
-            ) from e
-
-        # KeyError: el ZIP es válido pero falta word/document.xml (u otra
-        # parte esencial del formato DOCX). El extractor lanza KeyError
-        # al intentar leer el archivo interno del paquete OPC.
-        if nombre_tipo == "KeyError":
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "El archivo no contiene un documento Word válido: "
-                    f"archivo interno faltante ({e})."
-                ),
-            ) from e
-
-        # ValueError: el extractor no encontró una parte esperada del DOCX
-        # (lanzado por ExtractedDocx.xpath cuando una parte no está disponible).
-        if nombre_tipo == "ValueError":
-            raise HTTPException(
-                status_code=422,
-                detail=(f"El archivo no contiene un documento Word válido: {e}."),
-            ) from e
-
         raise HTTPException(
             status_code=500,
-            detail=f"Error interno del validador: {nombre_tipo}: {mensaje_error}",
+            detail=f"Error interno del validador: {type(e).__name__}: {e}",
         ) from e
     finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------

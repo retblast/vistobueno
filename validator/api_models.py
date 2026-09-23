@@ -113,7 +113,7 @@ class ValidarResponse(BaseModel):
                 {
                     "semaforo": "verde",
                     "resumen": {
-                        "total": 31,
+                        "total": 47,
                         "fallidos_error": 0,
                         "fallidos_warning": 2,
                     },
@@ -134,7 +134,7 @@ class ValidarResponse(BaseModel):
                     "metadatos": {
                         "archivo_nombre": "mi_tesis.docx",
                         "archivo_tamano_bytes": 123456,
-                        "reglas_evaluadas": 31,
+                        "reglas_evaluadas": 47,
                         "version_esquema": "2026-09-01",
                     },
                 }

@@ -8,41 +8,46 @@ Uso:
 """
 
 import io
+import zipfile
 
 import pytest
+from _docx_generator import build_large_docx
 from conftest import (
     CAMPOS_METADATOS,
     CAMPOS_RESULTADO,
     CAMPOS_RESUMEN,
     CLIENTE,
+    MIME_DOCX,
     PLANTILLA,
+    subir_plantilla,
 )
+
+from validator.api import REGLAS_YAML_PATH
+from validator.engine import build_report, load_rules, validate_docx
 
 # ---------------------------------------------------------------------------
 # Tests: respuesta exitosa (200)
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(scope="module")
+def respuesta_plantilla():
+    """Envía la plantilla oficial una sola vez por módulo.
+
+    Una sola validación (47 reglas) alcanza para todos los tests de
+    TestRespuestaExitosa, cuya aserciones son de solo lectura.
+    """
+    return subir_plantilla()
+
+
 class TestRespuestaExitosa:
     """Tests para el caso feliz: DOCX válido → 200 con reporte completo."""
 
     @pytest.fixture(autouse=True)
-    def _cargar_respuesta(self):
-        """Envía la plantilla oficial y guarda la respuesta."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            self.respuesta = CLIENTE.post(
-                "/validar",
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
-        self.datos = self.respuesta.json()
+    def _cargar_respuesta(self, respuesta_plantilla):
+        """Comparte la respuesta en cada test (las aserciones solo leen)."""
+        self.respuesta = respuesta_plantilla
+        self.datos = respuesta_plantilla.json()
 
     def test_status_code(self):
         """El endpoint debe devolver 200 para un DOCX válido."""
@@ -119,37 +124,13 @@ class TestQueryParams:
 
     def test_prompts_deshabilitados(self):
         """Si incluir_prompts_ia=false, la lista debe estar vacía."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar?incluir_prompts_ia=false",
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla("/validar?incluir_prompts_ia=false")
         assert respuesta.status_code == 200
         assert respuesta.json()["como_preguntar_a_una_ia"] == []
 
     def test_prompts_habilitados_por_defecto(self):
         """Por defecto, los prompts IA deben estar habilitados."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla()
         assert respuesta.status_code == 200
         # Si hay errores, debe haber prompts
         datos = respuesta.json()
@@ -183,37 +164,22 @@ class TestErrores:
         """Archivo vacío .docx → 422."""
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "vacio.docx",
-                    b"",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("vacio.docx", b"", MIME_DOCX)},
         )
         assert respuesta.status_code == 422
         assert "vacío" in respuesta.json()["detail"]
 
     def test_archivo_corrupto(self):
         """Archivo ZIP corrupto con extensión .docx → 422."""
-        contenido_invalido = b"esto no es un zip"
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "corrupto.docx",
-                    contenido_invalido,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("corrupto.docx", b"esto no es un zip", MIME_DOCX)},
         )
         assert respuesta.status_code == 422
         assert "detail" in respuesta.json()
 
     def test_zip_valido_pero_no_docx(self):
         """ZIP válido pero sin document.xml → 422 (corrupto)."""
-        import zipfile
-
         # Crear un ZIP válido pero con contenido que no es DOCX
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -224,57 +190,35 @@ class TestErrores:
 
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "falso.docx",
-                    contenido,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("falso.docx", contenido, MIME_DOCX)},
         )
-        # El KeyError por document.xml faltante ahora se captura
-        # y devuelve 422 con un mensaje descriptivo.
+        # El KeyError por document.xml faltante se captura y devuelve
+        # 422 con un mensaje descriptivo.
         assert respuesta.status_code == 422
         assert "detail" in respuesta.json()
         assert "Word válido" in respuesta.json()["detail"]
 
     def test_archivo_demasiado_grande(self):
         """Archivo >10 MB → 413."""
-        from _docx_generator import build_large_docx
-
         contenido = build_large_docx(target_bytes=11 * 1024 * 1024)
         assert len(contenido) > 10 * 1024 * 1024
 
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "grande.docx",
-                    contenido,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("grande.docx", contenido, MIME_DOCX)},
         )
         assert respuesta.status_code == 413
         assert "excede" in respuesta.json()["detail"].lower()
 
     def test_archivo_limite_exacto(self):
         """Archivo justo bajo 10 MB → 200 (debe pasar)."""
-        from _docx_generator import build_large_docx
-
         min_bytes = 10 * 1024 * 1024
         contenido = build_large_docx(target_bytes=min_bytes, seed=99)
         assert len(contenido) <= min_bytes
 
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "limite.docx",
-                    contenido,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("limite.docx", contenido, MIME_DOCX)},
         )
         assert respuesta.status_code == 200
         assert respuesta.json()["semaforo"] in ("verde", "rojo")
@@ -283,55 +227,24 @@ class TestErrores:
         """UploadFile con nombre vacío → 400 o 422."""
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "",
-                    b"contenido",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("", b"contenido", MIME_DOCX)},
         )
         assert respuesta.status_code in (400, 422)
 
     def test_content_type_omitido(self):
         """Sin Content-Type específico → debe aceptarse por extensión .docx."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                files={"archivo": ("tesis.docx", f, "")},
-            )
+        respuesta = subir_plantilla(mime="")
         assert respuesta.status_code == 200
 
     def test_archivo_nombre_con_espacios(self):
         """Nombre con espacios y caracteres especiales → debe procesarse."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                files={
-                    "archivo": (
-                        "mi tesis (copia).docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla(nombre="mi tesis (copia).docx")
         assert respuesta.status_code == 200
         assert respuesta.json()["metadatos"]["archivo_nombre"] == "mi tesis (copia).docx"
 
     def test_content_type_octet_stream(self):
         """Algunos navegadores envían application/octet-stream para .docx → debe aceptarse."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                files={"archivo": ("tesis.docx", f, "application/octet-stream")},
-            )
-        # Debe aceptar el archivo (extensión .docx válida)
+        respuesta = subir_plantilla(mime="application/octet-stream")
         assert respuesta.status_code == 200
         assert respuesta.json()["semaforo"] in ("verde", "rojo")
 
@@ -340,13 +253,7 @@ class TestErrores:
         contenido = b"MZ" + b"\x00" * 200  # cabecera MZ (EXE) + relleno
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "falso.docx",
-                    contenido,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("falso.docx", contenido, MIME_DOCX)},
         )
         # Validación temprana de magic bytes → 422 con mensaje de cabecera
         assert respuesta.status_code == 422
@@ -358,13 +265,7 @@ class TestErrores:
         contenido = b"PK\x03"
         respuesta = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "truncado.docx",
-                    contenido,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("truncado.docx", contenido, MIME_DOCX)},
         )
         assert respuesta.status_code == 422
         assert "cabecera" in respuesta.json()["detail"]
@@ -388,13 +289,7 @@ class TestErrores:
         # Archivo vacío
         r3 = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "vacio.docx",
-                    b"",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("vacio.docx", b"", MIME_DOCX)},
         )
         assert r3.status_code == 422
         assert isinstance(r3.json()["detail"], str)
@@ -403,13 +298,7 @@ class TestErrores:
         # Archivo corrupto → 422 (BadZipFile capturado)
         r4 = CLIENTE.post(
             "/validar",
-            files={
-                "archivo": (
-                    "corrupto.docx",
-                    b"no es zip",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("corrupto.docx", b"no es zip", MIME_DOCX)},
         )
         assert r4.status_code == 422
         assert isinstance(r4.json()["detail"], str)
@@ -425,31 +314,18 @@ class TestCorreo:
     """Cobertura del campo 'correo' (opcional) de POST /validar."""
 
     def _docx_payload(self) -> dict:
-        """Payload mínimo con extensión .docx para tests de validación de campos."""
-        return {
-            "archivo": (
-                "prueba.docx",
-                b"PK\x03\x04contenido-de-prueba",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            )
-        }
+        """Payload mínimo para tests de validación del campo correo.
+
+        El contenido NO es un DOCX real: solo lleva la firma PK para pasar
+        el chequeo de magic bytes. Funciona porque la validación de 'correo'
+        ocurre ANTES de procesar el archivo; si ese orden cambia, estos
+        tests fallarían por el DOCX falso.
+        """
+        return {"archivo": ("prueba.docx", b"PK\x03\x04contenido-de-prueba", MIME_DOCX)}
 
     def test_correo_valido_aceptado(self):
         """Correo válido → la validación de campos no falla con 422 de correo."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                data={"correo": "estudiante@unitru.edu.pe"},
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla(data={"correo": "estudiante@unitru.edu.pe"})
         assert respuesta.status_code == 200
 
     def test_correo_invalido_rechazado(self):
@@ -464,55 +340,17 @@ class TestCorreo:
 
     def test_correo_ausente_aceptado(self):
         """Campo 'correo' omitido → 200 (retrocompatible, opcional)."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla()
         assert respuesta.status_code == 200
 
     def test_correo_vacio_tratado_como_ausente(self):
         """Correo vacío ('') → tratado como ausente, no rechazado."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                data={"correo": ""},
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla(data={"correo": ""})
         assert respuesta.status_code == 200
 
     def test_correo_con_espacios_normalizado(self):
         """Correo con espacios alrededor → normalizado y aceptado."""
-        if not PLANTILLA.exists():
-            pytest.skip("Plantilla de prueba no disponible")
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                data={"correo": "  estudiante@unitru.edu.pe  "},
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
+        respuesta = subir_plantilla(data={"correo": "  estudiante@unitru.edu.pe  "})
         assert respuesta.status_code == 200
 
     def test_correo_invalido_detectado_antes_de_procesar_archivo(self):
@@ -520,13 +358,7 @@ class TestCorreo:
         respuesta = CLIENTE.post(
             "/validar",
             data={"correo": "@@malformed@@"},
-            files={
-                "archivo": (
-                    "corrupto.docx",
-                    b"no es zip",
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
+            files={"archivo": ("corrupto.docx", b"no es zip", MIME_DOCX)},
         )
         assert respuesta.status_code == 422
         assert "Correo electrónico inválido" in respuesta.json()["detail"]
@@ -545,26 +377,12 @@ class TestParidadAPICLI:
         if not PLANTILLA.exists():
             pytest.skip("Plantilla de prueba no disponible")
 
-        from validator.api import REGLAS_YAML_PATH
-        from validator.engine import build_report, load_rules, validate_docx
-
         # El motor se compara contra el MISMO YAML que carga la API (F5: DSL).
         rules_data = load_rules(REGLAS_YAML_PATH)
         resultados_motor = validate_docx(str(PLANTILLA), rules_data)
         reporte = build_report(resultados_motor)
 
-        with open(PLANTILLA, "rb") as f:
-            respuesta = CLIENTE.post(
-                "/validar",
-                files={
-                    "archivo": (
-                        "tesis.docx",
-                        f,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    )
-                },
-            )
-
+        respuesta = subir_plantilla()
         datos_api = respuesta.json()
 
         # Mismos counts
@@ -580,6 +398,7 @@ class TestParidadAPICLI:
         ids_api = {r["rule_id"] for r in datos_api["resultados"]}
         assert ids_api == ids_motor
 
-        # Mismos passed values
-        for r_motor, r_api in zip(resultados_motor, datos_api["resultados"], strict=False):
+        # Mismos passed values (strict: un desfase de longitud debe fallar,
+        # no truncarse silenciosamente)
+        for r_motor, r_api in zip(resultados_motor, datos_api["resultados"], strict=True):
             assert r_motor.passed == r_api["paso"], f"Discrepancia en {r_motor.rule_id}"

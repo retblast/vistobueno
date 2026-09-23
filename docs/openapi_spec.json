@@ -312,7 +312,7 @@
             "metadatos": {
               "archivo_nombre": "mi_tesis.docx",
               "archivo_tamano_bytes": 123456,
-              "reglas_evaluadas": 31,
+              "reglas_evaluadas": 47,
               "version_esquema": "2026-09-01"
             },
             "resultados": [
@@ -331,7 +331,7 @@
             "resumen": {
               "fallidos_error": 0,
               "fallidos_warning": 2,
-              "total": 31
+              "total": 47
             },
             "semaforo": "verde"
           }

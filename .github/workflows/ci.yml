@@ -2,7 +2,6 @@ name: VistoBueno CI
 
 on:
   push:
-    branches: [master, semana*]
   pull_request:
 
 jobs:
@@ -20,3 +19,6 @@ jobs:
 
       - name: Verify formatting (ruff format --check)
         run: nix develop --command ruff format --check validator/ scripts/ tests/
+
+      - name: Verify OpenAPI spec is in sync
+        run: nix develop --command python3 scripts/generate_openapi.py --check

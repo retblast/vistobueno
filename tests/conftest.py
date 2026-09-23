@@ -1,7 +1,7 @@
-"""Fixtures compartidas para la suite de tests de VistoBueno.
+"""Utilidades compartidas para la suite de tests de VistoBueno.
 
-Proporciona el cliente de prueba,constantes de validación de contrato
-y la ruta a la plantilla de prueba.
+Proporciona el cliente de prueba, constantes de validación de contrato,
+la ruta a la plantilla de prueba y un helper para subirla a la API.
 """
 
 from pathlib import Path
@@ -24,9 +24,11 @@ CLIENTE = TestClient(app)
 RECURSOS_DIR = Path(__file__).resolve().parent.parent / "recursos"
 PLANTILLA = RECURSOS_DIR / "EDUCACION INICIAL-PLANTILLA INVESTIGACIÓN CUANTITATIVA.docx"
 
+# MIME type oficial de los DOCX (paquetes OOXML)
+MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 # ---------------------------------------------------------------------------
-# constantes de validación de contrato (campos esperados en la respuesta API)
+# Constantes de validación de contrato (campos esperados en la respuesta API)
 # ---------------------------------------------------------------------------
 
 # Campos que debe tener cada elemento en 'resultados'
@@ -55,32 +57,32 @@ CAMPOS_METADATOS = {
 
 
 # ---------------------------------------------------------------------------
-# Fixture para enviar la plantilla
+# Helper para subir la plantilla
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def plantilla_bytes():
-    """Devuelve el contenido binario de la plantilla oficial de prueba."""
-    if not PLANTILLA.exists():
-        pytest.skip("Plantilla de prueba no disponible")
-    return PLANTILLA.read_bytes()
+def subir_plantilla(
+    ruta: str = "/validar",
+    nombre: str = "tesis.docx",
+    mime: str = MIME_DOCX,
+    data: dict | None = None,
+):
+    """Envía la plantilla oficial a POST /validar y devuelve la respuesta.
 
+    Args:
+        ruta: URL del endpoint (permite query params, ej. "?incluir_prompts_ia=false").
+        nombre: nombre de archivo declarado en el multipart.
+        mime: Content-Type declarado del archivo.
+        data: campos form adicionales (ej. {"correo": ...}).
 
-@pytest.fixture
-def plantilla_cliente():
-    """Envía la plantilla oficial y devuelve la respuesta de la API."""
+    Returns:
+        La respuesta del TestClient. Salta el test si la plantilla no
+        existe en recursos/.
+    """
     if not PLANTILLA.exists():
         pytest.skip("Plantilla de prueba no disponible")
     with open(PLANTILLA, "rb") as f:
-        respuesta = CLIENTE.post(
-            "/validar",
-            files={
-                "archivo": (
-                    "tesis.docx",
-                    f,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                )
-            },
-        )
-    return respuesta
+        kwargs = {"files": {"archivo": (nombre, f, mime)}}
+        if data is not None:
+            kwargs["data"] = data
+        return CLIENTE.post(ruta, **kwargs)
