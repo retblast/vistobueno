@@ -336,7 +336,7 @@ class TestErrores:
         assert respuesta.json()["semaforo"] in ("verde", "rojo")
 
     def test_zip_magic_bytes_invalidos(self):
-        """Archivo .docx con contenido basura que no es ZIP → 422."""
+        """Archivo .docx con cabecera que no es ZIP (PK) → 422."""
         contenido = b"MZ" + b"\x00" * 200  # cabecera MZ (EXE) + relleno
         respuesta = CLIENTE.post(
             "/validar",
@@ -348,9 +348,26 @@ class TestErrores:
                 )
             },
         )
-        # No es un ZIP válido → BadZipFile → 422
+        # Validación temprana de magic bytes → 422 con mensaje de cabecera
         assert respuesta.status_code == 422
-        assert "detail" in respuesta.json()
+        assert "cabecera" in respuesta.json()["detail"]
+        assert "PK" in respuesta.json()["detail"]
+
+    def test_zip_magic_bytes_truncados(self):
+        """Cabecera ZIP incompleta (solo 'PK\\x03') → 422."""
+        contenido = b"PK\x03"
+        respuesta = CLIENTE.post(
+            "/validar",
+            files={
+                "archivo": (
+                    "truncado.docx",
+                    contenido,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+        assert respuesta.status_code == 422
+        assert "cabecera" in respuesta.json()["detail"]
 
     def test_mensajes_error_son_descriptivos(self):
         """Todos los mensajes de error deben tener 'detail' con información útil."""
