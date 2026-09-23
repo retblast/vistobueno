@@ -19,7 +19,7 @@ Recibe un archivo DOCX de tesis y devuelve un reporte de validación estructurad
 | Campo | Tipo | Requerido | Descripción |
 |-------|------|-----------|-------------|
 | `archivo` | `file` | Sí | Archivo `.docx` a validar |
-| `correo` | `string` (form) | No | Correo electrónico del estudiante. Si se envía, debe tener formato válido (`usuario@dominio.pe`); se usará para notificar resultados cuando el envío esté habilitado (Actividad 6). Cadena vacía se trata como ausente. |
+| `correo` | `string` (form) | No | Correo electrónico del estudiante. Si se envía, debe tener formato válido (`usuario@dominio`); se usará para notificar resultados cuando el envío esté habilitado (Actividad 6). Cadena vacía se trata como ausente. |
 | `incluir_prompts_ia` | `bool` (query) | No (default: `true`) | Incluir la sección "Cómo preguntar a una IA" en la respuesta |
 
 ### Content-Type
@@ -215,7 +215,7 @@ Si el campo `correo` se envía pero no tiene formato válido:
 
 ```json
 {
-  "detail": "Correo electrónico inválido: 'no-es-un-correo'. Formato esperado: usuario@dominio.pe."
+  "detail": "Correo electrónico inválido: 'no-es-un-correo'. Formato esperado: usuario@dominio."
 }
 ```
 

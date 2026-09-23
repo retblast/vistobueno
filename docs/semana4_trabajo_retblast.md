@@ -169,7 +169,7 @@ corresponde a la actividad 6):
 - Si se envía, se valida con la librería `email-validator` (sin verificar
   entregabilidad, para no acoplarse a DNS en tests/dev).
 - Formato inválido → `422` con mensaje en español: `Correo electrónico
-  inválido: '…'. Formato esperado: usuario@dominio.pe.`
+  inválido: '…'. Formato esperado: usuario@dominio.`
 - Se añadió `email-validator` a `pythonEnv` en `flake.nix` (dependencia
   gestionada por Nix, sin `pip install`).
 

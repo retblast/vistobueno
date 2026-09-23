@@ -133,7 +133,7 @@ def _validar_correo(correo: str | None) -> str | None:
             status_code=422,
             detail=(
                 f"Correo electrónico inválido: '{correo_limpio}'. "
-                f"Formato esperado: usuario@dominio.pe."
+                f"Formato esperado: usuario@dominio."
             ),
         ) from e
 
