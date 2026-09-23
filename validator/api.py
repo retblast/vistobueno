@@ -201,6 +201,19 @@ async def validar(
             detail="El archivo está vacío.",
         )
 
+    # --- Validación: magic bytes de un ZIP/DOCX (cabecera PK) ---
+    # Un DOCX es un paquete OPC (ZIP). Toda imagen ZIP válida comienza con
+    # la firma local 'PK\x03\x04'. Verificarla antes de escribir el temporal
+    # permite rechazar rápido archivos renombrados a .docx sin abrirlos.
+    if not contenido.startswith(b"PK\x03\x04"):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "El archivo no es un ZIP/DOCX válido: cabecera incorrecta "
+                "(se esperaba la firma 'PK')."
+            ),
+        )
+
     # --- Guardar en archivo temporal y procesar ---
     tmp_path = None
     try:
