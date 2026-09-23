@@ -57,7 +57,7 @@ El archivo se procesó correctamente y se evaluaron las reglas.
 {
   "semaforo": "verde",
   "resumen": {
-    "total": 31,
+    "total": 47,
     "fallidos_error": 0,
     "fallidos_warning": 0
   },
@@ -83,7 +83,7 @@ El archivo se procesó correctamente y se evaluaron las reglas.
   "metadatos": {
     "archivo_nombre": "tesis.docx",
     "archivo_tamano_bytes": 123456,
-    "reglas_evaluadas": 31,
+    "reglas_evaluadas": 47,
     "version_esquema": "2026-09-01"
   }
 }
@@ -164,9 +164,13 @@ El endpoint valida primero la extensión del archivo y luego el Content-Type. De
 
 ### 413 Request Entity Too Large — Archivo muy grande
 
+Para evitar cargar uploads arbitrariamente grandes en memoria, el servidor
+lee a lo sumo 10 MB + 1 byte del body. Por eso el mensaje **no** reporta el
+tamaño exacto recibido:
+
 ```json
 {
-  "detail": "El archivo excede el tamaño máximo permitido (10 MB). Tamaño recibido: 15.2 MB."
+  "detail": "El archivo excede el tamaño máximo permitido (10 MB)."
 }
 ```
 
@@ -321,10 +325,13 @@ El motor interno (`validator.engine`) devuelve `RuleResult` (dataclass) y `build
 - **Tipos MIME aceptados**: documentado `application/octet-stream` además
   del MIME oficial de OOXML.
 - Ejemplo `curl` con campo `correo`.
+- Lectura del upload limitada a 10 MB + 1 byte: el `413` ya no reporta
+  "Tamaño recibido" (cambio solo del texto del mensaje).
+- Ejemplos de respuesta sincronizados a 47 reglas (antes decían 31).
 - Versión del endpoint: `1.1.0` → `1.2.0` (cambio aditivo, sin romper
   clientes existentes).
 
-### v1.1.0 (2026-09-15 — Semana 4, nota F5)
+### v1.1.1 (2026-09-15 — Semana 4, nota F5)
 
 - Sin cambios de campos en el contrato (las llamadas son idénticas).
 - Fuente de reglas: la API carga `reglas_unt.yaml` (DSL, 47 reglas) desde la
