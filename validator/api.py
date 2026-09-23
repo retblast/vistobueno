@@ -212,9 +212,12 @@ async def validar(
     # --- Validación: correo electrónico (opcional) ---
     _validar_correo(correo)
 
-    # --- Leer contenido ---
+    # --- Leer contenido (con tope) ---
+    # Leer a lo sumo TAMANO_MAXIMO_BYTES + 1: evita cargar en memoria
+    # un upload arbitrariamente grande antes de validar el tamaño.
+    # Nota: por eso el 413 no reporta el tamaño exacto recibido.
     try:
-        contenido = await archivo.read()
+        contenido = await archivo.read(TAMANO_MAXIMO_BYTES + 1)
     except Exception as e:
         raise HTTPException(
             status_code=422,
@@ -224,13 +227,9 @@ async def validar(
     # --- Validación: tamaño ---
     tamano = len(contenido)
     if tamano > TAMANO_MAXIMO_BYTES:
-        tamano_mb = round(tamano / (1024 * 1024), 1)
         raise HTTPException(
             status_code=413,
-            detail=(
-                f"El archivo excede el tamaño máximo permitido "
-                f"(10 MB). Tamaño recibido: {tamano_mb} MB."
-            ),
+            detail=("El archivo excede el tamaño máximo permitido (10 MB)."),
         )
 
     if tamano == 0:
