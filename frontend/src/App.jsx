@@ -3,7 +3,7 @@ import Upload from './components/Upload'
 import Report from './components/Report'
 import { MOCK_REPORT } from './mocks'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 function DarkModeToggle() {
   const [dark, setDark] = useState(() =>

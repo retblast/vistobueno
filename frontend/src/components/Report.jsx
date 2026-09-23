@@ -64,11 +64,11 @@ function Report({ data, onBack }) {
   const resumen = data?.resumen || { total: resultados.length, fallidos_error: 0, fallidos_warning: 0 }
   const semaforo = data?.semaforo || 'verde'
 
-  const fallidos = useMemo(() => resultados.filter((r) => !r.passed), [resultados])
+  const fallidos = useMemo(() => resultados.filter((r) => !r.paso), [resultados])
 
   // Agrupa los resultados filtrados por categoría para la vista detallada.
   const grupos = useMemo(() => {
-    const lista = resultados.filter((r) => filtro === 'todos' || r.severity === filtro)
+    const lista = resultados.filter((r) => filtro === 'todos' || r.severidad === filtro)
     const m = new Map()
     lista.forEach((r) => {
       const cat = categoriaDe(r.rule_id)
@@ -155,7 +155,7 @@ function Report({ data, onBack }) {
               ) : (
                 fallidos.map((r) => (
                   <div key={r.rule_id} className="pendiente">
-                    <span className={`dot ${r.severity}`}></span>
+                    <span className={`dot ${r.severidad}`}></span>
                     <span>{r.mensaje || r.message}</span>
                   </div>
                 ))
@@ -171,9 +171,9 @@ function Report({ data, onBack }) {
               <p className="vista-simple__empty">No hay resultados con este filtro.</p>
             ) : (
               grupos.map(([cat, items]) => {
-                const e = items.filter((r) => !r.passed && r.severity === 'error').length
-                const w = items.filter((r) => !r.passed && r.severity === 'warning').length
-                const ok = items.filter((r) => r.passed).length
+                const e = items.filter((r) => !r.paso && r.severidad === 'error').length
+                const w = items.filter((r) => !r.paso && r.severidad === 'warning').length
+                const ok = items.filter((r) => r.paso).length
                 return (
                   <details key={cat} className="categoria" open>
                     <summary className="cat-head">
@@ -187,11 +187,11 @@ function Report({ data, onBack }) {
                     </summary>
                     <div className="cat-body">
                       {items.map((r) => {
-                        const icono = !r.passed
-                          ? (r.severity === 'error' ? '✕' : '⚠')
+                        const icono = !r.paso
+                          ? (r.severidad === 'error' ? '✕' : '⚠')
                           : '✓'
-                        const claseIcono = !r.passed
-                          ? (r.severity === 'error' ? 'fail' : 'warn')
+                        const claseIcono = !r.paso
+                          ? (r.severidad === 'error' ? 'fail' : 'warn')
                           : 'ok'
                         return (
                           <div key={r.rule_id} className="resultado">
@@ -199,10 +199,10 @@ function Report({ data, onBack }) {
                             <div className="info">
                               <div className="msg">
                                 {r.mensaje || r.message}{' '}
-                                <span className={`badge ${r.severity}`}>
-                                  {r.severity === 'error' ? 'error' : 'advertencia'}
+                                <span className={`badge ${r.severidad}`}>
+                                  {r.severidad === 'error' ? 'error' : 'advertencia'}
                                 </span>
-                                {!r.passed && (
+                                {!r.paso && (
                                   <div className="esperado">
                                     <span className="etq">Esperado:</span> {r.esperado ?? r.expected}<br />
                                     <span className="etq">Encontrado:</span> {r.encontrado ?? r.found}
