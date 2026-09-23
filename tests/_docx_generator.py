@@ -42,8 +42,11 @@ def build_large_docx(target_bytes, seed=42):
         buf_base.seek(0)
         return buf_base.read()
 
-    random.seed(seed)
-    padding = bytes(random.getrandbits(8) for _ in range(padding_necesario))
+    # Instancia local: no tocar el RNG global para no afectar otros tests
+    # que compartan intérprete. randbytes() es CPython-nativo (~17x más
+    # rápido que un loop de getrandbits(8) para MBs de padding).
+    rng = random.Random(seed)
+    padding = rng.randbytes(padding_necesario)
 
     resultado = io.BytesIO()
     buf_base.seek(0)
