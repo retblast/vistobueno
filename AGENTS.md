@@ -34,9 +34,11 @@ Frontend (React)
 | **Extractor DOCX** | `validator/extractor.py` | Abre .docx (zip OPC), extrae XML |
 | **Checks** | `validator/checks.py` | Ejecuta checks individuales (xpath, atributos, regex) |
 | **Prompts IA** | `validator/prompts.py` | Genera prompts template para reglas fallidas |
+| **Exportador Markdown/PDF** | `validator/exportador.py` | Exporta reportes a Markdown y PDF |
 | **API** | `validator/api.py` | Endpoint FastAPI `POST /validar` |
 | **DTOs API** | `validator/api_models.py` | Modelos Pydantic de respuesta (campos en español) |
 | **CLI referencia** | `validator/cli.py` | Validador desde línea de comandos |
+| **Tests exportador** | `tests/test_exportador.py` | Tests de exportación Markdown/PDF |
 | **Reglas** | `unt_format_rules_schema.yaml` | 44 reglas, 32 ejecutables (fuente de verdad legacy) |
 | **Reglas DSL (producción)** | `reglas_unt.yaml` | 47 reglas verificables (F1–F6 + F2 ítems 1-3 y 11-12) |
 
@@ -357,6 +359,7 @@ vistobueno/
 ├── flake.nix                          # Entorno de desarrollo Nix
 ├── unt_format_rules_schema.yaml       # 44 reglas de formato (fuente de verdad legacy)
 ├── reglas_unt.yaml                    # Reglas en formato DSL (47 reglas)
+├── reglas_dsl_ejemplo.yaml            # Ejemplo de reglas DSL
 ├── validator/
 │   ├── __init__.py                    # Docstring del paquete
 │   ├── engine.py                      # Motor: load_rules, validate_docx, build_report
@@ -364,6 +367,7 @@ vistobueno/
 │   ├── extractor.py                   # Abre .docx, extrae XML (ExtractedDocx)
 │   ├── checks.py                      # Checks individuales (xpath, atributos, regex)
 │   ├── prompts.py                     # Generador de prompts "cómo preguntar a una IA"
+│   ├── exportador.py                  # Exporta reportes a Markdown y PDF
 │   ├── api.py                         # FastAPI endpoint POST /validar
 │   ├── api_models.py                  # Pydantic DTOs (ValidarResponse, etc.)
 │   ├── cli.py                         # CLI de referencia
@@ -380,6 +384,7 @@ vistobueno/
 │   ├── test_f4_ingenieria.py          # Tests F4: linter, cache, traza
 │   ├── test_paridad_formatos.py       # Paridad legacy vs DSL
 │   ├── test_propiedad.py              # Tests de propiedad (factory + mutaciones)
+│   ├── test_exportador.py             # Tests de exportación a Markdown/PDF
 │   ├── docx_factory.py                # Factory determinista de DOCX
 │   ├── _docx_builder.py               # Builder interno de DOCX
 │   ├── _mutations.py                  # Mutaciones sincronizadas con reglas_unt.yaml
@@ -389,14 +394,27 @@ vistobueno/
 │   ├── openapi_spec.json              # Especificación OpenAPI
 │   ├── DSL.md                         # Referencia del DSL declarativo
 │   ├── PLAN_DSL.md                    # Plan de fases DSL (F1-F6)
+│   ├── PLAN_BACKLOG_FUTURO.md         # Backlog de tareas futuras
+│   ├── CAMBIOS_MOTOR_DSL.md           # Historial de cambios del motor DSL
+│   ├── FLUJO_API.md                   # Flujo de la API en detalle
+│   ├── cronologia_trabajo.md          # Cronología del trabajo
 │   ├── ejemplo_respuesta_motor.json   # Salida de referencia del motor
 │   └── semana{N}_trabajo_{user}.md    # Bitácoras semanales
+├── diseno/
+│   └── *.md                           # Documentación de diseño (ver índice)
 ├── scripts/
 │   ├── eval_contra_plantillas.py      # Evaluación batch contra plantillas
-│   ├── evaluar_paridad_plantillas.py  # Paridad legacy vs DSL
+│   ├── evaluar_paridad_plantillas.py  # Paridad legacy vs DSL (recursos/)
 │   ├── migrar_legacy_a_dsl.py         # Migra YAML legacy → DSL
-│   └── ocr_pdfs.py                    # OCR de reglamentos escaneados
+│   ├── ocr_pdfs.py                    # OCR de reglamentos escaneados
+│   └── generate_openapi.py            # Regenerar especificación OpenAPI
 ├── frontend/                          # React + Vite (en desarrollo)
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── components/
+│   │   └── mocks.js
+│   └── public/
+├── mockups/                           # Prototipos HTML estáticos
 └── recursos/                          # Plantillas oficiales y reglamentos (.docx, .pdf)
 ```
 
@@ -454,6 +472,27 @@ El `AGENTS.md` se puede actualizar conforme el proyecto evolucione:
 - Nuevos roles o responsabilidades → actualizar tabla de roles
 
 **Restricción**: todo cambio al `AGENTS.md` debe ser **aprobado por el usuario** antes de hacerse commit. No actualices este documento unilateralmente.
+
+### Mantenimiento de README.md
+
+El `README.md` es el punto de entrada público del proyecto y debe mantenerse sincronizado con el estado real del código. Cada commit que modifique:
+
+- la arquitectura o el flujo de datos;
+- los comandos de desarrollo, tests o despliegue;
+- el contrato de la API;
+- el conjunto de reglas o el comportamiento del validador;
+- los componentes públicos del frontend o del backend;
+
+debe ir acompañado de una actualización de `README.md` que refleje el cambio. Si el README ya cubre el cambio sin necesidad de edición, no se requiere actualización.
+
+Al revisar un PR, verificar que:
+
+1. las rutas y nombres de archivos mencionados existan;
+2. los comandos de ejemplo aún sean válidos;
+3. las secciones de arquitectura, stack y estado actual estén actualizadas;
+4. cualquier cambio en `AGENTS.md` que afecte a la documentación pública haya sido reflejado en `README.md`.
+
+**Prioridad**: si hay conflicto entre README y AGENTS, mantener AGENTS como guía de trabajo y README como resumen público, pero ambos deben contar la misma historia.
 
 ---
 
