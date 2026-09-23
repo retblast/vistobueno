@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 
 // Mapeo de IDs de regla a categoría visible en el reporte.
 // El backend no agrupa por categoría en su respuesta JSON (solo devuelve
@@ -58,6 +58,12 @@ function Report({ data, onBack }) {
   const [filtro, setFiltro] = useState('todos') // 'todos' | 'error' | 'warning'
   const [vista, setVista] = useState('detallada') // 'detallada' | 'simple'
   const [copiado, setCopiado] = useState(null)
+  const semaforoRef = useRef(null)
+
+  // Al montar el reporte, llevar el foco/scroll al semáforo (visibilidad de estado).
+  useEffect(() => {
+    semaforoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
 
   const resultados = Array.isArray(data?.resultados) ? data.resultados : []
   const prompts = Array.isArray(data?.como_preguntar_a_una_ia) ? data.como_preguntar_a_una_ia : []
@@ -91,7 +97,15 @@ function Report({ data, onBack }) {
   return (
     <main>
       {/* ── Semáforo y resumen ──────────────────────── */}
-      <div className="card">
+      <div className="card" ref={semaforoRef} tabIndex={-1}>
+        {data?.__mock && (
+          <div className="aviso warn" role="status" style={{ marginBottom: '.8rem' }}>
+            <div className="aviso-fila">
+              <strong>Reporte de ejemplo.</strong>
+            </div>
+            <span className="ejemplos">{data.__mockMotivo}</span>
+          </div>
+        )}
         <div className="semaforo">
           <div className={`luz ${semaforo}`}>{semaforo === 'rojo' ? '✕' : '✓'}</div>
           <div>
@@ -175,7 +189,7 @@ function Report({ data, onBack }) {
                 const w = items.filter((r) => !r.paso && r.severidad === 'warning').length
                 const ok = items.filter((r) => r.paso).length
                 return (
-                  <details key={cat} className="categoria" open>
+                  <details key={cat} className="categoria">
                     <summary className="cat-head">
                       <strong>{cat}</strong>
                       <span className="der">
@@ -193,15 +207,22 @@ function Report({ data, onBack }) {
                         const claseIcono = !r.paso
                           ? (r.severidad === 'error' ? 'fail' : 'warn')
                           : 'ok'
+                        const etiquetaEstado = !r.paso
+                          ? (r.severidad === 'error' ? 'Error' : 'Advertencia')
+                          : 'Cumple'
                         return (
                           <div key={r.rule_id} className="resultado">
-                            <span className={`estado ${claseIcono}`}>{icono}</span>
+                            <span
+                              className={`estado ${claseIcono}`}
+                              role="img"
+                              aria-label={etiquetaEstado}
+                              title={etiquetaEstado}
+                            >
+                              {icono}
+                            </span>
                             <div className="info">
                               <div className="msg">
-                                {r.mensaje || r.message}{' '}
-                                <span className={`badge ${r.severidad}`}>
-                                  {r.severidad === 'error' ? 'error' : 'advertencia'}
-                                </span>
+                                {r.mensaje || r.message}
                                 {!r.paso && (
                                   <div className="esperado">
                                     <span className="etq">Esperado:</span> {r.esperado ?? r.expected}<br />
@@ -235,7 +256,7 @@ function Report({ data, onBack }) {
             prompts.map((p) => (
               <div key={p.rule_id} className="ia-card">
                 <div className="head">
-                  <span className="rule">{p.rule_id}</span>
+                  <span className="rule">{categoriaDe(p.rule_id)}</span>
                   <button
                     className="btn-copiar"
                     onClick={() => copiar(p.rule_id, p.prompt)}

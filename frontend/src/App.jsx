@@ -3,6 +3,12 @@ import Upload from './components/Upload'
 import Report from './components/Report'
 import { MOCK_REPORT } from './mocks'
 
+// API base URL:
+// - Default '' = mismo origen (funciona con el proxy de Vite en `npm run dev`).
+// - En producción no hay proxy de Vite: definir VITE_API_URL en tiempo de build
+//   (p.ej. VITE_API_URL=https://api.ejemplo.com) o servir el frontend detrás de un
+//   reverse proxy (nginx/caddy) que enrute /validar al backend FastAPI.
+//   Ver README.md → "Despliegue del frontend".
 const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 function DarkModeToggle() {
