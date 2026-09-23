@@ -1,7 +1,7 @@
 # Flujo del endpoint POST /validar
 
-**Versión**: 1.0  
-**Fecha**: 2026-09-09
+**Versión**: 1.1  
+**Fecha**: 2026-09-23
 
 ---
 
@@ -11,16 +11,22 @@
 flowchart TD
     A[Frontend<br/>POST /validar<br/>multipart/form-data] --> B{¿Hay campo archivo?}
     B -->|No| C[422<br/>FastAPI: campo requerido]
-    B -->|Sí| D{¿Extensión .docx?}
+    B -->|Sí| B2{¿Nombre vacío?}
+    B2 -->|Sí| C2[400<br/>Campo archivo sin nombre]
+    B2 -->|No| D{¿Extensión .docx?}
     D -->|No| E[415<br/>Tipo no soportado]
     D -->|Sí| F{Content-Type<br/>advisory check}
     F -->|No soportado| E
-    F -->|OK / vacío| G[Leer contenido]
+    F -->|OK / vacío| F2{¿correo presente<br/>y válido?}
+    F2 -->|Inválido| F3[422<br/>Correo electrónico inválido]
+    F2 -->|Válido / ausente / vacío| G[Leer contenido]
     G --> H{¿Tamaño > 10 MB?}
     H -->|Sí| I[413<br/>Archivo excede tamaño máximo]
     H -->|No| J{¿Archivo vacío?}
     J -->|Sí| K[422<br/>Archivo vacío]
-    J -->|No| L[Guardar en temp file]
+    J -->|No| J2{¿Cabecera PK\x03\x04?}
+    J2 -->|No| J3[422<br/>Cabecera ZIP inválida]
+    J2 -->|Sí| L[Guardar en temp file]
     L --> M[engine.validate_docx<br/>+ build_report]
     M --> N{¿éxito?}
     N -->|ZIP corrupto / XML inválido| O[422<br/>DOCX inválido]
@@ -80,11 +86,14 @@ flowchart LR
 | Paso | Código | Condición |
 |------|--------|-----------|
 | Campo requerido | 422 | `archivo` no está en el request |
+| Nombre de archivo | 400 | Campo presente pero `filename` vacío |
 | Extensión | 415 | Nombre no termina en `.docx` |
 | Content-Type | 415 | MIME type no es `.docx` ni `application/octet-stream` |
+| Correo (opcional) | 422 | Campo `correo` presente pero formato inválido |
 | Tamaño | 413 | Contenido > 10 MB |
 | Vacío | 422 | 0 bytes |
-| DOCX corrupto | 422 | BadZipFile, XML inválido |
+| Magic bytes | 422 | Cabecera no es `PK\x03\x04` (no es ZIP) |
+| DOCX corrupto | 422 | BadZipFile, KeyError (sin document.xml), ValueError, XML inválido |
 | Error interno | 500 | Cualquier otra excepción |
 
 ---

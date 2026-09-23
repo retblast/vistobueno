@@ -14,7 +14,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from email_validator import EmailNotValidError, validate_email
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 
 from .api_models import (
     MetadatosValidacion,
@@ -111,6 +112,32 @@ def _construir_respuesta(
     )
 
 
+def _validar_correo(correo: str | None) -> str | None:
+    """Valida el correo electrónico del estudiante (campo opcional).
+
+    - `None` o cadena vacía → `None` (el frontend puede omitirlo o enviar "").
+    - Si se envía, debe tener formato de correo válido; si no, lanza 422
+      con mensaje descriptivo en español.
+    """
+    if correo is None:
+        return None
+    correo_limpio = correo.strip()
+    if not correo_limpio:
+        return None
+
+    try:
+        resultado = validate_email(correo_limpio, check_deliverability=False)
+        return resultado.normalized
+    except EmailNotValidError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Correo electrónico inválido: '{correo_limpio}'. "
+                f"Formato esperado: usuario@dominio."
+            ),
+        ) from e
+
+
 # ---------------------------------------------------------------------------
 # Aplicación FastAPI
 # ---------------------------------------------------------------------------
@@ -118,7 +145,7 @@ def _construir_respuesta(
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 
@@ -134,7 +161,7 @@ app = FastAPI(
         400: {"description": "Sin archivo en la solicitud"},
         413: {"description": "Archivo excede el tamaño máximo (10 MB)"},
         415: {"description": "Tipo de archivo no soportado"},
-        422: {"description": "Archivo corrupto o no es DOCX válido"},
+        422: {"description": "Archivo corrupto, no es DOCX válido o correo inválido"},
         500: {"description": "Error interno del validador"},
     },
 )
@@ -144,6 +171,13 @@ async def validar(
         default=True,
         alias="incluir_prompts_ia",
         description="Incluir la sección 'Cómo preguntar a una IA' en la respuesta",
+    ),
+    correo: str | None = Form(
+        default=None,
+        description=(
+            "Correo electrónico del estudiante (opcional). "
+            "Se usará para notificar resultados cuando el envío esté habilitado."
+        ),
     ),
 ):
     # --- Validación: ¿hay archivo? ---
@@ -174,6 +208,9 @@ async def validar(
             ),
         )
 
+    # --- Validación: correo electrónico (opcional) ---
+    _validar_correo(correo)
+
     # --- Leer contenido ---
     try:
         contenido = await archivo.read()
@@ -199,6 +236,19 @@ async def validar(
         raise HTTPException(
             status_code=422,
             detail="El archivo está vacío.",
+        )
+
+    # --- Validación: magic bytes de un ZIP/DOCX (cabecera PK) ---
+    # Un DOCX es un paquete OPC (ZIP). Toda imagen ZIP válida comienza con
+    # la firma local 'PK\x03\x04'. Verificarla antes de escribir el temporal
+    # permite rechazar rápido archivos renombrados a .docx sin abrirlos.
+    if not contenido.startswith(b"PK\x03\x04"):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "El archivo no es un ZIP/DOCX válido: cabecera incorrecta "
+                "(se esperaba la firma 'PK')."
+            ),
         )
 
     # --- Guardar en archivo temporal y procesar ---

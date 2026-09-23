@@ -336,7 +336,7 @@ class TestErrores:
         assert respuesta.json()["semaforo"] in ("verde", "rojo")
 
     def test_zip_magic_bytes_invalidos(self):
-        """Archivo .docx con contenido basura que no es ZIP → 422."""
+        """Archivo .docx con cabecera que no es ZIP (PK) → 422."""
         contenido = b"MZ" + b"\x00" * 200  # cabecera MZ (EXE) + relleno
         respuesta = CLIENTE.post(
             "/validar",
@@ -348,9 +348,26 @@ class TestErrores:
                 )
             },
         )
-        # No es un ZIP válido → BadZipFile → 422
+        # Validación temprana de magic bytes → 422 con mensaje de cabecera
         assert respuesta.status_code == 422
-        assert "detail" in respuesta.json()
+        assert "cabecera" in respuesta.json()["detail"]
+        assert "PK" in respuesta.json()["detail"]
+
+    def test_zip_magic_bytes_truncados(self):
+        """Cabecera ZIP incompleta (solo 'PK\\x03') → 422."""
+        contenido = b"PK\x03"
+        respuesta = CLIENTE.post(
+            "/validar",
+            files={
+                "archivo": (
+                    "truncado.docx",
+                    contenido,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+        assert respuesta.status_code == 422
+        assert "cabecera" in respuesta.json()["detail"]
 
     def test_mensajes_error_son_descriptivos(self):
         """Todos los mensajes de error deben tener 'detail' con información útil."""
@@ -397,6 +414,122 @@ class TestErrores:
         assert r4.status_code == 422
         assert isinstance(r4.json()["detail"], str)
         assert len(r4.json()["detail"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: validación del campo correo (opcional)
+# ---------------------------------------------------------------------------
+
+
+class TestCorreo:
+    """Cobertura del campo 'correo' (opcional) de POST /validar."""
+
+    def _docx_payload(self) -> dict:
+        """Payload mínimo con extensión .docx para tests de validación de campos."""
+        return {
+            "archivo": (
+                "prueba.docx",
+                b"PK\x03\x04contenido-de-prueba",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        }
+
+    def test_correo_valido_aceptado(self):
+        """Correo válido → la validación de campos no falla con 422 de correo."""
+        if not PLANTILLA.exists():
+            pytest.skip("Plantilla de prueba no disponible")
+        with open(PLANTILLA, "rb") as f:
+            respuesta = CLIENTE.post(
+                "/validar",
+                data={"correo": "estudiante@unitru.edu.pe"},
+                files={
+                    "archivo": (
+                        "tesis.docx",
+                        f,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                },
+            )
+        assert respuesta.status_code == 200
+
+    def test_correo_invalido_rechazado(self):
+        """Correo sin formato válido → 422 con mensaje en español."""
+        respuesta = CLIENTE.post(
+            "/validar",
+            data={"correo": "no-es-un-correo"},
+            files=self._docx_payload(),
+        )
+        assert respuesta.status_code == 422
+        assert "Correo electrónico inválido" in respuesta.json()["detail"]
+
+    def test_correo_ausente_aceptado(self):
+        """Campo 'correo' omitido → 200 (retrocompatible, opcional)."""
+        if not PLANTILLA.exists():
+            pytest.skip("Plantilla de prueba no disponible")
+        with open(PLANTILLA, "rb") as f:
+            respuesta = CLIENTE.post(
+                "/validar",
+                files={
+                    "archivo": (
+                        "tesis.docx",
+                        f,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                },
+            )
+        assert respuesta.status_code == 200
+
+    def test_correo_vacio_tratado_como_ausente(self):
+        """Correo vacío ('') → tratado como ausente, no rechazado."""
+        if not PLANTILLA.exists():
+            pytest.skip("Plantilla de prueba no disponible")
+        with open(PLANTILLA, "rb") as f:
+            respuesta = CLIENTE.post(
+                "/validar",
+                data={"correo": ""},
+                files={
+                    "archivo": (
+                        "tesis.docx",
+                        f,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                },
+            )
+        assert respuesta.status_code == 200
+
+    def test_correo_con_espacios_normalizado(self):
+        """Correo con espacios alrededor → normalizado y aceptado."""
+        if not PLANTILLA.exists():
+            pytest.skip("Plantilla de prueba no disponible")
+        with open(PLANTILLA, "rb") as f:
+            respuesta = CLIENTE.post(
+                "/validar",
+                data={"correo": "  estudiante@unitru.edu.pe  "},
+                files={
+                    "archivo": (
+                        "tesis.docx",
+                        f,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                },
+            )
+        assert respuesta.status_code == 200
+
+    def test_correo_invalido_detectado_antes_de_procesar_archivo(self):
+        """Correo inválido con archivo corrupto → falla primero por correo (422)."""
+        respuesta = CLIENTE.post(
+            "/validar",
+            data={"correo": "@@malformed@@"},
+            files={
+                "archivo": (
+                    "corrupto.docx",
+                    b"no es zip",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+        assert respuesta.status_code == 422
+        assert "Correo electrónico inválido" in respuesta.json()["detail"]
 
 
 # ---------------------------------------------------------------------------

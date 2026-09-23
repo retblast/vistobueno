@@ -138,6 +138,76 @@ Se ejecutó `scripts/generate_openapi.py` para sincronizar `docs/openapi_spec.js
 
 ---
 
+### 23/09/2026: Cierre de la actividad 5 — validación de entrada y manejo de errores
+
+Se completó el trabajo pendiente de los días anteriores para cerrar la
+**actividad 5 del plan de prácticas** (*Implementar la validación de entrada
+en el endpoint … Documentar cada caso de error en CONTRATO_API.md*).
+
+#### Parte A — Validación de magic bytes (cabecera ZIP)
+
+Se agregó una verificación temprana en `validator/api.py`: todo DOCX es un
+paquete OPC (ZIP) y debe comenzar con la firma local `PK\x03\x04`. Archivos
+renombrados a `.docx` sin cabecera ZIP ahora se rechazan con `422` y un
+mensaje descriptivo en español **antes** de escribir el archivo temporal.
+
+El orden de validación quedó: extensión → content-type → correo → lectura →
+tamaño (413) → vacío (422) → magic bytes (422) → procesamiento.
+
+**Commits**:
+1. `feat(api): validar magic bytes PK del DOCX en POST /validar`
+2. `test(api): exigir 422 con mensaje claro para cabecera ZIP inválida`
+
+#### Parte B — Campo `correo` (opcional)
+
+Se implementó el campo de formulario `correo` previsto en las actividades 2,
+4 y 5 del plan (Option A: solo validación de formato, sin envío — el envío
+corresponde a la actividad 6):
+
+- Campo **opcional** (`default=None`): ausente o vacío → se omite; no rompe
+  clientes existentes.
+- Si se envía, se valida con la librería `email-validator` (sin verificar
+  entregabilidad, para no acoplarse a DNS en tests/dev).
+- Formato inválido → `422` con mensaje en español: `Correo electrónico
+  inválido: '…'. Formato esperado: usuario@dominio.`
+- Se añadió `email-validator` a `pythonEnv` en `flake.nix` (dependencia
+  gestionada por Nix, sin `pip install`).
+
+**Commits**:
+3. `chore(env): agregar email-validator a pythonEnv en flake.nix`
+4. `feat(api): aceptar y validar campo correo en POST /validar`
+5. `test(api): cubrir validación de correo opcional`
+11. `fix(api): corregir ejemplo de formato de correo (sin .pe)` — se eliminó
+    la suposición del TLD `.pe` del mensaje de error; el formato ahora es
+    genérico (`usuario@dominio`) y acepta cualquier TLD válido.
+
+#### Parte C — Sincronización de documentación (evidencia de la actividad 5)
+
+El producto de la actividad 5 es *"Casos de error documentados en
+docs/CONTRATO_API.md y pruebas asociadas"*. Se cerraron las discrepancias
+pendientes:
+
+- **CONTRATO_API.md → v1.2.0**: campo `correo`, magic bytes, MIME
+  `application/octet-stream`, ejemplos de `400` / `422` (cabecera, KeyError
+  sin `document.xml`, ValueError, correo), tabla de códigos actualizada,
+  ejemplo `curl` con correo, changelog.
+- **FLUJO_API.md → v1.1**: diagrama actualizado con nodos de nombre vacío
+  (`400`), correo (`422`) y magic bytes (`422`); tabla de validaciones HTTP
+  ampliada.
+- **openapi_spec.json** regenerada: versión `1.2.0`, propiedad `correo`,
+  respuesta `400` documentada. Verificada idempotente (sha256 estable tras
+  regenerar dos veces).
+
+**Commits**:
+6. `docs(api): sincronizar CONTRATO_API con validación de entrada (v1.2.0)`
+7. `docs(api): actualizar FLUJO_API con magic bytes y validación de correo`
+8. `chore(api): regenerar openapi_spec.json para v1.2.0`
+
+**Resultado**: **213 tests, todos pasan** (206 previos + 7 nuevos: 1 magic
+bytes truncado, 6 de correo). `ruff` y `mypy` limpios en `validator/`.
+
+---
+
 ## Evidencias producidas
 
 | Evidencia | Archivo | Competencia curricular |
@@ -151,6 +221,13 @@ Se ejecutó `scripts/generate_openapi.py` para sincronizar `docs/openapi_spec.js
 | Script de generación OpenAPI | `scripts/generate_openapi.py` | Ingeniería de Software II |
 | Especificación OpenAPI regenerada | `docs/openapi_spec.json` | Ingeniería de Software I |
 | Fixtures compartidos de tests | `tests/conftest.py` | Ingeniería de Software II |
+| Validación de magic bytes (cabecera PK) | `validator/api.py` | Ingeniería de Software II |
+| Dependencia `email-validator` en Nix | `flake.nix` | Ingeniería de Software I |
+| Campo `correo` con validación de formato | `validator/api.py` | Ingeniería de Software II |
+| Tests de validación de correo | `tests/test_api_contract.py` | Ingeniería de Software II |
+| Contrato v1.2.0 con todos los casos de error | `docs/CONTRATO_API.md` | Ingeniería de Software I |
+| Diagrama de flujo actualizado | `docs/FLUJO_API.md` | Ingeniería de Software I |
+| Especificación OpenAPI v1.2.0 | `docs/openapi_spec.json` | Ingeniería de Software I |
 
 ---
 
@@ -160,8 +237,9 @@ Se ejecutó `scripts/generate_openapi.py` para sincronizar `docs/openapi_spec.js
 |-------------|-----------|
 | **Ingeniería de Software I** — Technical documentation, tooling | Mejora del entorno de desarrollo con nix apps y shellHook documentado |
 | **Ingeniería de Software I** — API contract, OpenAPI spec | Generación y actualización de la especificación OpenAPI |
-| **Ingeniería de Software II** — Configuration management | Gestión del entorno reproducible con Nix flake |
-| **Ingeniería de Software II** — Error handling, testing | Corrección del handler de errores, tests de límites y casos borde |
+| **Ingeniería de Software I** — API contract, OpenAPI spec | Contrato v1.2.0 con magic bytes, correo y documentación completa de errores |
+| **Ingeniería de Software II** — Configuration management | Gestión del entorno reproducible con Nix flake (incluye `email-validator`) |
+| **Ingeniería de Software II** — Error handling, testing | Corrección del handler de errores, magic bytes, validación de correo, tests de límites y casos borde |
 
 ---
 
@@ -184,11 +262,27 @@ Se ejecutó `scripts/generate_openapi.py` para sincronizar `docs/openapi_spec.js
 - [x] Regenerar `openapi_spec.json` (v1.1.0)
 - [x] Crear `tests/conftest.py` con fixtures compartidos
 - [x] Test de magic bytes inválidos
-- [ ] Corregir discrepancias menores en CONTRATO_API.md
+- [x] Corregir discrepancias menores en CONTRATO_API.md → v1.2.0
+- [x] Validación de magic bytes (`PK\x03\x04`) en el endpoint
+- [x] Campo `correo` opcional con validación de formato (actividad 5)
+- [x] Tests de validación de correo (6 escenarios)
+- [x] Documentar 400 / 422 (KeyError, ValueError, cabecera, correo) en CONTRATO_API
+- [x] Actualizar FLUJO_API.md (diagrama + tabla de validaciones)
+- [x] Regenerar `openapi_spec.json` a v1.2.0
+- [x] Suite completa: 213/213 tests, ruff y mypy limpios
+- [ ] **Actividad 5 cerrada** (evidencia consolidada en esta bitácora)
+- [ ] Actualizar conteo de suite en `AGENTS.md` y `00_indice_diseno.md` (aprobado)
+- [ ] Push de la rama `semana4-cierre-actividad5` + PR (esperando orden de Master)
 
 ---
 
 ## Plan siguiente
 
-- **Día (22/09)**: Completar validación de content-type con verificación de magic bytes, investigar endpoints de DSpace.
-- **Día (23/09)**: Consolidar documentación, preparar evidencia de cierre de actividad 5.
+- **Actividad 6 (semanas 5–6 del plan)**: notificación por correo —
+  investigar SMTP institucional, diseñar plantilla HTML con reglas fallidas,
+  integrar envío al flujo de `POST /validar` cuando `semaforo == "rojo"`.
+- **Actividad 9 (semana 6)**: investigar API REST de DSpace FECyC
+  (endpoints de submission, metadatos, autenticación).
+- Coordinar con Integrante 2 el campo adicional `correo` antes de abrir el PR.
+- Solicitar credenciales SMTP y acceso DSpace al responsable de la sede
+  (Salcedo Quiñones) para no bloquear las semanas 6–7.

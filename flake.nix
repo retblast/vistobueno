@@ -15,6 +15,7 @@
           fastapi
           uvicorn
           pydantic
+          email-validator
           pyyaml
           python-docx
           pymupdf
