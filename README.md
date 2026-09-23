@@ -141,6 +141,7 @@ tests/
 
 scripts/
   eval_contra_plantillas.py       # Evaluación batch contra plantillas
+  generate_openapi.py             # Genera la especificación OpenAPI (docs/openapi_spec.json)
   evaluar_paridad_plantillas.py   # Paridad legacy vs DSL (recursos/)
   migrar_legacy_a_dsl.py          # Migra YAML legacy → DSL
   ocr_pdfs.py                     # OCR de reglamentos escaneados
@@ -188,6 +189,9 @@ python -m validator.exportador reporte.json reporte.pdf
 
 # evaluar un lote de plantillas/tesis de prueba
 python scripts/eval_contra_plantillas.py unt_format_rules_schema.yaml ruta/a/plantillas/
+
+# regenerar la especificación OpenAPI (docs/openapi_spec.json)
+python scripts/generate_openapi.py
 
 # calidad de ingeniería (lint, tipos y medición de cobertura)
 ruff check validator/ scripts/ tests/
