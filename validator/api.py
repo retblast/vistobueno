@@ -10,9 +10,9 @@ Uso:
     uvicorn validator.api:app --reload
 """
 
-import os
 import tempfile
 import zipfile
+from functools import cache
 from pathlib import Path
 
 from email_validator import EmailNotValidError, validate_email
@@ -50,16 +50,11 @@ TIPOS_ACEPTADOS = {
 
 EXTENSION_ACEPTADA = ".docx"
 
-# Cargar reglas una sola vez al iniciar el módulo
-_rules_data: dict | None = None
 
-
+@cache
 def _get_rules() -> dict:
-    """Carga el YAML de reglas en la primera llamada y lo cachea."""
-    global _rules_data
-    if _rules_data is None:
-        _rules_data = load_rules(REGLAS_YAML_PATH)
-    return _rules_data
+    """Carga el YAML de reglas una sola vez (cacheado en memoria)."""
+    return load_rules(REGLAS_YAML_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +114,10 @@ def _validar_correo(correo: str | None) -> str | None:
     - `None` o cadena vacía → `None` (el frontend puede omitirlo o enviar "").
     - Si se envía, debe tener formato de correo válido; si no, lanza 422
       con mensaje descriptivo en español.
+
+    El endpoint descarta el valor retornado por ahora: la normalización
+    queda como cimientos para la Actividad 6 (notificación por correo),
+    que usará el correo normalizado como destinatario.
     """
     if correo is None:
         return None
@@ -170,7 +169,6 @@ async def validar(
     archivo: UploadFile = File(..., description="Archivo .docx a validar"),
     incluir_prompts_ia: bool = Query(
         default=True,
-        alias="incluir_prompts_ia",
         description="Incluir la sección 'Cómo preguntar a una IA' en la respuesta",
     ),
     correo: str | None = Form(
@@ -311,8 +309,8 @@ async def validar(
             detail=f"Error interno del validador: {type(e).__name__}: {e}",
         ) from e
     finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        if tmp_path:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
