@@ -177,6 +177,9 @@ corresponde a la actividad 6):
 3. `chore(env): agregar email-validator a pythonEnv en flake.nix`
 4. `feat(api): aceptar y validar campo correo en POST /validar`
 5. `test(api): cubrir validación de correo opcional`
+11. `fix(api): corregir ejemplo de formato de correo (sin .pe)` — se eliminó
+    la suposición del TLD `.pe` del mensaje de error; el formato ahora es
+    genérico (`usuario@dominio`) y acepta cualquier TLD válido.
 
 #### Parte C — Sincronización de documentación (evidencia de la actividad 5)
 
