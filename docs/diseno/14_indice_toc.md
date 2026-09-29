@@ -89,7 +89,7 @@ Sobre las entradas de la misma región (mismo algoritmo de detección):
 
 La base ahora emite un TOC válido (`TDC_ENTRADAS_BASE`, 20 entradas
 `(nivel, texto)` con página), permitiendo que las dos reglas nuevas pasen en
-`test_doc_bueno_pasa_45/47`. La cadena de mutación agrega:
+`test_doc_bueno_pasa_sin_fallos`. La cadena de mutación agrega:
 
 - `indice_apunta_secciones` → `_insertar_tdc` (entrada "1.6. DELIMITACIÓN DE
   LA INVESTIGACIÓN" tras 1.5, cuyo token "DELIMITACIÓN" no existe en el cuerpo

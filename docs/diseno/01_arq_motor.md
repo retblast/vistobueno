@@ -47,7 +47,7 @@ flowchart TB
 
     subgraph DATOS["Datos"]
         YAML_LEGACY["unt_format_rules_schema.yaml<br/>(44 reglas legacy)"]
-        YAML_DSL["reglas_unt.yaml<br/>(47 reglas DSL)"]
+        YAML_DSL["reglas_unt.yaml<br/>(48 reglas DSL)"]
         DOCX["tesis.docx"]
     end
 
@@ -99,7 +99,7 @@ flowchart TB
     subgraph API_B["Backend"]
         FAPI["FastAPI<br/>POST /validar → motor"]
         SM["Motor de validación<br/>engine.validate_docx"]
-        REG["reglas_unt.yaml<br/>(47 reglas DSL)"]
+        REG["reglas_unt.yaml<br/>(48 reglas DSL)"]
         OUT["Respuesta JSON<br/>{semaforo, resultados}"]
     end
 

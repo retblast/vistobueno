@@ -11,8 +11,8 @@ partir de un diccionario de configuración, de modo que los tests de
 propiedad puedan pedir:
 
 - `configuracion_base()`: el documento "bueno", que cumple TODAS las reglas
-  mecánicas salvo las dos alternativas de estructura mutuamente excluyentes
-  (cualitativo y revisión de literatura). Resultado esperado: 45/47.
+  mecánicas. Las dos estructuras de otros tipos de TINV no le aplican (el
+  documento es un plan cuantitativo). Resultado esperado: 48 evaluadas, 0 fallos.
 - `aplicar_mutacion(rule_id, config)`: aplica un desvío MÍNIMO (una sola
   propiedad) contra el documento bueno, de forma que solo la regla
   `rule_id` cambie su resultado.
@@ -31,7 +31,8 @@ from _docx_builder import (
 )
 from _mutations import (
     DESVIOS_BASE,
-    EXCLUIDAS_BASE,
+    NO_APLICABLES_BASE,
+    NO_APLICABLES_TOTAL,
     REGLAS,
     REGLAS_ACOPLADAS,
     REGLAS_OK_BASE,
@@ -42,7 +43,8 @@ from _mutations import (
 __all__ = [
     "ANEXOS_BASE",
     "DESVIOS_BASE",
-    "EXCLUIDAS_BASE",
+    "NO_APLICABLES_BASE",
+    "NO_APLICABLES_TOTAL",
     "REGLAS",
     "REGLAS_ACOPLADAS",
     "REGLAS_OK_BASE",

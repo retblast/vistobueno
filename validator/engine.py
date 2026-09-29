@@ -100,15 +100,25 @@ def build_report(results: list[RuleResult], severities: list[str] | None = None)
     severidad "error" (independiente del filtro de severidad del reporte
     detallado) — un filtro de visualización nunca debe poder ocultar un
     bloqueo real de la entrega.
+
+    Las reglas **no aplicables** no entran en `resultados`: no se miraron, y
+    listarlas haría creer que se cumplieron. Se cuentan aparte en el resumen,
+    junto a cuántas sí se evaluaron. Sin eso, un total fijo haría creer al
+    estudiante que 4 reglas se cumplieron cuando en realidad no se miraron
+    (decisión 5 del diseño, docs/diseno/15_tipo_documento_grupos.md).
     """
     hay_error_bloqueante = any((not r.passed) and r.severity == Severity.ERROR for r in results)
-    reporte_resultados = filter_by_severity(results, severities)
+    evaluadas = [r for r in results if r.aplicable]
+    omitidas = len(results) - len(evaluadas)
+    reporte_resultados = filter_by_severity(evaluadas, severities)
 
     return {
         "semaforo": "rojo" if hay_error_bloqueante else "verde",
         "resultados": [r.to_dict() for r in reporte_resultados],
         "resumen": {
             "total": len(results),
+            "total_evaluadas": len(evaluadas),
+            "reglas_no_aplicables": omitidas,
             "fallidos_error": sum(
                 1 for r in results if not r.passed and r.severity == Severity.ERROR
             ),

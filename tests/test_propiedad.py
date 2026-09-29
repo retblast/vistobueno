@@ -6,11 +6,11 @@ reglas mecánicas salvo los esquemas alternativos de estructura
 (cualitativo y revisión de literatura), que son mutuamente excluyentes con
 el plan cuantitativo. Sobre ese documento se verifican dos propiedades:
 
-1. `test_doc_bueno_pasa_45` — el documento bueno pasa exactamente 45/47
+1. `test_doc_bueno_pasa_46` — el documento bueno pasa exactamente 46/48
    reglas, y las únicas no pasadas son las documentadas en
-   `EXCLUIDAS_BASE`.
+   `NO_APLICABLES_BASE`.
 
-2. `test_mutacion_afecta_solo_esa_regla` — para cada una de las 47 reglas,
+2. `test_mutacion_afecta_solo_esa_regla` — para cada una de las 48 reglas,
    aplicar su mutación (desvío MÍNIMO) cambia el resultado SOLO de esa
    regla (comparación punto a punto `(passed, found)` contra el documento
    bueno). Las reglas acopladas por mecanismo IDÉNTICO se declaran en
@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 from docx_factory import (
-    EXCLUIDAS_BASE,
+    NO_APLICABLES_BASE,
     REGLAS,
     REGLAS_ACOPLADAS,
     aplicar_mutacion,
@@ -54,9 +54,23 @@ def _por_regla(resultados):
 
 
 def _estado(docx_path: str) -> dict:
-    """`(rule_id -> (passed, found))`; para estructura solo `passed`."""
+    """`(rule_id -> (passed, found))`; para estructura `(passed, aplicable)`.
+
+    Las reglas de estructura no se comparan por `found` porque los autómatas
+    reportan un contador interno `headings=N` que cambia ante cualquier
+    inserción o renombrado, aunque la semántica no cambie. Se comparan por
+    `aplicable` en su lugar: desde el paso 4 la aplicabilidad depende del tipo
+    detectado, así que es la señal que distingue "esta tesis es de otro tipo"
+    de "esta tesis está mal estructurada", y sin ella una mutación que hace
+    aplicable una estructura alternativa no se observaría (no aplicable y
+    aplicable dan las dos `passed=True`).
+    """
     return {
-        r.rule_id: (r.passed, None if r.rule_id in ESTRUCTURA else r.found)
+        r.rule_id: (
+            (r.passed, None if r.rule_id in ESTRUCTURA else r.found)
+            if r.rule_id not in ESTRUCTURA
+            else (r.passed, r.aplicable)
+        )
         for r in validate_docx(docx_path, RULES)
     }
 
@@ -65,10 +79,19 @@ def _sin_archivo(path: str):
     Path(path).unlink(missing_ok=True)
 
 
+# El paso 6 agrega un error centinela (`tipo_documento_no_determinado` /
+# `tipo_documento_contradictorio`) cuando la detección no puede clasificar el
+# documento. No es una de las 48 reglas: lo deriva la detección, así que no
+# tiene mutación propia ni cuenta para `REGLAS`. En un documento mutado puede
+# aparecer (y en el base no), por lo que se excluye de la comparación punto a
+# punto para no contarlo como "movida".
+CENTINELAS = {"tipo_documento_no_determinado", "tipo_documento_contradictorio"}
+
+
 def _compare(path_a: str, path_b: str, esperado: set, rule_id: str):
     """Verifica que la única diferencia entre dos documentos es `esperado`."""
-    a = _estado(path_a)
-    b = _estado(path_b)
+    a = {rid: v for rid, v in _estado(path_a).items() if rid not in CENTINELAS}
+    b = {rid: v for rid, v in _estado(path_b).items() if rid not in CENTINELAS}
     assert set(a) == set(b) == set(REGLAS)
     diffs = {rid for rid in a if a[rid] != b[rid]}
     assert diffs == esperado, (
@@ -76,8 +99,15 @@ def _compare(path_a: str, path_b: str, esperado: set, rule_id: str):
     )
 
 
-def test_doc_bueno_pasa_45():
-    """El documento base cumple 45/47: solo fallan los esquemas alternativos."""
+def test_doc_bueno_pasa_sin_fallos():
+    """El documento base no falla NINGUNA regla. Este es el arreglo.
+
+    Antes fallaban las dos estructuras de otros tipos de tesis
+    (`estructura_tinv_cualitativo` y `estructura_tinv_revision_literatura`),
+    errores imposibles de corregir para una tesis cuantitativa que ponían el
+    semáforo en rojo. Con la detección de tipo, esas dos ya no aplican y
+    el documento sale limpio.
+    """
     cfg = configuracion_base()
     path = compilar_docx(cfg)
     try:
@@ -85,12 +115,22 @@ def test_doc_bueno_pasa_45():
     finally:
         _sin_archivo(path)
 
-    assert len(res) == 47
+    assert len(res) == 48
     fallos = {rid for rid, r in res.items() if not r.passed}
-    assert fallos == EXCLUIDAS_BASE, f"fallos={sorted(fallos)}"
-    for rid, r in res.items():
-        if rid not in EXCLUIDAS_BASE:
-            assert r.passed, f"{rid}: {r.found!r}"
+    assert fallos == set(), f"fallos={sorted(fallos)}"
+
+
+def test_doc_bueno_solo_omite_las_estructuras_de_otros_tipos():
+    """Las 2 no aplicables son exactamente los esquemas de otros tipos."""
+    cfg = configuracion_base()
+    path = compilar_docx(cfg)
+    try:
+        res = _por_regla(validate_docx(path, RULES))
+    finally:
+        _sin_archivo(path)
+
+    no_aplicables = {rid for rid, r in res.items() if not r.aplicable}
+    assert no_aplicables == NO_APLICABLES_BASE
 
 
 @pytest.mark.parametrize("rule_id", REGLAS)
@@ -109,8 +149,8 @@ def test_mutacion_afecta_solo_esa_regla(rule_id):
         _sin_archivo(path_base)
 
 
-def test_mutaciones_cubren_las_47_reglas():
+def test_mutaciones_cubren_las_48_reglas():
     """Cadena de seguridad: toda regla de reglas_unt.yaml tiene mutación."""
     ids_yaml = {r["id"] for r in RULES["reglas"]}
     assert ids_yaml == set(REGLAS)
-    assert len(REGLAS) == 47
+    assert len(REGLAS) == 48

@@ -334,6 +334,8 @@ class TestIntegracion:
         path = _make_docx(headings=["INTRODUCCION", "RESULTADOS"])
         try:
             resultados = validate_docx(path, rules)
-            assert len(resultados) == 47
+            # 48 del YAML + 1 centinela: docx mínimo sin clasificar -> el paso
+            # 6 agrega `tipo_documento_no_determinado`.
+            assert len(resultados) == 49
         finally:
             Path(path).unlink(missing_ok=True)

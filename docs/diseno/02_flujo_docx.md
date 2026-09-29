@@ -133,7 +133,7 @@ flowchart LR
     F --> C
 ```
 
-Justificación cuantitativa: 47 reglas DSL ejecutan decenas de consultas
+Justificación cuantitativa: 48 reglas DSL ejecutan decenas de consultas
 XPath; muchas comparten la misma expresión (por ejemplo, todas las de
 tamaño consultan `w:rPr/w:sz`). Sin caché, el coste sería
 `O(consultas × tamaño_árbol)`; con caché, cada `(parte, contexto, xpath)`

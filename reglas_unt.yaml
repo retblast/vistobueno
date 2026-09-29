@@ -15,6 +15,86 @@ namespaces:
   a: http://schemas.openxmlformats.org/drawingml/2006/main
   pic: http://schemas.openxmlformats.org/drawingml/2006/picture
 reglas:
+# Regla discriminadora. Corre en fase 1 y publica `tipo_documento` en el
+# contexto; las reglas de estructura la consultan con `aplicar_si`.
+# Es `warning` y siempre informa: no bloquea la entrega (decisión 4 del
+# diseño, docs/diseno/15_tipo_documento_grupos.md).
+- id: deteccion_tipo_documento
+  tipo: deteccion
+  descripcion: Determina a qué tipo de documento pertenece la tesis
+  valor_esperado: >-
+    uno de: tinv_cuantitativo, tinv_cualitativo, tinv_revision_literatura,
+    proyecto_cuantitativo, proyecto_cualitativo, informe_cuantitativo,
+    informe_cualitativo, tsp
+  severidad: warning
+  ubicacion: 'Capítulo II — esquemas formales por tipo de título (párr. 75-90)'
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  cita: 'Cada título profesional exige un esquema formal distinto'
+  deteccion_tipo:
+    expone: tipo_documento
+    declaracion:
+      anexo: 'Anexo 10 — Declaración jurada (párr. 1825-1835)'
+      etiquetas:
+        # EVALUADO: el manual llama a este tipo "Trabajo de Suficiencia
+        # Profesional" (párr. 89, 3430), que es el termino con el que se
+        # declara. Las dos etiquetas siguientes no aparecen en ninguna parte
+        # del manual; se conservan porque la facultad las usa en la practica.
+        tsp: ['TRABAJO DE SUFICIENCIA PROFESIONAL', 'TRABAJO DE SERVICIO', 'SERVICIO SOCIAL']
+        informe_cuantitativo: ['INFORME DE PROYECTO DE INVESTIGACIÓN CUANTITATIVO']
+        informe_cualitativo: ['INFORME DE PROYECTO DE INVESTIGACIÓN CUALITATIVO']
+        proyecto_cuantitativo: ['PROYECTO DE INVESTIGACIÓN CUANTITATIVO']
+        proyecto_cualitativo: ['PROYECTO DE INVESTIGACIÓN CUALITATIVO']
+        tinv_revision_literatura: ['TESIS PARA OBTENER EL GRADO DE BACHILLER EN INVESTIGACIÓN']
+        tinv_cualitativo: ['TESIS PARA OBTENER EL TÍTULO PROFESIONAL EN INVESTIGACIÓN CUALITATIVA']
+        tinv_cuantitativo: ['TESIS PARA OBTENER EL TÍTULO PROFESIONAL EN INVESTIGACIÓN CUANTITATIVA']
+    # En orden de especificidad (decisión 2): gana el primero que alcance su
+    # mínimo. El informe es la versión revisada del proyecto, así que sus
+    # firmas son más específicas y se evalúan antes.
+    firmas:
+    - tipo: tsp
+      evidencia: ['SECUENCIA DIDÁCTICA', 'SUSTENTO PSICOPEDAGÓGICO', 'SUSTENTO TEÓRICO CIENTÍFICO']
+      minimo: 2
+    # `minimo: 3` (las tres): 'PARTICIPANTES' e 'INSTRUMENTOS USADOS EN LA
+    # RECOLECCIÓN' también son secciones del TINV cualitativo, así que con
+    # `minimo: 2` una tesis cualitativa se detectaba como informe y se
+    # quedaba SIN validación estructural. Lo que separa al informe es
+    # 'SITUACIÓN PROBLEMATIZADA', que el TINV no trae.
+    - tipo: informe_cualitativo
+      evidencia: ['SITUACIÓN PROBLEMATIZADA', 'PARTICIPANTES', 'INSTRUMENTOS USADOS EN LA RECOLECCIÓN']
+      minimo: 3
+    - tipo: informe_cuantitativo
+      evidencia: ['SITUACIÓN PROBLEMATIZADA', 'DISEÑO DE CONTRASTACIÓN', 'OPERACIONALIZACIÓN DE LAS VARIABLES']
+      minimo: 2
+    - tipo: proyecto_cuantitativo
+      evidencia: ['PLAN DE INVESTIGACIÓN', 'RECURSOS Y MATERIALES', 'LÍNEA DE INVESTIGACIÓN']
+      minimo: 2
+    - tipo: proyecto_cualitativo
+      evidencia: ['SELECCIÓN DE PARTICIPANTES', 'ESCENARIO', 'UNIDAD DE ANÁLISIS']
+      minimo: 2
+    # Firma derivada de `estructura_tinv_revision_literatura`: las dos
+    # secciones que SOLO tiene una revisión. 'ESTADO DEL ARTE' no sirve como
+    # firma por sí solo (aparece en el marco teórico de cualquier tesis), por
+    # eso el umbral es 2: revisión tiene methodology+desarrollo, una tesis
+    # empírica sólo tiene el estado del arte.
+    - tipo: tinv_revision_literatura
+      evidencia: ['METODOLOGÍA DE REVISIÓN', 'DESARROLLO O ANÁLISIS CRÍTICO DE LA LITERATURA', 'ESTADO DEL ARTE']
+      minimo: 2
+    # Evidencia derivada de `estructura_tinv_cualitativo`: las secciones que
+    # ese esquema tiene y el cuantitativo NO. Con 'DEFINICIÓN DE TÉRMINOS' /
+    # 'CATEGORIZACIÓN' la firma solo alcanzaba 1 de 2 en su propio esquema.
+    - tipo: tinv_cualitativo
+      evidencia:
+      - 'MATRIZ DE CATEGORIZACIÓN'
+      - 'ESTRATEGIAS USADAS EN EL ANÁLISIS'
+      - 'ANÁLISIS Y DISCUSIÓN DE RESULTADOS'
+      minimo: 2
+    # `minimo: 2`: 'INSTRUMENTO' también casa con "Instrumentos usados en la
+    # recolección" del esquema cualitativo. Con 1 una tesis cualitativa
+    # alcanzaría esta firma. Las plantillas oficiales dan 2 de 3.
+    - tipo: tinv_cuantitativo
+      evidencia: ['VARIABLE', 'POBLACIÓN Y MUESTRA', 'INSTRUMENTO']
+      minimo: 2
+    minimo_global: 1
 - id: papel_tamano
   tipo: atributo_xml
   descripcion: El tamaño del papel debe ser A4
@@ -577,6 +657,13 @@ reglas:
     ignore_case: true
 - id: estructura_tinv_cuantitativo
   tipo: secuencia
+  tipo: secuencia
+  # El esquema solo le corresponde a su propio tipo. Si la deteccion no pudo
+  # determinarlo (sin_determinar) o se contradice con la estructura
+  # (contradictorio), el documento se valida contra TODOS los esquemas: es
+  # preferible mostrar de mas que dejar la estructura sin revisar en silencio.
+  aplicar_si:
+    tipo_documento: tinv_cuantitativo
   descripcion: 'Estructura obligatoria del Trabajo de Investigación (Cuantitativo). El orden debe ser
     exacto.
 
@@ -704,6 +791,13 @@ reglas:
       original: ANEXOS
 - id: estructura_tinv_cualitativo
   tipo: secuencia
+  tipo: secuencia
+  # El esquema solo le corresponde a su propio tipo. Si la deteccion no pudo
+  # determinarlo (sin_determinar) o se contradice con la estructura
+  # (contradictorio), el documento se valida contra TODOS los esquemas: es
+  # preferible mostrar de mas que dejar la estructura sin revisar en silencio.
+  aplicar_si:
+    tipo_documento: tinv_cualitativo
   descripcion: 'Estructura obligatoria del Trabajo de Investigación (Cualitativo). Diferencia clave: incluye
     "Categorías, matriz de categorización y unidad de análisis" y termina con "ANÁLISIS Y DISCUSIÓN DE
     RESULTADOS" en vez de solo "RESULTADOS".
@@ -814,6 +908,13 @@ reglas:
       original: ANEXOS
 - id: estructura_tinv_revision_literatura
   tipo: secuencia
+  tipo: secuencia
+  # El esquema solo le corresponde a su propio tipo. Si la deteccion no pudo
+  # determinarlo (sin_determinar) o se contradice con la estructura
+  # (contradictorio), el documento se valida contra TODOS los esquemas: es
+  # preferible mostrar de mas que dejar la estructura sin revisar en silencio.
+  aplicar_si:
+    tipo_documento: tinv_revision_literatura
   descripcion: 'Estructura obligatoria del Trabajo de Investigación basado en Revisión de la Literatura.
 
     '

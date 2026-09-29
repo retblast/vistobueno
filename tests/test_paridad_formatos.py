@@ -316,10 +316,34 @@ def _verificar_paridad(docx_path: str) -> dict:
         "estructura_tinv_cualitativo",
         "estructura_tinv_revision_literatura",
     }
+    # Desde el paso 4 el DSL hace algo que el motor legacy no puede: condicionar
+    # una regla a la clave que publica otra (`aplicar_si`). Una estructura que
+    # no le corresponde al tipo detectado NO SE EVALÚA, y una regla no aplicable
+    # no ha fallado. El legacy evalúa las 44 reglas siempre, así que reporta
+    # como error los esquemas de los otros tipos de tesis: exactamente el
+    # defecto que el paso 4 corrige. La paridad deja de aplicar a mano en esas
+    # dos reglas; el YAML legacy es "fuente de verdad histórica" (AGENTS.md) y
+    # no se actualiza, porque su modelo no tiene el concepto de aplicabilidad.
+    # Con el paso 6 las TRES estructuras divergen por aplicabilidad, no solo
+    # las dos alternativas: un documento cuya estructura está tan incompleta
+    # que no se puede clasificar hace que el DSL ponga la estructura
+    # cuantitativa como no aplicable (misma razón: el legacy no tiene el
+    # concepto de aplicabilidad y la reporta como fallada).
+    divergen_por_aplicabilidad = {
+        "estructura_tinv_cualitativo",
+        "estructura_tinv_revision_literatura",
+        "estructura_tinv_cuantitativo",
+    }
     diffs = []
     for rid in sorted(legacy):
         legacy_res, dsl_res = legacy[rid], dsl[rid]
-        if rid in solo_passed:
+        if rid in divergen_por_aplicabilidad:
+            if dsl_res.aplicable and legacy_res.passed != dsl_res.passed:
+                diffs.append(
+                    f"{rid}: la regla es aplicable en DSL, así que debe coincidir "
+                    f"(legacy={legacy_res.passed}, dsl={dsl_res.passed})"
+                )
+        elif rid in solo_passed:
             if legacy_res.passed != dsl_res.passed:
                 diffs.append(
                     f"{rid}: legacy(passed={legacy_res.passed}) != dsl(passed={dsl_res.passed})"

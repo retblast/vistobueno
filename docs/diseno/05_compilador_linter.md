@@ -13,7 +13,7 @@ en objetos ejecutables (`ReglaCompilada`) y, eventualmente, en un
 
 ```mermaid
 flowchart TD
-    YAML["reglas_unt.yaml<br/>(47 reglas)"] --> LINT["linter_o_alzar()<br/>(validación estática)"]
+    YAML["reglas_unt.yaml<br/>(48 reglas)"] --> LINT["linter_o_alzar()<br/>(validación estática)"]
     LINT -- "ok (sin errores)" --> LOOP["para cada regla"]
     LINT -- "DSLValidationError" --> F["error: regex inválida,<br/>ciclo ε, etc."]
     LOOP --> SECC["para cada sección en la regla"]

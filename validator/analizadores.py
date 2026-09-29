@@ -56,6 +56,11 @@ class Analizador(ABC):
         # Nodo objetivo (párrafo/subnodo) que determinó la última ejecución.
         # Permite que el motor enriquezca `location` con "página N" (ítem 1).
         self.ultimo_nodo = None
+        # Valor legible por maquina de la ultima ejecucion, cuando el
+        # analizador produce uno. `analizar()` devuelve texto pensado para
+        # personas, asi que no sirve para decidir condiciones `aplicar_si`.
+        # Los analizadores de deteccion lo rellenan; los demas lo dejan None.
+        self.valor: str | None = None
 
     @abstractmethod
     def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]: ...
@@ -103,6 +108,7 @@ class AnalizadorXML(Analizador):
         key = _resolve_attr_key(atributo)
         vals = [n.get(key) for n in nodes]
         vals = [v for v in vals if v is not None]
+        self.valor = vals[0] if vals else None
 
         if comp == "eq":
             ok = bool(vals) and vals[0] == esperado
@@ -668,3 +674,178 @@ class AnalizadorTocNumeracion(Analizador):
                 self.ultimo_nodo = entradas[0]["nodo"]
             return False, "jerarquia_incorrecta; " + " | ".join(fallos[:6])
         return True, "jerarquia_ok"
+
+
+# ---------------------------------------------------------------------------
+# deteccion_tipo: qué tipo de documento es (Semana 6, paso 2)
+# ---------------------------------------------------------------------------
+
+NIVEL_DECLARADO = "declarado"
+NIVEL_INFERIDO = "inferido"
+NIVEL_NO_DETERMINADO = "sin_determinar"
+
+# Valores que publica en el contexto cuando no se puede afirmar un tipo.
+TIPO_SIN_DETERMINAR = "sin_determinar"
+TIPO_CONTRADICTORIO = "contradictorio"
+
+# Casillas del Anexo 10 que sabemos leer de forma determinista. Un documento
+# puede marcarlas como texto plano o como símbolo Wingdings (`w:sym`), que es
+# como las dibuja Word; se cubren las dos formas.
+_CASILLA_MARCADA_TXT = re.compile(r"[☒☑✔■]|\[\s*(?:[xX✓])\s*\]|\(\s*[xX]\s*\)")
+_CASILLA_VACIA_TXT = re.compile(r"[☐□◻]|\[\s*\]|\(\s*\)")
+# Wingdings: F0FE/F0FC/F0A3 marcadas; F0A8/F0B0 son la casilla vacía.
+_SYM_MARCADA = {"F0FE", "F0FC", "F0A3"}
+_SYM_VACIA = {"F0A8", "F0B0"}
+
+
+def _norm_deteccion(s: str) -> str:
+    """Normaliza para comparar firmas: mayúsculas, sin tildes, sin
+    indentación y con espacios colapsados."""
+    return re.sub(r"\s+", " ", _sin_acentos(s).upper()).strip()
+
+
+def _estado_casilla(p) -> tuple[bool, bool]:
+    """(marcada, hay_casilla) para un párrafo `w:p`.
+
+    Una casilla sin marcar hace que el párrafo NO sea una declaración, aunque
+    tenga una etiqueta de tipo al lado: es el caso "desmarcado", que es el
+    error más fácil de cometer al leer.
+    """
+    texto = text_of(p)
+    for sym in p.iter(f"{W}sym"):
+        char = (sym.get(W + "char") or "").upper()
+        if char in _SYM_VACIA:
+            return False, True
+        if char in _SYM_MARCADA:
+            return True, True
+    if _CASILLA_VACIA_TXT.search(texto):
+        return False, True
+    if _CASILLA_MARCADA_TXT.search(texto):
+        return True, True
+    return False, False
+
+
+class DeteccionTipo(Analizador):
+    """Determina el tipo de documento de forma determinista.
+
+    Sección DSL `deteccion_tipo`. Tres niveles, en orden de preferencia
+    (decisión 2 del diseño):
+
+    1. **Declarado** — casilla marcada del Anexo 10, con la etiqueta del tipo
+       que el autor eligió. Es una declaración del autor, no una inferencia.
+    2. **Inferido** — se cuentan las firmas estructurales de cada tipo y gana
+       el primero que alcance su `minimo`. El orden de `firmas` es el de
+       especificidad (decisión 2: el informe gana al proyecto).
+    3. **Sin determinar** — ninguna firma alcanzó su umbral.
+
+    Si hay nivel 1 y nivel 2 y no coinciden, se publica
+    `TIPO_CONTRADICTORIO`: es preferible decir que hay una contradicción
+    visible a elegir en silencio.
+
+    El valor publicado (`Analizador.valor`) es el identificador canónico del
+    tipo, que es lo que consume `aplicar_si` en las reglas de estructura. El
+    nivel y la evidencia quedan además en `self.nivel` y `self.evidencia`,
+    para que el reporte pueda explicarle al estudiante por qué se eligió ese
+    tipo sin tener que parsear el texto del detalle.
+    """
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        # Nivel que decidió la detección (declarado / inferido / sin_determinar).
+        self.nivel: str = NIVEL_NO_DETERMINADO
+        # Evidencia concreta: la etiqueta del Anexo 10 leída, o las firmas
+        # que alcanzaron el umbral.
+        self.evidencia: list[str] = []
+
+    def _resolver(self, nivel: str, tipo: str | None, detalle: str) -> tuple[bool, str]:
+        self.nivel = nivel
+        self.valor = tipo if tipo is not None else TIPO_SIN_DETERMINAR
+        return tipo is not None, detalle
+
+    def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
+        body = extracted.document.find(W + "body")
+        if body is None:
+            self.nivel = NIVEL_NO_DETERMINADO
+            self.valor = TIPO_SIN_DETERMINAR
+            return False, "sin_determinado (documento sin cuerpo)"
+
+        parrafos = body.findall(W + "p")
+        declaracion, etiqueta = self._tipo_declarado(parrafos)
+        inferido, evidencia = self._tipo_inferido(parrafos)
+
+        if declaracion and inferido and declaracion != inferido:
+            self.nivel = NIVEL_NO_DETERMINADO
+            self.evidencia = [etiqueta, *evidencia]
+            self.valor = TIPO_CONTRADICTORIO
+            return False, (
+                f"contradictorio: declarado={declaracion} ('{etiqueta}') "
+                f"inferido={inferido} ({', '.join(evidencia)})"
+            )
+
+        if declaracion:
+            self.evidencia = [etiqueta]
+            return self._resolver(
+                NIVEL_DECLARADO, declaracion, f"declarado={declaracion} ('{etiqueta}')"
+            )
+
+        if inferido:
+            self.evidencia = evidencia
+            quoted = ", ".join(f'"{e}"' for e in evidencia)
+            return self._resolver(NIVEL_INFERIDO, inferido, f"inferido={inferido} ({quoted})")
+
+        self.evidencia = []
+        return self._resolver(
+            NIVEL_NO_DETERMINADO, None, "sin_determinado (ninguna firma alcanzó su mínimo)"
+        )
+
+    # -- nivel 1: declaración del Anexo 10 --------------------------------
+    def _tipo_declarado(self, parrafos) -> tuple[str | None, str]:
+        """Tipo cuya casilla aparece marcada junto a su etiqueta.
+
+        La casilla y la etiqueta deben estar en el MISMO párrafo: si estuvieran
+        separadas, no habría forma de saber a cuál corresponde cada casilla.
+
+        Si en un mismo párrafo casan varias etiquetas, gana la MÁS LARGA. El
+        cotejo es por subcadena y unas etiquetas contienen a otras: "INFORME
+        DE PROYECTO DE INVESTIGACIÓN CUANTITATIVO" contiene "PROYECTO DE
+        INVESTIGACIÓN CUANTITATIVO", así que las dos casan en el mismo
+        párrafo. Con el orden del diccionario el resultado dependía de dónde
+        estuviera escrita cada clave en el YAML, que es una fuente de fallo
+        silencioso. Con la más larga gana, el texto del Anexo 10 basta para
+        decidir y reordenar el YAML no cambia nada.
+        """
+        etiquetas = self.config.get("declaracion", {}).get("etiquetas", {})
+        if not etiquetas:
+            return None, ""
+        for p in parrafos:
+            marcada, hay_casilla = _estado_casilla(p)
+            if not hay_casilla or not marcada:
+                continue
+            texto = _norm_deteccion(text_of(p))
+            candidatos: list[tuple[int, str, str]] = []
+            for tipo, alias in etiquetas.items():
+                for etiqueta in [tipo, *alias]:
+                    clave = _norm_deteccion(etiqueta)
+                    if clave and clave in texto:
+                        candidatos.append((len(clave), tipo, etiqueta))
+            if candidatos:
+                # Más larga primero. El nombre del tipo solo desempata, para
+                # que un empate no dependa del orden del diccionario.
+                candidatos.sort(key=lambda c: (-c[0], c[1]))
+                _, tipo, etiqueta = candidatos[0]
+                return tipo, etiqueta
+        return None, ""
+
+    # -- nivel 2: firmas estructurales ------------------------------------
+    def _tipo_inferido(self, parrafos) -> tuple[str | None, list[str]]:
+        textos = [_norm_deteccion(text_of(p)) for p in parrafos]
+        for firma in self.config.get("firmas", []):
+            minimo = firma.get("minimo", 1)
+            encontradas = [
+                ev
+                for ev in firma.get("evidencia", [])
+                if any(_norm_deteccion(ev) in t for t in textos)
+            ]
+            if len(encontradas) >= minimo:
+                return firma.get("tipo"), encontradas
+        return None, []

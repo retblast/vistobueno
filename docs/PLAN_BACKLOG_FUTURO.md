@@ -77,8 +77,9 @@ Mejoras que no tocan reglas pero sí el ecosistema del motor.
 > **PENDIENTE → Integrante 1 (Backend)**: el motor DSL pasó de **41 a 47 reglas**
 > (Semana 5, ítems 1-3 y 11-12 de la F2). Coordinar para:
 > 1. Exponer `formato` en `POST /validar` (exportación, ítem 16, `CONTRATO_API.md` v1.2.0).
-> 2. Actualizar `docs/CONTRATO_API.md` (changelog: hoy dice "41 reglas" en v1.1.0;
->    agregar entrada v1.2.0 con 47 reglas). No se editó aquí por ser archivo del área backend.
+> 2. Changelog de `docs/CONTRATO_API.md`: la entrada v1.1.0 (Semana 4, nota F5)
+>    quedó actualizada con las 47 reglas; conviene reetiquetarla como **v1.2.0**
+>    (Sería entrada nueva de Semana 5). No se editó aquí por ser archivo del área backend.
 
 ---
 

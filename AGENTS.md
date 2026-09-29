@@ -40,7 +40,7 @@ Frontend (React)
 | **CLI referencia** | `validator/cli.py` | Validador desde línea de comandos |
 | **Tests exportador** | `tests/test_exportador.py` | Tests de exportación Markdown/PDF |
 | **Reglas** | `unt_format_rules_schema.yaml` | 44 reglas, 32 ejecutables (fuente de verdad legacy) |
-| **Reglas DSL (producción)** | `reglas_unt.yaml` | 47 reglas verificables (F1–F6 + F2 ítems 1-3 y 11-12) |
+| **Reglas DSL (producción)** | `reglas_unt.yaml` | 48 reglas verificables (F1–F6 + F2 ítems 1-3 y 11-12) |
 
 ---
 
@@ -115,6 +115,7 @@ Cada integrante lleva una **bitácora semanal** en `docs/semana{N}_trabajo_{user
 |------|------------|---------|
 | Bitácora semanal | `docs/semana{N}_trabajo_{username}.md` | `docs/semana2_trabajo_retblast.md` |
 | Contrato de API | `docs/CONTRATO_API.md` | — |
+| Handover de API | `docs/HANDOVER_{AREA}_{TEMA}.md` | `docs/HANDOVER_API_TIPO_DOCUMENTO.md` |
 | Tests | `tests/test_{area}_{descripcion}.py` | `tests/test_api_contract.py` |
 | Modelos Pydantic | `validator/api_models.py` | — |
 | Scripts | `scripts/{descripcion}.py` | `scripts/eval_contra_plantillas.py` |
@@ -276,11 +277,13 @@ menos de 50 caracteres, la rasteriza y aplica Tesseract (spa+eng). Si
 - **Reglas legacy** en `unt_format_rules_schema.yaml`: 44 definidas; **32 con
   mecanismo verificable** (ejecutables sobre XML del DOCX); **12 sin mecanismo**
   (requieren análisis semántico, fuera del MVP). Fuente de referencia histórica.
-- **Reglas de producción (DSL)** en `reglas_unt.yaml`: **47 reglas verificables**,
-  que incluyen las 32 migradas, las 9 mecanizadas a mano (F3) y los ítems de la
-  Semana 5: `indice_paginas_separadas` (paginación real), `encabezado_membrete` y
-  `encabezado_formato` (encabezados/pies), `notas_al_pie_consistencia`, e
-  `indice_apunta_secciones` / `indice_numeracion_jerarquica` (índice de contenidos).
+- **Reglas de producción (DSL)** en `reglas_unt.yaml`: **48 reglas verificables**,
+  que incluyen las 32 migradas, las 9 mecanizadas a mano (F3), los ítems de la
+  Semana 5 (`indice_paginas_separadas`, `encabezado_membrete`,
+  `encabezado_formato`, `notas_al_pie_consistencia`, `indice_apunta_secciones`,
+  `indice_numeracion_jerarquica`) y la regla discriminadora
+  `deteccion_tipo_documento` (Semana 6, Paso 3: identifica a qué tipo de
+  documento pertenece la tesis y publica `tipo_documento` en el contexto).
 - Las reglas cubren: papel, fuente, tamaños, interlineado, alineación, márgenes, numeración, sangría, estructura de secciones.
 
 ### Severidad
@@ -289,7 +292,7 @@ menos de 50 caracteres, la rasteriza y aplica Tesseract (spa+eng). Si
 - `warning`: no bloquea, pero se muestra en el reporte.
 
 3 reglas bajadas de `error` a `warning` por desvío documentado entre manual y plantillas oficiales.
-> Los conteos declarados aquí (47 reglas, doc bueno 45/47, suite 213 tests) se
+> Los conteos declarados aquí (48 reglas, doc bueno 0 fallos, suite 322 tests) se
 > mantienen sincronizados con `tests/_mutations.py` y `docs/diseno/00_indice_diseno.md`.
 
 ### Cómo agregar una regla nueva al YAML
@@ -358,7 +361,7 @@ vistobueno/
 ├── README.md                          # Documentación general del proyecto
 ├── flake.nix                          # Entorno de desarrollo Nix
 ├── unt_format_rules_schema.yaml       # 44 reglas de formato (fuente de verdad legacy)
-├── reglas_unt.yaml                    # Reglas en formato DSL (47 reglas)
+├── reglas_unt.yaml                    # Reglas en formato DSL (48 reglas)
 ├── reglas_dsl_ejemplo.yaml            # Ejemplo de reglas DSL
 ├── validator/
 │   ├── __init__.py                    # Docstring del paquete
@@ -391,6 +394,7 @@ vistobueno/
 │   └── _xml_constants.py              # Constantes XML para el builder
 ├── docs/
 │   ├── CONTRATO_API.md                # Especificación del endpoint
+│   ├── HANDOVER_API_TIPO_DOCUMENTO.md # Cambios de API pendientes (Semana 6)
 │   ├── openapi_spec.json              # Especificación OpenAPI
 │   ├── DSL.md                         # Referencia del DSL declarativo
 │   ├── PLAN_DSL.md                    # Plan de fases DSL (F1-F6)

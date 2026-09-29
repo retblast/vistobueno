@@ -3,7 +3,7 @@
 Cada regla de `reglas_unt.yaml` tiene aquí UNA mutación: un desvío MÍNIMO
 sobre la configuración base que la hace fallar (solo a ella, o a su par
 acoplado). También centraliza la metadata de cobertura de reglas
-(`REGLAS`, `REGLAS_ACOPLADAS`, `EXCLUIDAS_BASE`).
+(`REGLAS`, `REGLAS_ACOPLADAS`, `NO_APLICABLES_BASE`).
 
 Sincronización obligatoria: al importar este módulo se verifica que
 `_MUTACIONES` tenga exactamente las mismas reglas que `reglas_unt.yaml`.
@@ -19,10 +19,11 @@ import yaml
 from _docx_builder import _ANADIDAS_REVISION, _HEADINGS_CUANT, _headings_insertadas
 
 # ---------------------------------------------------------------------------
-# Nombres de las reglas de reglas_unt.yaml (47).
+# Nombres de las reglas de reglas_unt.yaml (48).
 # ---------------------------------------------------------------------------
 
 REGLAS = [
+    "deteccion_tipo_documento",
     "papel_tamano",
     "fuente_principal",
     "tamano_cuerpo",
@@ -107,12 +108,40 @@ REGLAS_ACOPLADAS = {
     # "PROBLEMÁTICA Y CONTEXTO": la entrada "1.1. SITUACIÓN PROBLEMÁTICA" del
     # índice deja de apuntar a una sección real (falla indice_apunta_secciones).
     "estructura_tinv_cuantitativo": {"indice_apunta_secciones"},
+    # Las mutaciones de las estructuras alternativas cambian qué firma de
+    # detección casa con el documento, así que también mueven
+    # deteccion_tipo_documento. El acople es correcto y es justo lo que hace
+    # útil la detección: el documento pasa a leerse como cualitativo o como
+    # revisión. El sentido inverso NO ocurre (mutar la detección no cambia las
+    # estructuras: solo se añade un anexo), por eso el mapa es unidireccional.
+    "estructura_tinv_cualitativo": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cuantitativo",
+    },
+    "estructura_tinv_revision_literatura": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cuantitativo",
+    },
+    # Al revés que las de arriba: una detección contradictoria (el Anexo 10
+    # declara un tipo que la estructura desmiente) hace que el tipo real ya no
+    # sea "una de las tres", así que la estructura que antes aplicaba
+    # (cuantitativo) deja de aplicar. Las dos alternativas ya eran no
+    # aplicables y siguen siéndolo. El paso 6 turns el caso contradictorio en
+    # un error centinela propio en vez de validar contra las tres.
+    # NOTA: el centinela `tipo_documento_contradictorio` aparece en el
+    # documento mutado pero no se cuenta aquí porque no es una de las 48
+    # reglas (lo deriva la detección).
+    "deteccion_tipo_documento": {
+        "estructura_tinv_cuantitativo",
+    },
 }
 
-# Exclusión documentada: el documento base (plan tipo cuantitativo) no puede
-# cumplir simultáneamente los esquemas alternativos (la estructura del
-# documento define el tipo de investigación). Ver docs/PLAN_DSL.md, F6.
-EXCLUIDAS_BASE = {
+# El documento base es un plan tipo CUANTITATIVO, así que los esquemas de
+# los otros dos tipos de TINV no le aplican. Desde el paso 4 no "fallan":
+# la detección de tipo los marca como no aplicables (`aplicable=False`), que
+# es la diferencia entre un error corregible y un error que no le toca al
+# documento. Antes de ese paso fallaban y ponían el semáforo en rojo.
+NO_APLICABLES_BASE = {
     "estructura_tinv_cualitativo",
     "estructura_tinv_revision_literatura",
 }
@@ -257,6 +286,14 @@ _MUTACIONES = {
     "indice_numeracion_jerarquica": lambda c: _renumerar_tdc(
         c, "1.2. ENUNCIADO DEL PROBLEMA 4", "2.2. ENUNCIADO DEL PROBLEMA 4"
     ),
+    # deteccion_tipo_documento: el autor declara en el Anexo 10 un tipo que no
+    # corresponde a la estructura del documento (marca "cualitativo" sobre un
+    # plan cuantitativo). Es el desvío mínimo posible para esta regla: con
+    # `minimo: 1` no se puede quitar la firma sin renombrar tres títulos, y
+    # renombrarlos rompería además la estructura y el índice.
+    "deteccion_tipo_documento": lambda c: c["anexos_items"].append(
+        "☒ PROYECTO DE INVESTIGACIÓN CUALITATIVO"
+    ),
 }
 
 
@@ -268,7 +305,7 @@ RUTA_REGLAS_YAML = Path(__file__).resolve().parent.parent / "reglas_unt.yaml"
 
 
 def _validar_sincronizacion() -> None:
-    """Falla el import si `_MUTACIONES` no cubre exactamente las 47 reglas.
+    """Falla el import si `_MUTACIONES` no cubre exactamente las 48 reglas.
 
     Evita la desincronización silenciosa factory↔YAML: el error ocurre en la
     recolecta de tests (cuando se importa el factory), no cuando un test
@@ -291,6 +328,9 @@ _validar_sincronizacion()
 
 
 # Conveniencia: exposición del resultado esperado del documento base.
-DESVIOS_BASE = len(EXCLUIDAS_BASE)
+# Desde el paso 4 el documento base pasa las 48 reglas: no hay desvíos, solo
+# 2 esquemas que no le aplican.
+DESVIOS_BASE = 0
 TOTAL_REGLAS = len(REGLAS)
 REGLAS_OK_BASE = TOTAL_REGLAS - DESVIOS_BASE
+NO_APLICABLES_TOTAL = len(NO_APLICABLES_BASE)

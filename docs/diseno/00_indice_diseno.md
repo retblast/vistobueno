@@ -2,13 +2,15 @@
 
 > Documento: `00_indice_diseno.md`
 > Autor: IvanSanchezSil (Integrante 3 — Motor de reglas / DSL)
-> Rama: `semana4`
+> Rama: `semana6`
 > Estado: **Borrador sin commit** — el motor, el DSL, el OCR y la migración
 > se implementaron primero ("de frente"); este paquete documenta el diseño
 > **a posteriori**: qué se construyó, cómo se modeló y por qué se decidió así.
 > La F5 (doc 09) quedó **implementada** el 2026-09-15; el doc 10 (calidad y
 > exportación) se agregó el 2026-09-16 como parte de las tareas 15 y 16; el
-> doc 14 (índice de contenidos, ítems 11-12 de la F2) el 2026-09-22.
+> doc 14 (índice de contenidos, ítems 11-12 de la F2) el 2026-09-22; el
+> doc 15 (tipo de documento y grupos excluyentes) el 2026-09-28, como el
+> **único** redactado antes de implementar.
 
 ## 1. Propósito
 
@@ -65,6 +67,10 @@ flowchart LR
         N["14_indice_toc.md<br/>Índice de contenidos (ítems 11-12)"]
     end
 
+    subgraph SEMANA6["Semana 6 — corrección"]
+        O["15_tipo_documento_grupos.md<br/>Tipo de documento + grupos excluyentes"]
+    end
+
     subgraph FUTURO["F5 (implementada)"]
         I["09_f5_enlace_api_propuesta.md<br/>F5 (Opción A)"]
     end
@@ -76,6 +82,8 @@ flowchart LR
     H --> COMPILACION
     G --> A
     I -.-> A
+    N -.-> O
+    O -.-> COMPILACION
 ```
 
 | Doc | Área | Diagramas clave | Público |
@@ -94,6 +102,7 @@ flowchart LR
 | **12** | Encabezados y pies | Multi-parte header/footer, membrete y formato (ítem 2) | Todo el equipo |
 | **13** | Notas al pie | `AnalizadorNotaPie`, numeración 1..N consecutiva (ítem 3) | Todo el equipo |
 | **14** | Índice de contenidos | `AnalizadorTocApunta`/`AnalizadorTocNumeracion` (ítems 11-12) | Todo el equipo |
+| **15** | Tipo de documento + grupos excluyentes | DFA de detección (Moore), evaluación en dos fases | LFA / Compiladores |
 
 ## 2.1 Fases de diseño F1–F6 (E)
 
@@ -131,7 +140,7 @@ flowchart LR
 ## 3. Convenciones
 
 - **Fuente de verdad**: las configuraciones mostradas en los diagramas de
-  estados provienen de `reglas_unt.yaml` (47 reglas) y de los tests
+  estados provienen de `reglas_unt.yaml` (48 reglas) y de los tests
    `test_f2_automatas.py`; los nombres de módulos y clases reflejan el código
    real en `validator/`.
 - **Fases del plan**: se referencian las fases F1–F6 de `docs/PLAN_DSL.md`
@@ -150,7 +159,11 @@ flowchart LR
 3. **05** explica cómo se compila y se valida contra un documento.
 4. **06** (migración), **07** (tests) y **08** (OCR) son procesos transversales.
 5. **09** es la única propuesta a futuro (F5): el resto documenta lo ya
-      implementado y verificado por la suite (213 tests).
+      implementado y verificado por la suite (295 tests).
+6. **15** es el único documento con diseño **previo** a la implementación: se
+   escribió antes de escribir código, porque detecta un defecto de correctitud
+   (una tesis conforme se reporta en rojo). Su plan de ejecución por pasos está
+   en `docs/PLAN_TIPO_DOCUMENTO.md`.
 
 ---
 
@@ -167,3 +180,6 @@ flowchart LR
 | Compilación / enlace con fábricas | 05 | Compiladores — pipeline |
 | Verificación por propiedades (mutaciones) | 07 | Ingeniería de software — testing |
 | Lenguaje específico de dominio (DSL) | 04, 05 | Ingeniería de software — DSL |
+| Clasificación de lenguaje (DFA → etiqueta de tipo) | 15 | LFA — clasificación de cadenas |
+| Máquina de Moore (salida por estado) | 15 | LFA — Máquinas de Mealy/Moore |
+| Token en tabla de símbolos y selección de camino | 15 | Compiladores — tabla de símbolos, árbol sintáctico |

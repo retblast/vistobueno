@@ -36,6 +36,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .analizadores import (
+    TIPO_CONTRADICTORIO,
+    TIPO_SIN_DETERMINAR,
     Analizador,
     AnalizadorCantidadPatron,
     AnalizadorConteoNodos,
@@ -49,6 +51,7 @@ from .analizadores import (
     AnalizadorTocApunta,
     AnalizadorTocNumeracion,
     AnalizadorXML,
+    DeteccionTipo,
 )
 from .automata import DFA, PDA, GramaticaEstructura, Transicion, TransicionPDA
 from .dsl_check import linter_o_alzar
@@ -74,6 +77,7 @@ SECCIONES_ANALIZADOR = (
     "nota_pie",
     "toc_apunta",
     "toc_numeracion",
+    "deteccion_tipo",
 )
 
 
@@ -409,7 +413,37 @@ _FABRICAS: dict[str, Callable[[dict], Analizador]] = {
     "nota_pie": AnalizadorNotaPie,
     "toc_apunta": AnalizadorTocApunta,
     "toc_numeracion": AnalizadorTocNumeracion,
+    "deteccion_tipo": DeteccionTipo,
 }
+
+
+def _expone_de(rule: dict) -> str | None:
+    """Clave que una regla publica en el contexto.
+
+    Se puede declarar en dos sitios equivalentes: a nivel de la regla, o
+    dentro de la sección del analizador que produce el valor (`deteccion_tipo`
+    lo hace así, porque la clave describe a ese analizador y no a la regla
+    entera). La sección tiene prioridad si aparecen ambas.
+    """
+    for seccion in SECCIONES_ANALIZADOR:
+        cfg = rule.get(seccion)
+        if isinstance(cfg, dict) and isinstance(cfg.get("expone"), str):
+            return cfg["expone"]
+    expone = rule.get("expone")
+    return expone if isinstance(expone, str) else None
+
+
+def _coincide(valor_contexto: object, valor_esperado: object) -> bool:
+    """Compara un valor del contexto contra lo que pide una condición.
+
+    Escalar: igualdad exacta. Lista: "cualquiera de estos" (se compara el
+    contexto contra cada elemento, sin exigir que la lista esté ordenada ni
+    que no tenga repetidos). Una lista vacía no casa con nada: se trata como
+    una condición que nunca se cumple, no como una que siempre se cumple.
+    """
+    if isinstance(valor_esperado, list):
+        return any(valor_contexto == candidato for candidato in valor_esperado)
+    return valor_contexto == valor_esperado
 
 
 @dataclass
@@ -418,6 +452,68 @@ class ReglaCompilada:
 
     rule: dict
     analizadores: list[Analizador] = field(default_factory=list)
+    # Clave que la regla publica en el contexto del documento (fase 1).
+    # `None` si la regla no participa de la detección.
+    expone: str | None = None
+    # Mapa `clave -> valor` que debe cumplirse para que la regla aplique
+    # (fase 2). `None` si la regla es incondicional.
+    aplicar_si: dict | None = None
+
+    def aplica_en(self, contexto: dict) -> bool:
+        """¿Se cumple la condición `aplicar_si` con el contexto dado?
+
+        Una regla incondicional siempre aplica. Las condiciones son
+        conjuntas: todas las claves deben coincidir. Una clave ausente del
+        contexto hace que la regla NO aplique (se trata como "sin valor
+        conocido", no como "vale cualquier cosa").
+
+        Un valor escalar exige igualdad exacta. Un valor lista significa
+        "cualquiera de estos": así una regla puede admitir varios tipos y,
+        sobre todo, declarar explícitamente qué hace con un tipo que no se
+        pudo determinar en vez de quedar en silencio.
+        """
+        if self.aplicar_si is None:
+            return True
+        return all(
+            _coincide(contexto.get(clave), valor) for clave, valor in self.aplicar_si.items()
+        )
+
+    def valor_para_contexto(self) -> str:
+        """Valor que la regla publica en el contexto tras ejecutarse.
+
+        Se toma del primer analizador que haya producido un valor legible por
+        máquina (`Analizador.valor`). No se usa `resultado.found`: ese texto
+        está escrito para que lo lea una persona, no para comparar. Si ningún
+        analizador produce valor, la clave se publica vacía.
+        """
+        for analizador in self.analizadores:
+            valor = getattr(analizador, "valor", None)
+            if valor is not None:
+                return str(valor)
+        return ""
+
+    def no_aplicable(self) -> RuleResult:
+        """Resultado de una regla que no le toca a este documento.
+
+        `passed=True` a propósito: una regla no aplicable no ha fallado, y
+        no debe poder bloquear la entrega. `aplicable=False` es lo que la
+        marca como omitida del reporte.
+        """
+        esperados = self.rule.get("valor_esperado", "")
+        if isinstance(esperados, list):
+            esperados = "; ".join(map(str, esperados))
+        return RuleResult(
+            rule_id=self.rule["id"],
+            passed=True,
+            severity=Severity(self.rule.get("severidad", "error")),
+            message=self.rule.get("descripcion", self.rule["id"]),
+            expected=str(esperados),
+            found="no aplica a este documento",
+            aplicable=False,
+            location=self.rule.get("ubicacion") or None,
+            fuente=self.rule.get("fuente", ""),
+            cita=self.rule.get("cita", ""),
+        )
 
     @staticmethod
     def _detalle_con_traza(detalle: str, analizador: Analizador) -> str:
@@ -433,14 +529,37 @@ class ReglaCompilada:
             return f"{detalle} ruta={' -> '.join(ruta)}"
         return detalle
 
+    def _detalle_expositor(self, detalles: list[tuple[Analizador, str]]) -> str:
+        """Texto a mostrar en `found` cuando la regla PASA y declara `expone`.
+
+        Una regla que `expone` es informativa por definición: en vez del
+        genérico "cumple", el reporte debe decir qué se encontró (el tipo de
+        documento detectado, por ejemplo). Se usa el detalle del mismo
+        analizador cuyo `valor` se publica en el contexto, para que el
+        `found` y el valor consumido por `aplicar_si` no puedan divergir.
+
+        Devuelve "" si la regla no expone nada, de modo que el llamador siga
+        usando "cumple": el `valor` de un analizador común (p. ej. el valor
+        real que lee `AnalizadorXML`) no debe alterar el `found` de las reglas
+        que no publican nada en el contexto.
+        """
+        if not self.expone:
+            return ""
+        for an, detalle in detalles:
+            if getattr(an, "valor", None) is not None:
+                return detalle or str(an.valor)
+        return ""
+
     def ejecutar(self, extracted: ExtractedDocx) -> RuleResult:
         fallos: list[str] = []
         pagina: int | None = None
+        detalles: list[tuple[Analizador, str]] = []
         for an in self.analizadores:
             try:
                 ok, detalle = an.analizar(extracted)
             except Exception as e:  # noqa:BLE001
                 ok, detalle = False, f"error ejecutando analizador: {type(e).__name__}: {e}"
+            detalles.append((an, detalle))
             if not ok:
                 fallos.append(self._detalle_con_traza(detalle, an))
                 # Enriquecer la ubicación con la página física real (ítem 1):
@@ -462,11 +581,92 @@ class ReglaCompilada:
             severity=Severity(self.rule.get("severidad", "error")),
             message=self.rule.get("descripcion", self.rule["id"]),
             expected=str(esperados),
-            found="; ".join(fallos) if fallos else "cumple",
+            found="; ".join(fallos) if fallos else (self._detalle_expositor(detalles) or "cumple"),
             location=ubicacion or None,
             fuente=self.rule.get("fuente", ""),
             cita=self.rule.get("cita", ""),
         )
+
+
+# Los dos estados en que la detección NO pudo clasificar el documento. Son
+# estados terminales: no son un tipo más, son la ausencia de uno. Cada uno
+# lleva un error propio, accionable, en vez de validar el documento contra
+# todos los esquemas posibles (decisión 6 del diseño,
+# docs/diseno/15_tipo_documento_grupos.md).
+#
+#   - Con el paso 4, `sin_determinar` y `contradictorio` activaban las TRES
+#     estructuras y el estudiante veía 2 errores de estructura que no podía
+#     corregir sin adivinar el tipo. El problema real —"no sabemos qué tipo
+#     es esto"— se escondía detrás de simétricos errores de secciones.
+#   - Aquí las estructuras solo aplican a su tipo exacto, así que en estos dos
+#     casos no se evalúa ninguna: sale 1 error que dice qué hacer.
+#
+# El `found` se completa con el detalle real de la detección (qué firmas se
+# buscaron y no casaron, o qué declaración choca con qué firma), para que el
+# estudiante vea la evidencia, no solo el veredicto.
+_SENTINELAS = {
+    TIPO_SIN_DETERMINAR: {
+        "rule_id": "tipo_documento_no_determinado",
+        "message": (
+            "No se pudo determinar el tipo de documento, así que no se validó "
+            "la estructura del capítulo de metodología. Causa probable: el "
+            "Anexo 10 no tiene ninguna casilla marcada y el documento no "
+            "trae secciones que identifiquen su esquema."
+        ),
+        "expected": "un tipo de documento de entre los 8 esquemas de la UNT",
+    },
+    TIPO_CONTRADICTORIO: {
+        "rule_id": "tipo_documento_contradictorio",
+        "message": (
+            "El tipo de documento no es coherente: la declaración del Anexo 10 "
+            "no coincide con el que se deduce de la estructura del documento. "
+            "Corrige la casilla del Anexo 10 o corrige el capítulo de "
+            "metodología, para que ambos digan lo mismo. Hasta entonces no se "
+            "puede validar la estructura de ningún esquema."
+        ),
+        "expected": "declaración del Anexo 10 y estructura del documento del mismo tipo",
+    },
+}
+
+
+def _con_sentinel(resultados: list[RuleResult | None], contexto: dict) -> list[RuleResult]:
+    """Agrega el error centinela si el tipo quedó sin determinar o contradictorio.
+
+    Va justo después de la regla de detección, que es donde el estudiante
+    empieza a leer. El resto de reglas se conserva en el orden del YAML: este
+    resultado no es una regla del YAML, es la traducción a error de un estado
+    de la detección.
+    """
+    spec = _SENTINELAS.get(contexto.get("tipo_documento", ""))
+    if spec is None:
+        return [r for r in resultados if r is not None]
+
+    # El detalle de la detección es la evidencia: sin él el estudiante sabe
+    # que no se clasificó, pero no por qué.
+    detalle = ""
+    for r in resultados:
+        if r is not None and r.rule_id == "deteccion_tipo_documento":
+            detalle = r.found
+            break
+    sentinela = RuleResult(
+        rule_id=spec["rule_id"],
+        passed=False,
+        severity=Severity.ERROR,
+        message=spec["message"],
+        expected=spec["expected"],
+        found=detalle or "sin detalle",
+        # El estudiante no puede "corregir esto" sin el reglamento, así que
+        # se le da la referencia que permite rastrear el origen.
+        location="Capítulo II — esquemas formales por tipo de título (párr. 75-90)",
+        fuente="MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
+        cita="Cada título profesional exige un esquema formal distinto",
+    )
+    salida: list[RuleResult | None] = list(resultados)
+    for i, r in enumerate(resultados):
+        if r is not None and r.rule_id == "deteccion_tipo_documento":
+            salida.insert(i + 1, sentinela)
+            break
+    return [r for r in salida if r is not None]
 
 
 class CompilerDSL:
@@ -501,8 +701,43 @@ class CompilerDSL:
             if not analizadores:
                 # Regla declarada pero sin analizadores: no mecanizada.
                 continue
-            reglas.append(ReglaCompilada(rule=rule, analizadores=analizadores))
+            reglas.append(
+                ReglaCompilada(
+                    rule=rule,
+                    analizadores=analizadores,
+                    expone=_expone_de(rule),
+                    aplicar_si=rule.get("aplicar_si"),
+                )
+            )
         return reglas
 
     def ejecutar(self, rules_data: dict, extracted: ExtractedDocx) -> list[RuleResult]:
-        return [r.ejecutar(extracted) for r in self.compilar(rules_data)]
+        """Evalúa las reglas en dos fases y devuelve los resultados.
+
+        **Fase 1** — reglas sin `aplicar_si`. Se ejecutan todas y las que
+        declaran `expone` publican su valor en el contexto del documento.
+
+        **Fase 2** — reglas con `aplicar_si`. Aplican solo si su condición se
+        cumple contra el contexto; si no, se marcan como no aplicables.
+
+        El orden de salida es el del YAML, no el de las fases: se preasignan
+        los huecos y se rellenan por fase, de modo que el reporte no cambia
+        de orden respecto de la evaluación de una sola pasada.
+        """
+        reglas = self.compilar(rules_data)
+        contexto: dict[str, str] = {}
+        resultados: list[RuleResult | None] = [None] * len(reglas)
+
+        for i, r in enumerate(reglas):
+            if r.aplicar_si is None:
+                res = r.ejecutar(extracted)
+                resultados[i] = res
+                if r.expone:
+                    contexto[r.expone] = r.valor_para_contexto()
+
+        for i, r in enumerate(reglas):
+            if r.aplicar_si is None:
+                continue
+            resultados[i] = r.ejecutar(extracted) if r.aplica_en(contexto) else r.no_aplicable()
+
+        return _con_sentinel(resultados, contexto)

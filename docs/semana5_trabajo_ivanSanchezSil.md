@@ -67,7 +67,7 @@
   el acople de `indice_subdivisiones` **no** se tocó porque en éxito el motor
   reporta `found="cumple"` (el paso a n/a no es observable).
 - Conteos sincronizados: **47 reglas**, doc bueno **45/47**, 47 mutaciones,
-  suite **204 tests**.
+  suite **206 tests**.
 
 ### 2026-09-23 (cierre de la revisión técnica del PR #28)
 
@@ -95,8 +95,33 @@
   `reporte_a_pdf` (los flujos json/markdown ya no arrastran la dependencia) y
   `tests/test_cli_integracion.py` que cubre `--formato json/markdown/pdf`,
   `--salida`, el atajo `--json` y el filtro `--severity`.
-- `docs/CONTRATO_API.md` actualizado: "41 reglas" → "47 reglas" (v1.2.0).
-- Conteos sincronizados: **47 reglas**, doc bueno **45/47**, suite **204 tests**.
+- `docs/CONTRATO_API.md` actualizado: "41 reglas" → "47 reglas" (la entrada
+  quedó etiquetada v1.1.0; falta reetiquetarla como v1.2.0 — ver backlog).
+- Conteos sincronizados: **47 reglas**, doc bueno **45/47**, suite **206 tests**.
+
+### 2026-09-23 (Semana 5.2 — sincronización de docs post-merge, rama `semana52-docs-sync`)
+
+- El PR #28 quedó **mergeado por retblast** (`9ac1cdf`, 2026-09-23): la rama
+  `semana5-motor-calidad-paginacion` cerró su ciclo y **no se borra**; el
+  trabajo de este bloque va en rama aparte.
+- **Regenerado `docs/ejemplo_respuesta_motor.json`** (CLI `--json` contra el
+  MANUAL): `encabezado_membrete`, `encabezado_formato` e
+  `indice_paginas_separadas` ahora pasan (`found: "cumple"`) — desaparece el
+  `ValueError: parte 'header'...` que citó la revisión y sus prompts en
+  `como_preguntar_a_una_ia`. `resultados` 45→47 (faltaban las de la F2) y
+  `resumen` ahora refleja las 47 reglas del DSL sobre el MANUAL
+  (27 error + 10 warning).
+- Conteos sincronizados: **47 reglas**, doc bueno **45/47**, suite **206 tests**
+  (el nit `d75c535` sumó 2 tests de paginación).
+- **Pendiente intencional (decisión de alcance)**: el CI de master quedó en
+  rojo por el paso `cachix-action` (caché `vistobueno` sin token). Se dejó SIN
+  tocar el `.github/workflows/ci.yml`; coordinar con retblast (crear caché
+  pública `vistobueno` + secreto `CACHIX_AUTH_TOKEN`, o quitar el paso).
+- **Nit del review (`d75c535`)**: `_paginacion_para()` ahora también avanza el
+  mapa con `w:pPr/w:pageBreakBefore` (además de `lastRenderedPageBreak` y
+  `w:br w:type="page"`); tests `test_mapa_de_salto_con_page_break_before` y
+  `test_paginas_distintas_solo_con_page_break_before`. Es lo que deja la suite
+  en 206 tests.
 
 ## Evidencias producidas
 
@@ -108,8 +133,8 @@
 | Tests | `tests/test_f2_paginacion.py`, `tests/test_f2_encabezados.py`, `tests/test_f2_notaspie.py`, `tests/test_toc_indice.py` |
 | Factory | `tests/_docx_builder.py`, `tests/_xml_constants.py`, `tests/_mutations.py`, `tests/docx_factory.py` |
 | Backlog | `docs/PLAN_BACKLOG_FUTURO.md` (ítems 1-3 y 11-12 ✅) |
-| Commits | `28b2c57`, `1cacd14`, `e38969a`, `(Bloque D)` (rama `semana5-motor-calidad-paginacion`) |
-| Gates | `pytest` 204 passed; `ruff` y `mypy` limpios |
+| Commits | `28b2c57`, `1cacd14`, `e38969a`, `(Bloque D)`, `6e0775f` (NS URI), `ba4f560` (n/a F2), `df7a832` (CLI + weasyprint lazy), `7ea6998` (conteos 204), `d75c535` (pageBreakBefore) · Semana 5.2: `semana52-docs-sync` (docs, este commit) |
+| Gates | `pytest` 206 passed; `ruff` y `mypy` limpios |
 
 ## Relación con competencias curriculares
 
@@ -126,10 +151,12 @@
 
 ## Plan de la semana siguiente
 
-1. Push de `semana5-motor-calidad-paginacion` y actualización del PR #28.
+1. Coordinar el **CI de master** (rojo por `cachix-action` sin `CACHIX_AUTH_TOKEN`)
+   con retblast: crear caché pública `vistobueno` + secreto, o quitar el paso
+   `cachix` del workflow para dejarlo verde.
 2. Contar con el Backend para el ítem 16 (`formato` en `POST /validar`) y para
-   actualizar `docs/CONTRATO_API.md` (changelog v1.1.0 dice "41 reglas"; falta
-   entrada v1.2.0 con 47 — quedó anotado en `docs/PLAN_BACKLOG_FUTURO.md`).
+   reetiquetar el changelog de `docs/CONTRATO_API.md` (v1.1.0 → v1.2.0 con las 47
+   reglas; quedó anotado en `docs/PLAN_BACKLOG_FUTURO.md`).
 3. Evaluar las dos reglas de TOC con `scripts/eval_contra_plantillas.py`
    (ítem 13 del backlog) contra las plantillas oficiales; ajustar la variante
    débil si alguna plantilla las hace fallar.

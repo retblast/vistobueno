@@ -327,14 +327,14 @@ El motor interno (`validator.engine`) devuelve `RuleResult` (dataclass) y `build
 - Ejemplo `curl` con campo `correo`.
 - Lectura del upload limitada a 10 MB + 1 byte: el `413` ya no reporta
   "Tamaño recibido" (cambio solo del texto del mensaje).
-- Ejemplos de respuesta sincronizados a 47 reglas (antes decían 31).
+- Ejemplos de respuesta sincronizados a 48 reglas (antes decían 31).
 - Versión del endpoint: `1.1.0` → `1.2.0` (cambio aditivo, sin romper
   clientes existentes).
 
 ### v1.1.1 (2026-09-15 — Semana 4, nota F5)
 
 - Sin cambios de campos en el contrato (las llamadas son idénticas).
-- Fuente de reglas: la API carga `reglas_unt.yaml` (DSL, 47 reglas) desde la
+- Fuente de reglas: la API carga `reglas_unt.yaml` (DSL, 48 reglas) desde la
   F5, en lugar del YAML legacy `unt_format_rules_schema.yaml`.
 
 ### v1.1.0 (2026-09-09 — Semana 3)
