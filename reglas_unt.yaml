@@ -46,6 +46,10 @@ reglas:
       # Se listan los dos porque la declaración se lee del Anexo 10, y lo que
       # se encuentra ahí escrito es el segundo. El primero se conserva por si
       # el autor transcribe el título en lugar de marcar la casilla.
+      #
+      # La casilla (símbolo, texto plano o content-control w14) puede vivir en
+      # cualquier párrafo del cuerpo, dentro de una tabla o de un w:sdt; si es
+      # una tabla, la etiqueta se busca en la MISMA fila (revisión del PR #45).
       etiquetas:
         # EVALUADO: el manual llama a este tipo "Trabajo de Suficiencia
         # Profesional" (párr. 89, 3430). Las dos etiquetas siguientes no
@@ -71,6 +75,12 @@ reglas:
     # En orden de especificidad (decisión 2): gana el primero que alcance su
     # mínimo. El informe es la versión revisada del proyecto, así que sus
     # firmas son más específicas y se evalúan antes.
+    #
+    # Las firmas se cotejan SOLO contra párrafos con estilo de título, igual
+    # que el DFA de estructura (revisión del PR #45). La prosa no cuenta como
+    # evidencia: la línea "Línea de investigación:" de la carátula está en
+    # toda tesis, pero no es un título, así que no debe alcanzar el mínimo de
+    # proyecto en un documento que no lo es.
     firmas:
     - tipo: tsp
       evidencia: ['SECUENCIA DIDÁCTICA', 'SUSTENTO PSICOPEDAGÓGICO', 'SUSTENTO TEÓRICO CIENTÍFICO']
@@ -179,7 +189,7 @@ reglas:
   cita: '"Nombre de la Universidad: Centrado, con negrita y con mayúsculas (tamaño de letra, 18 puntos)."'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'universidad')][1]/w:r[1]/w:rPr/w:sz
     atributo: '@w:val'
@@ -196,7 +206,7 @@ reglas:
     puntos)."'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'programa') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
@@ -204,6 +214,12 @@ reglas:
     atributo: '@w:val'
     comparacion: eq
     esperado: '26'
+# Título del trabajo (handover issue #4): el XPath buscaba el placeholder
+# "título del trabajo" de las plantillas, que una tesis real no contiene
+# (→ 0 nodos). Ahora se localiza el título como el primer párrafo no vacío
+# tras la línea "ESCUELA PROFESIONAL" que no repite universidad/facultad/
+# escuela/optar/tesis (perfil fijo del manual: Univ→Facultad/Escuela→Título).
+# Se valida solo en la carátula (`contexto: caratula`).
 - id: caratula_titulo_trabajo_tamano
   tipo: atributo_xml
   descripcion: Tamaño de letra del título del trabajo en carátula
@@ -215,10 +231,8 @@ reglas:
     (tamaño de letra, 14 puntos)."'
   atributo_xml:
     parte: document
-    contexto: todos
-    xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'título del trabajo') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
-      'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'titulo del trabajo'))][1]/w:r[1]/w:rPr/w:sz
+    contexto: caratula
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'tesis') and string-length(normalize-space(.)) < 40)][1]/w:r[1]/w:rPr/w:sz
     atributo: '@w:val'
     comparacion: eq
     esperado: '28'
@@ -234,7 +248,7 @@ reglas:
     (tamaño de letra, 13 puntos)."'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'para optar')][1]/w:r[1]/w:rPr/w:sz
     atributo: '@w:val'
@@ -251,7 +265,7 @@ reglas:
     minúsculas (tamaño de letra, 12 puntos)."'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
       'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]/w:r[1]/w:rPr/w:sz
     atributo: '@w:val'
@@ -317,7 +331,7 @@ reglas:
     del Trabajo...: Centrado...", etc.'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'universidad') or (contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
@@ -331,6 +345,14 @@ reglas:
     atributo: '@w:val'
     comparacion: all_eq
     esperado: center
+# Márgenes del cuerpo: se validan SOLO las secciones que rigen el cuerpo real
+# (contexto `seccion_cuerpo`), y en las secciones landscape se normaliza la
+# rotación que Word aplica (bottom<->left, top<->right): el empaste sigue en
+# el mismo borde físico. Antes se validaba `all_eq` sobre TODAS las secciones
+# con el valor OOXML crudo, y las secciones landscape (tablas anchas legítimas,
+# incluso dentro del cuerpo, p. ej. OPERACIONALIZACIÓN) producían falsos
+# positivos (handover issue #2). La política queda resuelta: se acepta la
+# rotación estándar de Word; no se exige uniformidad fuera del cuerpo.
 - id: margen_superior
   tipo: atributo_xml
   descripcion: Margen superior del documento
@@ -341,7 +363,7 @@ reglas:
   cita: '"Superior: 2.5 cm"'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: seccion_cuerpo
     xpath: (//w:sectPr)/w:pgMar
     atributo: '@w:top'
     comparacion: all_eq
@@ -356,7 +378,7 @@ reglas:
   cita: '"Inferior: 2.5 cm"'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: seccion_cuerpo
     xpath: (//w:sectPr)/w:pgMar
     atributo: '@w:bottom'
     comparacion: all_eq
@@ -371,7 +393,7 @@ reglas:
   cita: '"Derecho: 2.5 cm"'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: seccion_cuerpo
     xpath: (//w:sectPr)/w:pgMar
     atributo: '@w:right'
     comparacion: all_eq
@@ -386,7 +408,7 @@ reglas:
   cita: '"Izquierdo: 3.0 cm"'
   atributo_xml:
     parte: document
-    contexto: todos
+    contexto: seccion_cuerpo
     xpath: (//w:sectPr)/w:pgMar
     atributo: '@w:left'
     comparacion: all_eq
@@ -487,13 +509,13 @@ reglas:
   cita: '"Nombre de la Universidad: Centrado, con negrita y con mayúsculas (tamaño de letra, 18 puntos)."'
   presencia_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'universidad')][1]/w:r[1]/w:rPr/w:b[not(@w:val='0')]
     comparacion: exists
   patron_texto:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'universidad')][1]//w:t
     patron: ^[A-ZÁÉÍÓÚÑ0-9 .,-]+$
@@ -510,7 +532,7 @@ reglas:
     puntos)."'
   presencia_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'programa') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
@@ -518,7 +540,7 @@ reglas:
     comparacion: exists
   patron_texto:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'programa') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
@@ -537,20 +559,16 @@ reglas:
     (tamaño de letra, 14 puntos)."'
   presencia_xml:
     parte: document
-    contexto: todos
-    xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'título del trabajo') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
-      'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'titulo del trabajo'))][1]/w:r[1]/w:rPr/w:b[not(@w:val='0')]
+    contexto: caratula
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'tesis') and string-length(normalize-space(.)) < 40)][1]/w:r[1]/w:rPr/w:b[not(@w:val='0')]
     comparacion: exists
   patron_texto:
     parte: document
-    contexto: todos
-    xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'título del trabajo') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
-      'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'titulo del trabajo'))][1]//w:t
+    contexto: caratula
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'tesis') and string-length(normalize-space(.)) < 40)][1]//w:t
     patron: .*[a-záéíóúñ].*
     comparacion: fullmatch
-    coincidencia: todos
+    coincidencia: alguno
 - id: caratula_autores_mayusculas_sin_negrita
   tipo: presencia_xml
   descripcion: 'Los apellidos y nombres del autor en carátula: mayúsculas, sin negrita'
@@ -561,13 +579,13 @@ reglas:
   cita: '"Apellidos y Nombres del autor(a/es/as): Centrado, con letras mayúsculas."'
   presencia_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
       'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]/w:r[1]/w:rPr/w:b[not(@w:val='0')]
     comparacion: not_exists
   patron_texto:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
       'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]//w:t
     patron: ^[A-ZÁÉÍÓÚÑ0-9 .,-]+$
@@ -583,7 +601,7 @@ reglas:
   cita: '"Apellidos y nombres del/a asesor(a): Centrado, con negrita, con letras mayúsculas y minúsculas..."'
   presencia_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'asesor')][1]/w:r[1]/w:rPr/w:b[not(@w:val='0')]
     comparacion: exists
@@ -597,13 +615,13 @@ reglas:
   cita: '"Ciudad y país: Centrado, con negrita, con mayúsculas y minúsculas (tamaño de letra, 12 puntos)."'
   presencia_xml:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'trujillo')][1]/w:r[1]/w:rPr/w:b[not(@w:val='0')]
     comparacion: exists
   patron_texto:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
       'trujillo')][1]//w:t
     patron: ^[A-ZÁÉÍÓÚÑ0-9 .,-]+$
@@ -693,10 +711,9 @@ reglas:
 # Verificado sobre la estructura real de la plantilla, no sobre el indice.
 - id: estructura_tinv_cuantitativo
   tipo: secuencia
-  tipo: secuencia
   # El esquema solo le corresponde a su propio tipo. Si la deteccion no pudo
   # determinarlo (sin_determinar) o se contradice con la estructura
-  # (contradictorio), el documento se valida contra TODOS los esquemas: es
+  # Si la detección no pudo determinarlo, el documento se valida contra su tipo exacto
   # preferible mostrar de mas que dejar la estructura sin revisar en silencio.
   aplicar_si:
     tipo_documento: tinv_cuantitativo
@@ -827,10 +844,9 @@ reglas:
       original: ANEXOS
 - id: estructura_tinv_cualitativo
   tipo: secuencia
-  tipo: secuencia
   # El esquema solo le corresponde a su propio tipo. Si la deteccion no pudo
   # determinarlo (sin_determinar) o se contradice con la estructura
-  # (contradictorio), el documento se valida contra TODOS los esquemas: es
+  # Si la detección no pudo determinarlo, el documento se valida contra su tipo exacto
   # preferible mostrar de mas que dejar la estructura sin revisar en silencio.
   aplicar_si:
     tipo_documento: tinv_cualitativo
@@ -944,10 +960,9 @@ reglas:
       original: ANEXOS
 - id: estructura_tinv_revision_literatura
   tipo: secuencia
-  tipo: secuencia
   # El esquema solo le corresponde a su propio tipo. Si la deteccion no pudo
   # determinarlo (sin_determinar) o se contradice con la estructura
-  # (contradictorio), el documento se valida contra TODOS los esquemas: es
+  # Si la detección no pudo determinarlo, el documento se valida contra su tipo exacto
   # preferible mostrar de mas que dejar la estructura sin revisar en silencio.
   aplicar_si:
     tipo_documento: tinv_revision_literatura
@@ -1098,6 +1113,8 @@ reglas:
 
 - id: referencias_minimo_cuantitativo
   tipo: estructura
+  aplicar_si:
+    tipo_documento: tinv_cuantitativo
   descripcion: Mínimo de referencias bibliográficas para Trabajo de Investigación Cuantitativo
   valor_esperado: '>= 20 referencias'
   severidad: warning
@@ -1111,6 +1128,8 @@ reglas:
 
 - id: referencias_minimo_cualitativo
   tipo: estructura
+  aplicar_si:
+    tipo_documento: tinv_cualitativo
   descripcion: Mínimo de referencias bibliográficas para Trabajo de Investigación Cualitativo
   valor_esperado: '>= 30 referencias'
   severidad: warning
@@ -1124,6 +1143,8 @@ reglas:
 
 - id: referencias_minimo_revision
   tipo: estructura
+  aplicar_si:
+    tipo_documento: tinv_revision_literatura
   descripcion: Mínimo de referencias bibliográficas para Trabajo de Revisión de la Literatura
   valor_esperado: '>= 20 referencias'
   severidad: warning
@@ -1139,6 +1160,8 @@ reglas:
 
 - id: anexos_minimos_cuantitativo
   tipo: estructura
+  aplicar_si:
+    tipo_documento: tinv_cuantitativo
   descripcion: Anexos obligatorios para Trabajo de Investigación Cuantitativo
   valor_esperado:
   - Matriz de consistencia
@@ -1171,6 +1194,8 @@ reglas:
 
 - id: anexos_minimos_cualitativo
   tipo: estructura
+  aplicar_si:
+    tipo_documento: tinv_cualitativo
   descripcion: Anexos obligatorios para Trabajo de Investigación Cualitativo
   valor_esperado:
   - Matriz de consistencia
@@ -1223,6 +1248,10 @@ reglas:
 
 - id: proyecto_caratula_texto
   tipo: formato_texto
+  aplicar_si:
+    tipo_documento:
+      - proyecto_cuantitativo
+      - proyecto_cualitativo
   descripcion: En la carátula del Proyecto, la línea de tipo dice "Proyecto de Investigación" (no "Trabajo de Investigación para optar...")
   valor_esperado: Proyecto de Investigación
   severidad: error

@@ -73,27 +73,75 @@ REGLAS = [
     "indice_numeracion_jerarquica",
 ]
 
-# Reglas cuyo mecanismo es IDÉNTICO entre sí (mismo conteo de nodos con la
-# misma sección y mínimo): un desvío de cantidad las cambia a ambas a la vez.
-# No existe un DOCX donde cambie solo una de ellas. Se documenta como
-# exclusión de la propiedad "solo esa regla".
+# Con `aplicar_si` (handover issue #5) las reglas tipo-específicas SOLO se
+# evalúan en su propio tipo de documento. El documento base es cuantitativo,
+# así que una mutación que VOLTEA el tipo (los esquemas alternativos) o lo
+# vuelve contradictorio mueve, de paso, a todas las reglas condicionadas:
+# las del tipo que se deja dejan de aplicar (`aplicable` pasa a False) y las
+# del tipo al que se llega pasan a aplicarse. Ese acople es inherente a la
+# detección y se documenta aquí, regla por regla:
 #
-# - referencias_minimo_*_revision (mínimo 20) comparten conteo con la
-#   cantidad mínima de referencias; al bajar una, caen los dos que usan 20 Y
-#   el cualitativo (mínimo 30) porque 19 < 30. Los tres quedan acoplados.
+# - Volteo a cualitativo (estructura_tinv_cualitativo y las mutaciones que lo
+#   componen): 7 reglas — detección, la estructura cuantitativa deja de
+#   aplicar, la cualitativa pasa a aplicarse, y los mínimos de referencias y
+#   anexos de ambos tipos voltean su aplicabilidad.
+# - Volteo a revisión: 6 reglas — las reglas del tipo cualitativo NO se
+#   mueven (ya eran no aplicables y siguen siéndolo: la revisión tampoco es
+#   su tipo).
+# - Detección contradictoria (deteccion_tipo_documento): el tipo deja de ser
+#   "uno de los tres", así que las reglas del cuantitativo dejan de aplicar.
+# - Volteo a proyecto (proyecto_caratula_texto): 5 reglas — las reglas de los
+#   tipos tinv alternativos ya eran no aplicables y no se mueven.
+#
 # - caratula_universidad_negrita_mayusculas y caratula_ciudad_pais_negrita
 #   seleccionan el MISMO párrafo: la línea "UNIVERSIDAD NACIONAL DE TRUJILLO"
 #   contiene "trujillo", así que `[1]` de la regla de ciudad resuelve al
 #   párrafo de la universidad. Un cambio de negrita en esa línea las afecta
 #   a ambas (quirk del XPath heredado del reglamento).
 REGLAS_ACOPLADAS = {
-    "referencias_minimo_cuantitativo": {
-        "referencias_minimo_cualitativo",
-        "referencias_minimo_revision",
-    },
-    "referencias_minimo_revision": {
+    "estructura_tinv_cualitativo": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cuantitativo",
         "referencias_minimo_cuantitativo",
         "referencias_minimo_cualitativo",
+        "anexos_minimos_cuantitativo",
+        "anexos_minimos_cualitativo",
+    },
+    "referencias_minimo_cualitativo": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cualitativo",
+        "estructura_tinv_cuantitativo",
+        "referencias_minimo_cuantitativo",
+        "anexos_minimos_cuantitativo",
+        "anexos_minimos_cualitativo",
+    },
+    "anexos_minimos_cualitativo": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cualitativo",
+        "estructura_tinv_cuantitativo",
+        "referencias_minimo_cuantitativo",
+        "referencias_minimo_cualitativo",
+        "anexos_minimos_cuantitativo",
+    },
+    "estructura_tinv_revision_literatura": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cuantitativo",
+        "referencias_minimo_cuantitativo",
+        "referencias_minimo_revision",
+        "anexos_minimos_cuantitativo",
+    },
+    "referencias_minimo_revision": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cuantitativo",
+        "estructura_tinv_revision_literatura",
+        "referencias_minimo_cuantitativo",
+        "anexos_minimos_cuantitativo",
+    },
+    "proyecto_caratula_texto": {
+        "deteccion_tipo_documento",
+        "estructura_tinv_cuantitativo",
+        "referencias_minimo_cuantitativo",
+        "anexos_minimos_cuantitativo",
     },
     "caratula_universidad_negrita_mayusculas": {"caratula_ciudad_pais_negrita"},
     "caratula_ciudad_pais_negrita": {"caratula_universidad_negrita_mayusculas"},
@@ -108,24 +156,11 @@ REGLAS_ACOPLADAS = {
     # "PROBLEMÁTICA Y CONTEXTO": la entrada "1.1. SITUACIÓN PROBLEMÁTICA" del
     # índice deja de apuntar a una sección real (falla indice_apunta_secciones).
     "estructura_tinv_cuantitativo": {"indice_apunta_secciones"},
-    # Las mutaciones de las estructuras alternativas cambian qué firma de
-    # detección casa con el documento, así que también mueven
-    # deteccion_tipo_documento. El acople es correcto y es justo lo que hace
-    # útil la detección: el documento pasa a leerse como cualitativo o como
-    # revisión. El sentido inverso NO ocurre (mutar la detección no cambia las
-    # estructuras: solo se añade un anexo), por eso el mapa es unidireccional.
-    "estructura_tinv_cualitativo": {
-        "deteccion_tipo_documento",
-        "estructura_tinv_cuantitativo",
-    },
-    "estructura_tinv_revision_literatura": {
-        "deteccion_tipo_documento",
-        "estructura_tinv_cuantitativo",
-    },
     # Al revés que las de arriba: una detección contradictoria (el Anexo 10
     # declara un tipo que la estructura desmiente) hace que el tipo real ya no
     # sea "una de las tres", así que la estructura que antes aplicaba
-    # (cuantitativo) deja de aplicar. Las dos alternativas ya eran no
+    # (cuantitativo) deja de aplicar, y con ella los mínimos de referencias y
+    # anexos del tipo cuantitativo. Las reglas de los otros tipos ya eran no
     # aplicables y siguen siéndolo. El paso 6 turns el caso contradictorio en
     # un error centinela propio en vez de validar contra las tres.
     # NOTA: el centinela `tipo_documento_contradictorio` aparece en el
@@ -133,17 +168,25 @@ REGLAS_ACOPLADAS = {
     # reglas (lo deriva la detección).
     "deteccion_tipo_documento": {
         "estructura_tinv_cuantitativo",
+        "referencias_minimo_cuantitativo",
+        "anexos_minimos_cuantitativo",
     },
 }
 
-# El documento base es un plan tipo CUANTITATIVO, así que los esquemas de
-# los otros dos tipos de TINV no le aplican. Desde el paso 4 no "fallan":
-# la detección de tipo los marca como no aplicables (`aplicable=False`), que
-# es la diferencia entre un error corregible y un error que no le toca al
-# documento. Antes de ese paso fallaban y ponían el semáforo en rojo.
+# El documento base es un plan tipo CUANTITATIVO, así que no le aplican ni los
+# esquemas de los otros dos tipos de TINV ni, desde el issue #5 del handover,
+# sus mínimos de referencias/anexos ni el texto de carátula del Proyecto.
+# Desde el paso 4 no "fallan": la detección de tipo los marca como no
+# aplicables (`aplicable=False`), que es la diferencia entre un error
+# corregible y un error que no le toca al documento. Antes de ese paso las
+# estructuras fallaban y ponían el semáforo en rojo.
 NO_APLICABLES_BASE = {
     "estructura_tinv_cualitativo",
     "estructura_tinv_revision_literatura",
+    "referencias_minimo_cualitativo",
+    "referencias_minimo_revision",
+    "anexos_minimos_cualitativo",
+    "proyecto_caratula_texto",
 }
 
 
@@ -214,6 +257,59 @@ def _interleaved_cualitativo() -> list:
     return res
 
 
+# Volteos de tipo (handover issue #5): las reglas condicionadas con
+# `aplicar_si` no se evalúan en el doc base (cuantitativo), así que su
+# mutación primero vuelve el documento legible para su propio tipo y
+# después agrega el desvío que la regla debe detectar.
+
+
+def _voltear_cualitativo(c: dict) -> None:
+    """Misma mutación de headings que `estructura_tinv_cualitativo`: el
+    documento pasa a leerse como TINV cualitativo."""
+    c["headings"] = _interleaved_cualitativo()
+
+
+def _voltear_revision(c: dict) -> None:
+    """Misma mutación de headings que `estructura_tinv_revision_literatura`:
+    el documento pasa a leerse como revisión de la literatura."""
+    c["headings"] = _headings_insertadas(_HEADINGS_CUANT, _ANADIDAS_REVISION)
+
+
+def _voltear_proyecto(c: dict) -> None:
+    """Añade dos firmas de proyecto (párrafos con estilo de título) para que
+    la detección lea el documento como proyecto cuantitativo.
+
+    `proyecto_cuantitativo` se evalúa ANTES que los TINV en el orden de
+    especificidad de la detección, así que con dos firmas gana. El doc no
+    declara nada en el Anexo 10, no hay contradicción: el tipo queda
+    `proyecto_cuantitativo` y las reglas de proyecto pasan a aplicarse.
+    """
+    c["headings"] = list(c["headings"]) + [
+        "PLAN DE INVESTIGACIÓN",
+        "RECURSOS Y MATERIALES",
+    ]
+
+
+def _mut_referencias_cualitativo(c: dict) -> None:
+    _voltear_cualitativo(c)
+    c["referencias_n"] = 29
+
+
+def _mut_referencias_revision(c: dict) -> None:
+    _voltear_revision(c)
+    c["referencias_n"] = 19
+
+
+def _mut_anexos_cualitativo(c: dict) -> None:
+    _voltear_cualitativo(c)
+    c["anexos_items"].remove("Juicio de expertos")
+
+
+def _mut_proyecto_caratula(c: dict) -> None:
+    _voltear_proyecto(c)
+    c["portada"]["proyecto"].update(sz=24)
+
+
 _MUTACIONES = {
     "papel_tamano": lambda c: c["pg"].update(w=10000),
     "fuente_principal": lambda c: c.update(fuente="Arial"),
@@ -262,12 +358,12 @@ _MUTACIONES = {
     "resumen_longitud": lambda c: c.update(resumen_palabras=60),
     "palabras_clave_minimo": lambda c: c.update(palabras_clave_n=2),
     "referencias_minimo_cuantitativo": lambda c: c.update(referencias_n=19),
-    "referencias_minimo_cualitativo": lambda c: c.update(referencias_n=29),
-    "referencias_minimo_revision": lambda c: c.update(referencias_n=19),
+    "referencias_minimo_cualitativo": _mut_referencias_cualitativo,
+    "referencias_minimo_revision": _mut_referencias_revision,
     "anexos_minimos_cuantitativo": lambda c: c["anexos_items"].remove("Reporte de similitud"),
-    "anexos_minimos_cualitativo": lambda c: c["anexos_items"].remove("Juicio de expertos"),
+    "anexos_minimos_cualitativo": _mut_anexos_cualitativo,
     "caratula_orcid": lambda c: c["portada"].pop("orcid"),
-    "proyecto_caratula_texto": lambda c: c["portada"]["proyecto"].update(sz=24),
+    "proyecto_caratula_texto": _mut_proyecto_caratula,
     "indice_paginas_separadas": lambda c: c.update(indices_paginas_separadas=False),
     "encabezado_membrete": lambda c: c.update(header_logo=False),
     "encabezado_formato": lambda c: c.update(header_fuente="Arial"),

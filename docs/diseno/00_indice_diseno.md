@@ -159,7 +159,7 @@ flowchart LR
 3. **05** explica cómo se compila y se valida contra un documento.
 4. **06** (migración), **07** (tests) y **08** (OCR) son procesos transversales.
 5. **09** es la única propuesta a futuro (F5): el resto documenta lo ya
-      implementado y verificado por la suite (368 tests).
+      implementado y verificado por la suite (388 tests).
 6. **15** es el único documento con diseño **previo** a la implementación: se
    escribió antes de escribir código, porque detecta un defecto de correctitud
    (una tesis conforme se reporta en rojo). Su plan de ejecución por pasos está

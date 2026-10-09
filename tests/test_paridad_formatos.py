@@ -226,6 +226,21 @@ def _document_xml(conforme: bool, estructura: bool) -> str:
         if h in ("DEDICATORIA", "AGRADECIMIENTO"):
             nivel = 1
         paras.append(_heading(h, nivel))
+        if h == "INTRODUCCIÓN":
+            # Prosa del cuerpo: el extractor define el "cuerpo" por el rango
+            # semántico Introducción→Referencias/Anexos, no por la última
+            # sección; los párrafos de contenido viven aquí.
+            paras.append(
+                _cuerpo_para(
+                    "La motricidad fina se desarrolla a través de estrategias lúdicas.", conforme
+                )
+            )
+            paras.append(
+                _cuerpo_para("Se aplicó un estudio cuantitativo con diseño experimental.", conforme)
+            )
+            paras.append(
+                _cuerpo_para("Los resultados muestran una mejora significativa.", conforme)
+            )
 
     # Índices subdivisiones (solo en el documento conforme)
     if conforme:
@@ -236,15 +251,7 @@ def _document_xml(conforme: bool, estructura: bool) -> str:
     # ── Marcador de sección (fin de preliminares) ───────────
     paras.append(_sect_marker(conforme))
 
-    # ── Cuerpo (párrafos regulares, no headings) ────────────
-    paras.append(
-        _cuerpo_para("La motricidad fina se desarrolla a través de estrategias lúdicas.", conforme)
-    )
-    paras.append(
-        _cuerpo_para("Se aplicó un estudio cuantitativo con diseño experimental.", conforme)
-    )
-    paras.append(_cuerpo_para("Los resultados muestran una mejora significativa.", conforme))
-
+    # ── Cierre del documento ────────────────────────────────
     paras.append(_sect_final(conforme))
 
     body = "".join(paras)
@@ -315,6 +322,16 @@ def _verificar_paridad(docx_path: str) -> dict:
         "estructura_tinv_cuantitativo",
         "estructura_tinv_cualitativo",
         "estructura_tinv_revision_literatura",
+        # Márgenes (handover issue #2): el DSL valida SOLO las secciones que
+        # rigen el cuerpo (`contexto: seccion_cuerpo`), dejando fuera las
+        # landscape de anexos; el legacy mira todas las secciones (no tiene
+        # el concepto de sección). El veredicto `passed` coincide en los
+        # documentos sintéticos, pero el `found` difiere (menos nodos), así
+        # que aquí solo se compara el resultado binario.
+        "margen_superior",
+        "margen_inferior",
+        "margen_derecho",
+        "margen_izquierdo",
     }
     # Desde el paso 4 el DSL hace algo que el motor legacy no puede: condicionar
     # una regla a la clave que publica otra (`aplicar_si`). Una estructura que

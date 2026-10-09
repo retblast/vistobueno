@@ -34,6 +34,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from .analizadores import (
     TIPO_CONTRADICTORIO,
@@ -604,7 +605,22 @@ class ReglaCompilada:
 # El `found` se completa con el detalle real de la detección (qué firmas se
 # buscaron y no casaron, o qué declaración choca con qué firma), para que el
 # estudiante vea la evidencia, no solo el veredicto.
-_SENTINELAS = {
+# La severidad del centinela depende del estado:
+#   - `sin_determinar` y `contradictorio` son estados terminales que impiden
+#     validar la estructura → error bloquante.
+#   - Los tipos de proyecto, informe y TSP todavía NO tienen una estructura
+#     cargada (viven en `reglas_unt_pendientes.yaml`, que la API no carga).
+#     El documento se valida con las reglas generales y queda avisado con un
+#     warning: no se vende un "verde" que no validó el capítulo de
+#     metodología, pero tampoco se bloquea a un estudiante que sí eligió bien.
+class _SentinelSpec(TypedDict):
+    rule_id: str
+    message: str
+    expected: str
+    severity: Severity
+
+
+_SENTINELAS: dict[str, _SentinelSpec] = {
     TIPO_SIN_DETERMINAR: {
         "rule_id": "tipo_documento_no_determinado",
         "message": (
@@ -614,6 +630,7 @@ _SENTINELAS = {
             "trae secciones que identifiquen su esquema."
         ),
         "expected": "un tipo de documento de entre los 8 esquemas de la UNT",
+        "severity": Severity.ERROR,
     },
     TIPO_CONTRADICTORIO: {
         "rule_id": "tipo_documento_contradictorio",
@@ -625,24 +642,75 @@ _SENTINELAS = {
             "puede validar la estructura de ningún esquema."
         ),
         "expected": "declaración del Anexo 10 y estructura del documento del mismo tipo",
+        "severity": Severity.ERROR,
+    },
+    "proyecto_cuantitativo": {
+        "rule_id": "tipo_documento_sin_estructura",
+        "message": (
+            "El documento es un PROYECTO DE INVESTIGACIÓN CUANTITATIVO, cuyo "
+            "esquema formal todavía no tiene validación estructural en el "
+            "validador: solo se validan las reglas generales de formato."
+        ),
+        "expected": "estructura de proyecto cuantitativo",
+        "severity": Severity.WARNING,
+    },
+    "proyecto_cualitativo": {
+        "rule_id": "tipo_documento_sin_estructura",
+        "message": (
+            "El documento es un PROYECTO DE INVESTIGACIÓN CUALITATIVO, cuyo "
+            "esquema formal todavía no tiene validación estructural en el "
+            "validador: solo se validan las reglas generales de formato."
+        ),
+        "expected": "estructura de proyecto cualitativo",
+        "severity": Severity.WARNING,
+    },
+    "informe_cuantitativo": {
+        "rule_id": "tipo_documento_sin_estructura",
+        "message": (
+            "El documento es un INFORME DE PROYECTO CUANTITATIVO, cuyo "
+            "esquema formal todavía no tiene validación estructural en el "
+            "validador: solo se validan las reglas generales de formato."
+        ),
+        "expected": "estructura de informe cuantitativo",
+        "severity": Severity.WARNING,
+    },
+    "informe_cualitativo": {
+        "rule_id": "tipo_documento_sin_estructura",
+        "message": (
+            "El documento es un INFORME DE PROYECTO CUALITATIVO, cuyo esquema "
+            "formal todavía no tiene validación estructural en el validador: "
+            "solo se validan las reglas generales de formato."
+        ),
+        "expected": "estructura de informe cualitativo",
+        "severity": Severity.WARNING,
+    },
+    "tsp": {
+        "rule_id": "tipo_documento_sin_estructura",
+        "message": (
+            "El documento es un TRABAJO DE SUFICIENCIA PROFESIONAL, cuyo "
+            "esquema formal todavía no tiene validación estructural en el "
+            "validador: solo se validan las reglas generales de formato."
+        ),
+        "expected": "estructura de trabajo de suficiencia profesional",
+        "severity": Severity.WARNING,
     },
 }
 
 
 def _con_sentinel(resultados: list[RuleResult | None], contexto: dict) -> list[RuleResult]:
-    """Agrega el error centinela si el tipo quedó sin determinar o contradictorio.
+    """Agrega el resultado centinela según el `tipo_documento` publicado.
 
     Va justo después de la regla de detección, que es donde el estudiante
     empieza a leer. El resto de reglas se conserva en el orden del YAML: este
-    resultado no es una regla del YAML, es la traducción a error de un estado
-    de la detección.
+    resultado no es una regla del YAML, es la traducción de un estado de la
+    detección (error terminal o aviso de falta de validación estructural).
     """
     spec = _SENTINELAS.get(contexto.get("tipo_documento", ""))
     if spec is None:
         return [r for r in resultados if r is not None]
 
     # El detalle de la detección es la evidencia: sin él el estudiante sabe
-    # que no se clasificó, pero no por qué.
+    # que no se clasificó (o qué tipo salió), pero no por qué.
     detalle = ""
     for r in resultados:
         if r is not None and r.rule_id == "deteccion_tipo_documento":
@@ -651,7 +719,7 @@ def _con_sentinel(resultados: list[RuleResult | None], contexto: dict) -> list[R
     sentinela = RuleResult(
         rule_id=spec["rule_id"],
         passed=False,
-        severity=Severity.ERROR,
+        severity=spec["severity"],
         message=spec["message"],
         expected=spec["expected"],
         found=detalle or "sin detalle",

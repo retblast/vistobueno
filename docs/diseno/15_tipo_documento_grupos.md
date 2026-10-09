@@ -442,17 +442,27 @@ se sigue calculando sobre todos los errores, así que omitir no cambia el veredi
 En el documento bueno (plan cuantitativo) eso da 46 evaluadas y 2 omitidas: las
 estructuras de cualitativo y de revisión, que no aplican a un plan cuantitativo.
 
-## Riesgos conocidos que NO se corrigen aquí
+## Riesgos conocidos (y su estado)
 
-- **Las firmas se comparan sobre todos los párrafos del cuerpo, no solo sobre
-  títulos.** `LÍNEA DE INVESTIGACIÓN` es evidencia de `proyecto_cuantitativo`
-  y aparece en la carátula de toda tesis UNT. Hoy no dispara porque esa firma
-  exige 2 de 3, pero es frágil: bastaría que una tesis tuviera además "plan de
-  investigación" y "recursos y materiales" para clasificarse como proyecto.
-  Endurecerlo exige distinguir títulos de prosa, que es un cambio de analizador.
+- **Las firmas estructurales se cotejan solo contra títulos (resuelto en el
+  PR #45).** Antes las firmas se comparaban sobre todos los párrafos del
+  cuerpo: `LÍNEA DE INVESTIGACIÓN` es evidencia de `proyecto_cuantitativo` y
+  aparece en la carátula de toda tesis UNT, así que una TINV llegaba a 1/2 de
+  proyecto solo por prosa y bastaba un párrafo suelto ("recursos y
+  materiales", "plan de investigación") para virar la clasificación. Ahora la
+  inferencia solo mira párrafos con estilo de título, igual que el DFA de
+  estructura. Medido sobre una tesis real (TINV cuantitativa): el "1/2" de
+  proyecto desaparece y la TINV se sigue detectando.
 - **Solo los 3 TINV tienen reglas de estructura.** Una TSP, un informe o un
   proyecto no reciben ninguna validación estructural: salen vacíos por ese
-  lado. Las 5 reglas nuevas van en el archivo aparte (paso 8).
+  lado. Desde el PR #45 el motor emite un **warning** `tipo_documento_sin_estructura`
+  para esos 5 tipos: el semáforo no vende un "verde" que no validó el capítulo
+  de metodología. Las 5 reglas nuevas van en el archivo aparte (paso 8).
+- **La casilla del Anexo 10 se lee en cualquier párrafo del cuerpo (resuelto
+  en el PR #45).** Antes solo se miraban los hijos directos del body; ahora se
+  recorren las tablas (`w:tbl`) y los content-control de Word (`w:sdt`,
+  `w14:checkbox`), y si el Anexo 10 es una tabla, la etiqueta se busca en la
+  misma fila de la casilla.
 - **El Anexo 10 y los encabezados de capítulo usan dos vocabularios que no son
   intercambiables.** El Anexo 10 (párr. 5014-5016) pide marcar "TRABAJO DE
   INVESTIGACIÓN CUANTITATIVO"; el nombre del título que se opta es "TESIS PARA
@@ -476,15 +486,18 @@ Cada estructura acepta **solo su tipo exacto**. Cuando el tipo no se puede
 clasificar, **ninguna** estructura se evalúa, y en su lugar el motor sintetiza un
 error centinela:
 
-| Estado de la detección | Error |
+| Estado de la detección | Resultado |
 |---|---|
-| `sin_determinar` | `tipo_documento_no_determinado` |
-| `contradictorio` | `tipo_documento_contradictorio` |
+| `sin_determinar` | error `tipo_documento_no_determinado` |
+| `contradictorio` | error `tipo_documento_contradictorio` |
+| tipo **sin estructura cargada** (proyecto, informe, TSP) | warning `tipo_documento_sin_estructura` |
 
-Los dos son `error`, se insertan justo después de `deteccion_tipo_documento` (que
+Los dos errores se insertan justo después de `deteccion_tipo_documento` (que
 sigue siendo `warning` e informativa), y su `found` arrastra el detalle real de
 la detección: qué firmas se buscaron y no casaron, o qué declaración choca con
-qué firma. El mensaje dice qué corregir, no solo qué falló.
+qué firma. El mensaje dice qué corregir, no solo qué falló. El warning de tipo
+sin estructura no bloquea (el estudiante sí eligió bien), pero evita el verde
+silencioso: queda explícito que su esquema aún no se valida.
 
 Esto **revierte** parte de la decisión del paso 4, que hacía que los estados
 desconocidos activaran las tres estructuras "para no dejar la estructura sin

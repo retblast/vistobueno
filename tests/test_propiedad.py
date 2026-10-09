@@ -81,11 +81,18 @@ def _sin_archivo(path: str):
 
 # El paso 6 agrega un error centinela (`tipo_documento_no_determinado` /
 # `tipo_documento_contradictorio`) cuando la detección no puede clasificar el
-# documento. No es una de las 48 reglas: lo deriva la detección, así que no
-# tiene mutación propia ni cuenta para `REGLAS`. En un documento mutado puede
-# aparecer (y en el base no), por lo que se excluye de la comparación punto a
-# punto para no contarlo como "movida".
-CENTINELAS = {"tipo_documento_no_determinado", "tipo_documento_contradictorio"}
+# documento, y el issue #5 del handover trae el warning
+# `tipo_documento_sin_estructura` cuando el tipo detectado (proyecto, informe,
+# TSP) todavía no tiene esquema en `reglas_unt.yaml`. Ninguno es una de las 48
+# reglas: los deriva la detección, así que no tienen mutación propia ni cuenta
+# para `REGLAS`. En un documento mutado pueden aparecer (y en el base no), por
+# lo que se excluyen de la comparación punto a punto para no contarlos como
+# "movidas".
+CENTINELAS = {
+    "tipo_documento_no_determinado",
+    "tipo_documento_contradictorio",
+    "tipo_documento_sin_estructura",
+}
 
 
 def _compare(path_a: str, path_b: str, esperado: set, rule_id: str):
@@ -120,8 +127,11 @@ def test_doc_bueno_pasa_sin_fallos():
     assert fallos == set(), f"fallos={sorted(fallos)}"
 
 
-def test_doc_bueno_solo_omite_las_estructuras_de_otros_tipos():
-    """Las 2 no aplicables son exactamente los esquemas de otros tipos."""
+def test_doc_bueno_solo_omite_las_reglas_de_otros_tipos():
+    """Las no aplicables son exactamente las reglas de otros tipos de
+    documento: los 2 esquemas de estructura alternativos y, desde el issue
+    #5 del handover, sus mínimos de referencias/anexos y el texto de
+    carátula del Proyecto."""
     cfg = configuracion_base()
     path = compilar_docx(cfg)
     try:

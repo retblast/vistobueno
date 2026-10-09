@@ -27,7 +27,7 @@ import re
 from abc import ABC, abstractmethod
 
 from .extractor import NS, ExtractedDocx, W, text_of
-from .tokenizer import PARRAFO, _es_heading, seccion, tokenizar
+from .tokenizer import PARRAFO, TITULO, _es_heading, seccion, solo, tokenizar
 
 # Prefijos de namespace para resolver names en atributos (ej. "@w:val").
 PREFIX_NS = NS
@@ -80,6 +80,23 @@ class AnalizadorXML(Analizador):
     Se usa para los DSL `atributo_xml` y `presencia_xml`.
     """
 
+    # En secciones landscape Word rota el par de márgenes opuestos
+    # (bottom<->left y top<->right) para que el empaste siga en el mismo
+    # borde físico. Al comparar un margen en una sección landscape se usa el
+    # valor del atributo rotado (handover issue #2).
+    _ROTACION_MARGEN = {
+        "@w:top": "@w:right",
+        "@w:right": "@w:top",
+        "@w:bottom": "@w:left",
+        "@w:left": "@w:bottom",
+    }
+
+    def _valor_margen(self, extracted, node, atributo, key):
+        """Valor de `atributo` normalizado para la orientación de la sección."""
+        if atributo in self._ROTACION_MARGEN and extracted.es_seccion_landscape(node):
+            key = _resolve_attr_key(self._ROTACION_MARGEN[atributo])
+        return node.get(key)
+
     def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
         parte = self.config.get("parte", "document")
         contexto = self.config.get("contexto", "todos")
@@ -106,7 +123,7 @@ class AnalizadorXML(Analizador):
         if atributo is None:
             return False, "falta 'atributo' para comparación de atributo"
         key = _resolve_attr_key(atributo)
-        vals = [n.get(key) for n in nodes]
+        vals = [self._valor_margen(extracted, n, atributo, key) for n in nodes]
         vals = [v for v in vals if v is not None]
         self.valor = vals[0] if vals else None
 
@@ -725,6 +742,71 @@ def _estado_casilla(p) -> tuple[bool, bool]:
     return False, False
 
 
+# Namespace de Word 2010 en adelante (`w14`): lleva el estado de las casillas
+# de content-control. El namespace no está en `extractor.NS` porque aquí solo
+# se lee el estado de un checkbox del Anexo 10.
+W14 = "{http://schemas.microsoft.com/office/word/2010/wordml}"
+
+
+def _en_fila(p):
+    """Ancestro `w:tr` (fila de tabla) del párrafo, o `None` si no vive en
+    una tabla. Los párrafos de una celda están anidados (body > tbl > tr > tc
+    > p), por eso se sube por los padres."""
+    nodo = p.getparent()
+    while nodo is not None and nodo.tag != W + "tr":
+        nodo = nodo.getparent()
+    return nodo
+
+
+def _estado_casilla_contenido(p) -> tuple[bool, bool]:
+    """(marcada, hay_casilla) de una casilla de content-control.
+
+    Word dibuja la casilla como símbolo (`w:sym`) o como texto plano, que
+    cubre `_estado_casilla`; pero si el autor la inserta como control de
+    contenido, el `w14:checkbox` vive en `w:sdtPr`, un árbol hermano de
+    `w:sdtContent` (que es el que contiene al párrafo). Hay que subir hasta
+    el ancestro `w:sdt` para leer el estado.
+    """
+    nodo = p.getparent()
+    while nodo is not None and nodo.tag != W + "sdt":
+        nodo = nodo.getparent()
+    if nodo is None:
+        return False, False
+    # `find` no baja a los nietos: el w14:checkbox vive dentro de w:sdtPr.
+    checked = nodo.find(f"{W}sdtPr/{W14}checkbox/{W14}checked")
+    if checked is None:
+        return False, False
+    val = (checked.get(W14 + "val") or "").strip().lower()
+    return val in ("1", "true", "on", "yes", ""), True
+
+
+def _casilla_de(p) -> tuple[bool, bool]:
+    """(marcada, hay_casilla) de un párrafo de declaración.
+
+    Mira la casilla propia (símbolo o texto), la del content-control `w:sdt`
+    que lo envuelve y la de los párrafos hermanos de su misma fila de tabla:
+    en el Anexo 10 la casilla y su etiqueta pueden vivir en celdas distintas.
+    """
+    marcada, hay_casilla = _estado_casilla(p)
+    if hay_casilla:
+        return marcada, True
+    marcada, hay_casilla = _estado_casilla_contenido(p)
+    if hay_casilla:
+        return marcada, True
+    tr = _en_fila(p)
+    if tr is not None:
+        for celda in tr.iter(W + "p"):
+            if celda is p:
+                continue
+            m, h = _estado_casilla(celda)
+            if h:
+                return m, True
+            m, h = _estado_casilla_contenido(celda)
+            if h:
+                return m, True
+    return False, False
+
+
 class DeteccionTipo(Analizador):
     """Determina el tipo de documento de forma determinista.
 
@@ -735,7 +817,10 @@ class DeteccionTipo(Analizador):
        que el autor eligió. Es una declaración del autor, no una inferencia.
     2. **Inferido** — se cuentan las firmas estructurales de cada tipo y gana
        el primero que alcance su `minimo`. El orden de `firmas` es el de
-       especificidad (decisión 2: el informe gana al proyecto).
+       especificidad (decisión 2: el informe gana al proyecto). Las firmas se
+       cotejan solo contra párrafos con estilo de TÍTULO (igual que el DFA de
+       la regla de estructura): la prosa es ruido y no debe contar como
+       evidencia estructural.
     3. **Sin determinar** — ninguna firma alcanzó su umbral.
 
     Si hay nivel 1 y nivel 2 y no coinciden, se publica
@@ -769,9 +854,21 @@ class DeteccionTipo(Analizador):
             self.valor = TIPO_SIN_DETERMINAR
             return False, "sin_determinado (documento sin cuerpo)"
 
-        parrafos = body.findall(W + "p")
-        declaracion, etiqueta = self._tipo_declarado(parrafos)
-        inferido, evidencia = self._tipo_inferido(parrafos)
+        # Nivel 1 (declaración): la casilla marcada puede vivir en cualquier
+        # párrafo del cuerpo, incluidos los de una tabla (`w:tbl`) o de un
+        # bloque de contenido (`w:sdt`), así que se recorren todos los
+        # descendientes y no solo los hijos directos del body.
+        todos = list(body.iter(W + "p"))
+        declaracion, etiqueta = self._tipo_declarado(todos)
+
+        # Nivel 2 (inferencia): las firmas se cotejan SOLO contra párrafos
+        # con estilo de título (decisión 2 del diseño, revisión del PR). La
+        # prosa es mucho más ruidosa que la estructura: con prosa, la línea
+        # "Línea de investigación:" de la carátula le regalaba la evidencia a
+        # `proyecto_cuantitativo` en cualquier tesis y bastaba un párrafo
+        # suelto ("recursos y materiales") para virar la clasificación.
+        title_texts = [t.texto for t in solo(tokenizar(extracted), [TITULO])]
+        inferido, evidencia = self._tipo_inferido(title_texts)
 
         if declaracion and inferido and declaracion != inferido:
             self.nivel = NIVEL_NO_DETERMINADO
@@ -802,10 +899,12 @@ class DeteccionTipo(Analizador):
     def _tipo_declarado(self, parrafos) -> tuple[str | None, str]:
         """Tipo cuya casilla aparece marcada junto a su etiqueta.
 
-        La casilla y la etiqueta deben estar en el MISMO párrafo: si estuvieran
-        separadas, no habría forma de saber a cuál corresponde cada casilla.
+        La casilla y la etiqueta deben estar relacionadas: en el MISMO párrafo
+        o, si el Anexo 10 es una tabla, en la MISMA fila — Word suele poner la
+        casilla en una celda y su etiqueta en otra. La casilla se lee como
+        símbolo, texto plano o content-control `w14:checkbox`.
 
-        Si en un mismo párrafo casan varias etiquetas, gana la MÁS LARGA. El
+        Si en un contexto casan varias etiquetas, gana la MÁS LARGA. El
         cotejo es por subcadena y unas etiquetas contienen a otras: "INFORME
         DE PROYECTO DE INVESTIGACIÓN CUANTITATIVO" contiene "PROYECTO DE
         INVESTIGACIÓN CUANTITATIVO", así que las dos casan en el mismo
@@ -818,10 +917,16 @@ class DeteccionTipo(Analizador):
         if not etiquetas:
             return None, ""
         for p in parrafos:
-            marcada, hay_casilla = _estado_casilla(p)
+            marcada, hay_casilla = _casilla_de(p)
             if not hay_casilla or not marcada:
                 continue
-            texto = _norm_deteccion(text_of(p))
+            # La etiqueta se busca en el párrafo de la casilla y, si vive en
+            # una tabla, también en los párrafos hermanos de su misma fila.
+            textos = [text_of(p)]
+            tr = _en_fila(p)
+            if tr is not None:
+                textos.extend(text_of(c) for c in tr.iter(W + "p") if c is not p)
+            texto = _norm_deteccion(" ".join(textos))
             candidatos: list[tuple[int, str, str]] = []
             for tipo, alias in etiquetas.items():
                 for etiqueta in [tipo, *alias]:
@@ -837,8 +942,14 @@ class DeteccionTipo(Analizador):
         return None, ""
 
     # -- nivel 2: firmas estructurales ------------------------------------
-    def _tipo_inferido(self, parrafos) -> tuple[str | None, list[str]]:
-        textos = [_norm_deteccion(text_of(p)) for p in parrafos]
+    def _tipo_inferido(self, textos) -> tuple[str | None, list[str]]:
+        """Tipo que alcanza su `minimo` de firmas entre los títulos.
+
+        `textos` son los textos planos de los párrafos con estilo de título;
+        el cotejo es por subcadena y normalización, para que la numeración
+        ("2.1."), la sangría y las tildes no rompan el emparejamiento.
+        """
+        textos = [_norm_deteccion(t) for t in textos]
         for firma in self.config.get("firmas", []):
             minimo = firma.get("minimo", 1)
             encontradas = [

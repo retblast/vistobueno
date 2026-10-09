@@ -211,12 +211,14 @@ pytest tests/ --cov=validator --cov-report=term-missing
 nix flake check
 ```
 
-La suite (**368 tests**) incluye los **tests de propiedad** (F6): un factory
+La suite (**381 tests**) incluye los **tests de propiedad** (F6): un factory
 determinista de DOCX (`tests/docx_factory.py`, descompuesto en
 `tests/_xml_constants.py`, `tests/_docx_builder.py` y `tests/_mutations.py`;
 este último **sincroniza sus mutaciones con `reglas_unt.yaml` al importar`)
-genera un documento "bueno" (46 de 48 evaluadas; las 2 estructuras de los otros
-tipos de TINV no le aplican, porque el documento es un plan cuantitativo) y 48
+genera un documento "bueno" (42 de 48 evaluadas; las 6 reglas de otros tipos
+—las 2 estructuras alternativas, los mínimos de referencias/anexos de
+cualitativo y revisión, y la carátula del Proyecto— no le aplican, porque el
+documento es un plan cuantitativo) y 48
 mutaciones de una sola propiedad
 (`tests/test_propiedad.py`), verificando que un desvío mínimo invalida solo
 su regla. Sobre eso, las **mejoras de ingeniería F4** agregaron: un **linter

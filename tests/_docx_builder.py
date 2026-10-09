@@ -340,6 +340,19 @@ def _document_xml(cfg: dict) -> str:
         ):
             paras.append(_page_break_para())
         paras.append(_heading(h))
+        if h == "INTRODUCCIÓN":
+            # Párrafos de prosa del cuerpo: viven entre Introducción y
+            # Referencias (el extractor define el cuerpo por ese rango
+            # semántico, no por la última sección del documento).
+            paras.append(
+                _cuerpo_para(
+                    "La motricidad fina se desarrolla a través de estrategias lúdicas.", cfg
+                )
+            )
+            paras.append(
+                _cuerpo_para("Se aplicó un estudio cuantitativo con diseño experimental.", cfg)
+            )
+            paras.append(_cuerpo_para("Los resultados muestran una mejora significativa.", cfg))
         if h == "INDICE DE CONTENIDOS":
             paras.extend(_tdc_para(e) for e in cfg.get("tdc_entradas", []))
         if h == "RESUMEN":
@@ -358,13 +371,10 @@ def _document_xml(cfg: dict) -> str:
                 _body_para(f"Anexo {i + 1}. {item}") for i, item in enumerate(cfg["anexos_items"])
             )
 
-    # Marcador de sección (fin de preliminares) y cuerpo
+    # Marcador de sección (fin de preliminares); la prosa del cuerpo ya se
+    # insertó tras el heading "INTRODUCCIÓN". Los párrafos que siguen al
+    # marcador no son cuerpo (anexos finales y notas), solo cierran el doc.
     paras.append(_sect_marker(cfg))
-    paras.append(
-        _cuerpo_para("La motricidad fina se desarrolla a través de estrategias lúdicas.", cfg)
-    )
-    paras.append(_cuerpo_para("Se aplicó un estudio cuantitativo con diseño experimental.", cfg))
-    paras.append(_cuerpo_para("Los resultados muestran una mejora significativa.", cfg))
     nota_pie = _notas_pie_para(cfg)
     if nota_pie:
         paras.append(nota_pie)
