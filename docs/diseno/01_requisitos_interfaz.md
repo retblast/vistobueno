@@ -72,7 +72,7 @@ El sistema está orientado al **personal de la sede (Repositorio FECyC)**, que o
 | RF-17 | El operador debe poder ver resultados agrupados por categoría | Alta |
 | RF-18 | El operador debe poder expandir/colapsar cada categoría | Alta |
 | RF-19 | Cada regla debe mostrar el valor esperado y el valor encontrado | Alta |
-| RF-20 | El sistema debe mostrar el estado de la notificación por correo (`enviado`, `fallo` con detalle técnico, `sin_correo`, `no_solicitado`; sin badge en `sin_observaciones`/`deshabilitado`) | Media |
+| RF-20 | El sistema debe mostrar el estado de la notificación por correo (`enviado`, `fallo` con detalle técnico, `sin_correo`, `no_solicitado`, `deshabilitado` con nota de configuración para administradores cuando el backend envía `detalle`; sin badge en `sin_observaciones` y en `deshabilitado` sin `detalle`) | Media |
 
 ### 4.4 Prompts IA
 
@@ -135,7 +135,7 @@ El sistema está orientado al **personal de la sede (Repositorio FECyC)**, que o
 | 6 | Reporte | Ver resumen | KPIs: total reglas, errores, advertencias |
 | 7 | Reporte | Filtrar por severidad | Chips para alternar entre todos/errores/advertencias |
 | 8 | Reporte | Ver por categoría | Secciones expandibles agrupadas |
-| 9 | Reporte | Ver estado de notificación | Badge según `notificacion.estado`: enviado / fallo (con detalle) / falta correo / no solicitado |
+| 9 | Reporte | Ver estado de notificación | Badge según `notificacion.estado`: enviado / fallo (con detalle) / falta correo / no solicitado / deshabilitado (nota de config. para admins, con detalle) |
 | 10 | Reporte | Copiar prompts IA | Botón para copiar cada prompt al portapapeles |
 | 11 | Navegación | Volver a cargar | Botón para regresar a la pantalla de carga |
 

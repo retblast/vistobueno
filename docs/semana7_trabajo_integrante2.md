@@ -189,6 +189,22 @@ El revisor probó el PR por su cuenta (CI 2/2 verde, lint/build/pytest locales, 
 
 ---
 
+### Séptima tanda — Arreglos.txt v5 (C41): badge de `deshabilitado` con nota de configuración
+
+El backend (v1.4 del contrato) ahora llena `notificacion.detalle` también cuando `estado=deshabilitado` — una nota de configuración para administradores (`CONTRATO_API.md`: *"Mostrar detalle como nota de configuración para administradores"*); antes el campo venía `null` y la UI no tenía nada que mostrar. La parte visual queda de este lado (**C41**, `Report.jsx`):
+
+- `badgeNotificacion()` suma el caso `deshabilitado`: **solo** si el backend envía `detalle` muestra un badge informativo (clase `info`, junto a `no_solicitado`) con el texto *"El envío de correos no está habilitado en el servidor."* y la nota de configuración en `.badge-notif-detalle` (mismo estilo que el detalle de `fallo`). Sin `detalle` (backend anterior o respuesta incompleta) no se muestra nada, como hasta ahora — el cambio es aditivo y backwards-compatible.
+- `sin_observaciones` sigue sin badge.
+- `docs/diseno/01_requisitos_interfaz.md`: RF-20 y la tabla del reporte actualizadas con el nuevo comportamiento.
+
+#### Verificación (2026-10-09)
+
+- Backend en `:8000` (post-merge de upstream): `POST /validar` con `correo` + `notificar=true` + semáforo rojo → `{"estado":"deshabilitado","detalle":"El servidor no tiene la notificación habilitada: configure VISTOBUENO_NOTIFICACIONES=1 y VISTOBUENO_SMTP_HOST."}`.
+- UI en `:5173` (Playwright): badge azul visible con texto + nota de configuración (evidencia en `resultados_vistobueno/S7_pruebas_usabilidad/capturas/14_deshabilitado_nota.png`, local).
+- `npm run lint` → 0 errores/0 warnings · `npm run build` → OK.
+
+---
+
 ## Evidencias
 
 - Commits: `e27e683` (mejoras IHC), `7bd0be4` (Arreglos.txt v1), `5c169ef` (v2), `6c512ec` (v3), `df05bd6` (auditoría UX C17–C29), `d306f36` + `4c9cc55` (Fase A revisión, C30–C38), `21d0ac3` (script E2E versionado, C39), `abac6b6` (lint en CI, C40, rama `ci-frontend-lint`).
@@ -215,7 +231,6 @@ El revisor probó el PR por su cuenta (CI 2/2 verde, lint/build/pytest locales, 
 
 ## Plan siguiente
 
-- PR [#42](https://github.com/retblast/vistobueno/pull/42) (`Rodo00:master` → `master`, head `842ba75`, C17–C38 + workflows del fork) **activo**, mergeable y CI verde; subsume al PR [#41](https://github.com/retblast/vistobueno/pull/41) (5 commits, cerrable cuando #42 se fusione). Cerrar actividad 7 en `resultados_vistobueno/S7_pruebas_usabilidad/resumen.txt` tras la fusión.
-- PR [#43](https://github.com/retblast/vistobueno/pull/43) (lint en CI, rama `ci-frontend-lint`) **abierto, pendiente de aprobación del equipo**; cerrar cuando se fusione.
-- Integrar feedback de revisión de los PRs #42/#43 (si lo hay); fases B/C/D de la revisión (motor, backend, infra) pendientes de asignación.
-- Capturas de pantalla pendientes (`resultados_vistobueno/S7_pruebas_usabilidad/capturas/`).
+- **2026-10-09**: el equipo fusionó los PRs de frontend — [#41](https://github.com/retblast/vistobueno/pull/41) (`be33d60`, C17–C39) y [#43](https://github.com/retblast/vistobueno/pull/43) (`dd76185`, lint de frontend en el CI); [#42](https://github.com/retblast/vistobueno/pull/42) cerrado (subsumido por #41).
+- **C41** (Arreglos.txt v5) en PR propio desde `upstream/master`; integrar feedback si lo hay.
+- Tag `v0.7.0` pendiente de creación; fases B/C/D de la revisión pendientes de asignación (el backend ya avanzó con #46).

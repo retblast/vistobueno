@@ -60,8 +60,9 @@ function categoriaDe(ruleId) {
 //  - fallo:                 mostrar el detalle técnico (reintento manual).
 //  - sin_correo:            pedir el correo en el formulario de carga.
 //  - no_solicitado:         ofrecer la casilla de envío (opt-in) en el formulario.
-//  - sin_observaciones/
-//    deshabilitado:         nada que mostrar.
+//  - deshabilitado:         nota de configuración para administradores (si el
+//                           backend envía `detalle`; ver CONTRATO_API.md).
+//  - sin_observaciones:     nada que mostrar.
 function badgeNotificacion(notif) {
   if (!notif || typeof notif.estado !== 'string') return null
   const detalle = typeof notif.detalle === 'string' && notif.detalle.trim() ? notif.detalle.trim() : null
@@ -84,8 +85,18 @@ function badgeNotificacion(notif) {
         clase: 'info',
         texto: 'No se solicitó el envío por correo. Active “Enviar observaciones por correo al estudiante” al validar.',
       }
+    case 'deshabilitado':
+      // El backend (contrato v1.4) adjunta `detalle` con la nota de
+      // configuración para administradores. Sin `detalle` (backend anterior
+      // o respuesta incompleta) no se muestra nada, como hasta ahora.
+      if (!detalle) return null
+      return {
+        clase: 'info',
+        texto: 'El envío de correos no está habilitado en el servidor.',
+        detalle,
+      }
     default:
-      // sin_observaciones | deshabilitado → nada relevante
+      // sin_observaciones → nada relevante
       return null
   }
 }
