@@ -1351,6 +1351,25 @@ reglas:
   nota_pie:
     operacion: numeracion_consistente
 
+# ─── TRACK CHANGES: cambios con seguimiento sin resolver ────
+# El manual NO menciona "control de cambios"; es una advertencia de calidad
+# documental (entregar con cambios sin aceptar/rechazar). No bloquea.
+- id: track_changes_sin_resolver
+  tipo: conteo_nodos
+  descripcion: El documento no debe contener cambios con seguimiento sin aceptar/rechazar
+  valor_esperado: 0 marcas de inserción/eliminación pendientes
+  severidad: warning
+  ubicacion: Todo el documento (función "Control de cambios" de Word)
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  cita: '"El documento debe entregarse con los cambios aceptados (sin control de cambios pendiente)."'
+  conteo_nodos:
+    label: cambios
+    xpath: '//w:ins | //w:del'
+    parte: document
+    contexto: todos
+    cantidad_minima: 0
+    cantidad_maxima: 0
+
 # ─── F2 ítems 11-12: ÍNDICE / TABLA DE CONTENIDOS (2026-09-22) ────
 # EVALUADO: el manual define el índice de contenidos como "Lista estructurada
 # de los segmentos que integran la investigación, según orden de presentación"

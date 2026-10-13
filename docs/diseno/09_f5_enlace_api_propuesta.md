@@ -64,8 +64,11 @@ anexa `ultima_ruta` al detalle de un fallo de autómata
 
 ```
 act: ok=False, detail = "headings=18 faltantes=[...]"
-nuevo: detail += f" ruta={' -> '.join(ultima_ruta)}"
+nuevo: detail += f" reconoció={' → '.join(etiquetas_legibles)}"
 ```
+
+(F6, 2026-10-13) La ruta se humaniza: `nombre` de máquina → `original`/`patron`
+y se omite `__inicio__` (`compilador._etiquetas_estados` + `_detalle_con_traza`).
 
 Pros (cumplidos): sin cambio de contrato API. Contras (aceptados): el
 `found` se vuelve más largo. Impacto en tests (aplicado): `test_paridad`

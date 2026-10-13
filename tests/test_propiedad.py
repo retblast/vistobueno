@@ -6,11 +6,11 @@ reglas mecánicas salvo los esquemas alternativos de estructura
 (cualitativo y revisión de literatura), que son mutuamente excluyentes con
 el plan cuantitativo. Sobre ese documento se verifican dos propiedades:
 
-1. `test_doc_bueno_pasa_46` — el documento bueno pasa exactamente 46/48
-   reglas, y las únicas no pasadas son las documentadas en
-   `NO_APLICABLES_BASE`.
+1. `test_doc_bueno_pasa_sin_fallos` — el documento bueno pasa TODAS las
+   reglas aplicables (43/49) y las únicas no aplicables son las
+   documentadas en `NO_APLICABLES_BASE`.
 
-2. `test_mutacion_afecta_solo_esa_regla` — para cada una de las 48 reglas,
+2. `test_mutacion_afecta_solo_esa_regla` — para cada una de las 49 reglas,
    aplicar su mutación (desvío MÍNIMO) cambia el resultado SOLO de esa
    regla (comparación punto a punto `(passed, found)` contra el documento
    bueno). Las reglas acopladas por mecanismo IDÉNTICO se declaran en
@@ -83,7 +83,7 @@ def _sin_archivo(path: str):
 # `tipo_documento_contradictorio`) cuando la detección no puede clasificar el
 # documento, y el issue #5 del handover trae el warning
 # `tipo_documento_sin_estructura` cuando el tipo detectado (proyecto, informe,
-# TSP) todavía no tiene esquema en `reglas_unt.yaml`. Ninguno es una de las 48
+# TSP) todavía no tiene esquema en `reglas_unt.yaml`. Ninguno es una de las 49
 # reglas: los deriva la detección, así que no tienen mutación propia ni cuenta
 # para `REGLAS`. En un documento mutado pueden aparecer (y en el base no), por
 # lo que se excluyen de la comparación punto a punto para no contarlos como
@@ -122,7 +122,7 @@ def test_doc_bueno_pasa_sin_fallos():
     finally:
         _sin_archivo(path)
 
-    assert len(res) == 48
+    assert len(res) == 49
     fallos = {rid for rid, r in res.items() if not r.passed}
     assert fallos == set(), f"fallos={sorted(fallos)}"
 
@@ -159,8 +159,8 @@ def test_mutacion_afecta_solo_esa_regla(rule_id):
         _sin_archivo(path_base)
 
 
-def test_mutaciones_cubren_las_48_reglas():
+def test_mutaciones_cubren_las_49_reglas():
     """Cadena de seguridad: toda regla de reglas_unt.yaml tiene mutación."""
     ids_yaml = {r["id"] for r in RULES["reglas"]}
     assert ids_yaml == set(REGLAS)
-    assert len(REGLAS) == 48
+    assert len(REGLAS) == 49

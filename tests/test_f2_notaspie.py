@@ -5,7 +5,9 @@ Cubre:
   (`None` cuando el DOCX no la tiene).
 - `AnalizadorNotaPie` (`nota_pie` / `operacion: numeracion_consistente`):
   ids consecutivos sin saltos/repetidos, y existencia en `footnotes.xml`.
-  Documento sin notas al pie pasa (n/a documentado).
+  Documento sin notas al pie pasa (n/a documentado). Al fallar fija
+  `ultimo_nodo` (primera `w:footnoteReference`), de modo que el motor anexa
+  "; página N" a la `location` (trabajo "ubicación de NotaPie por página").
 - Regla `notas_al_pie_consistencia` end-to-end contra `reglas_unt.yaml`:
   la base (sin notas) cumple, la mutación `notas_pie_ids=[1,2,4]` la invalida
   y no altera otras reglas.
@@ -14,6 +16,7 @@ Uso:
     pytest tests/test_f2_notaspie.py -v
 """
 
+import re
 from pathlib import Path
 
 from docx_factory import (
@@ -184,7 +187,7 @@ def test_sin_part_footnotes_pasa_por_numeracion():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end con la factory (mutación de las 47 reglas)
+# End-to-end con la factory (mutación de las 49 reglas)
 # ---------------------------------------------------------------------------
 
 
@@ -215,8 +218,16 @@ def test_mutacion_con_salto_falla_solo_esa_regla():
 
 def test_fallo_de_notas_enriquece_ubicacion_con_pagina():
     # El párrafo con w:footnoteReference está en el cuerpo, así que sí tiene
-    # página -> el ítem 1 anexa "; página N" a la ubicación.
+    # página -> el ítem 1 anexa "; página N" a la ubicación. Se comprueba el
+    # sufijo real (no basta con el "página" del texto fijo de la ubicación).
     cfg = aplicar_mutacion("notas_al_pie_consistencia", configuracion_base())
     r = _resultado_por(cfg, "notas_al_pie_consistencia")
     assert not r.passed
-    assert "página" in r.location
+    assert re.search(r"; página \d+$", r.location), r.location
+
+
+def test_notas_que_pasan_no_llevan_pagina():
+    # Sin fallo no se enriquece: la ubicación queda tal cual la declara el YAML.
+    r = _resultado_por(configuracion_base(), "notas_al_pie_consistencia")
+    assert r.passed
+    assert not re.search(r"; página \d+$", r.location or ""), r.location

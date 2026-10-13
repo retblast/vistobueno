@@ -173,7 +173,7 @@ específicas, por lo que se evalúan **antes** y ganan.
    ```
 
 5. **Los conteos del reporte son dinámicos.** En una tesis cuantitativa se
-   evalúan 43 de 48 reglas. Un total fijo haría creer al estudiante que 5 reglas
+   evalúan 43 de 49 reglas. Un total fijo haría creer al estudiante que 6 reglas
    se cumplieron cuando en realidad no se miraron. Consecuencia: `resumen` cambia
    de semántica y requiere regenerar `openapi_spec.json` (el CI verifica el
    drift).

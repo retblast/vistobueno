@@ -521,18 +521,18 @@ class TestImagenRefactor:
 
 
 class TestReglasUntCompletas:
-    """Smoke: las 48 reglas de reglas_unt.yaml validan sin excepción."""
+    """Smoke: las 49 reglas de reglas_unt.yaml validan sin excepción."""
 
-    def test_48_reglas_validan(self):
+    def test_49_reglas_validan(self):
         rules = load_rules("reglas_unt.yaml")
-        assert len(rules["reglas"]) == 48
+        assert len(rules["reglas"]) == 49
         path = _make_docx([_para("RESUMEN", "Ttulo1"), _para("cuerpo breve")])
         try:
             resultados = validate_docx(path, rules)
-            # 48 del YAML + 1 centinela: este docx mínimo no se puede
+            # 49 del YAML + 1 centinela: este docx mínimo no se puede
             # clasificar (ni Anexo 10 ni firmas), y el paso 6 agrega el error
-            # `tipo_documento_no_determinado` como 49º resultado.
-            assert len(resultados) == 49
+            # `tipo_documento_no_determinado` como 50º resultado.
+            assert len(resultados) == 50
             assert all(isinstance(r, RuleResult) for r in resultados)
         finally:
             Path(path).unlink(missing_ok=True)

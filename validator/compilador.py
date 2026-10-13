@@ -82,6 +82,29 @@ SECCIONES_ANALIZADOR = (
 )
 
 
+# Estado inicial implícito de un DFA sin `inicial` declarado. No es una
+# sección del documento, así que se omite al armar la traza legible.
+_ESTADO_INICIAL = "__inicio__"
+
+
+def _etiquetas_estados(config: dict) -> dict[str, str]:
+    """Mapa `nombre` de estado → etiqueta humana (explicabilidad, F6).
+
+    Los estados de `automata_secuencia` declaran `nombre` (identificador de
+    máquina), `patron` (texto reconocido) y `original` (nombre legible, a
+    veces con la indentación del esquema). Para que el estudiante entienda el
+    `found` se prefiere `original`, luego `patron`, luego el propio `nombre`.
+    """
+    etiquetas: dict[str, str] = {}
+    for estado in config.get("estados", []):
+        nombre = estado.get("nombre")
+        if not nombre:
+            continue
+        etiqueta = estado.get("original") or estado.get("patron") or nombre
+        etiquetas[nombre] = str(etiqueta).strip()
+    return etiquetas
+
+
 # ---------------------------------------------------------------------------
 # AutomataSecuencia con interfaz Analizador (se usa a través del DSL)
 # ---------------------------------------------------------------------------
@@ -253,7 +276,7 @@ class AutomataSecuencia(Analizador):
                     found = k
                     break
             if found is None:
-                faltantes.append(e.get("original", patron.pattern))
+                faltantes.append(str(e.get("original", patron.pattern)).strip())
             else:
                 pos = found + 1
         return faltantes
@@ -518,17 +541,24 @@ class ReglaCompilada:
 
     @staticmethod
     def _detalle_con_traza(detalle: str, analizador: Analizador) -> str:
-        """Anexa la traza de estados del autómata (F5).
+        """Anexa la traza de estados legible del autómata (F5/F6).
 
         Los analizadores de autómatas (`AutomataSecuencia`, `AutomataPila`)
         dejan en `ultima_ruta` la secuencia de estados recorrida por el
         último `reconocer()`. Solo se anexa al detalle cuando la regla FALLA,
-        para que el usuario sepa dónde se desvió el documento.
+        para que el usuario sepa dónde se desvió el documento. Los nombres de
+        máquina se traducen a etiquetas humanas con `_etiquetas_estados`
+        (`caratula` → "Carátula"); si el analizador no declara `estados` (el
+        PDA), se conserva el nombre tal cual.
         """
         ruta = getattr(analizador, "ultima_ruta", None)
-        if ruta:
-            return f"{detalle} ruta={' -> '.join(ruta)}"
-        return detalle
+        if not ruta:
+            return detalle
+        etiquetas = _etiquetas_estados(getattr(analizador, "config", {}))
+        legible = [etiquetas.get(n, n) for n in ruta if n != _ESTADO_INICIAL]
+        if not legible:
+            return detalle
+        return f"{detalle} reconoció={' → '.join(legible)}"
 
     def _detalle_expositor(self, detalles: list[tuple[Analizador, str]]) -> str:
         """Texto a mostrar en `found` cuando la regla PASA y declara `expone`.

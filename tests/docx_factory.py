@@ -11,8 +11,8 @@ partir de un diccionario de configuración, de modo que los tests de
 propiedad puedan pedir:
 
 - `configuracion_base()`: el documento "bueno", que cumple TODAS las reglas
-  mecánicas. Las dos estructuras de otros tipos de TINV no le aplican (el
-  documento es un plan cuantitativo). Resultado esperado: 48 evaluadas, 0 fallos.
+  aplicables. Las 6 reglas de otros tipos de documento no le aplican (el
+  documento es un plan cuantitativo). Resultado: 0 fallos sobre 49 reglas.
 - `aplicar_mutacion(rule_id, config)`: aplica un desvío MÍNIMO (una sola
   propiedad) contra el documento bueno, de forma que solo la regla
   `rule_id` cambie su resultado.

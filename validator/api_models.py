@@ -193,9 +193,9 @@ class ValidarResponse(BaseModel):
                     "semaforo": "verde",
                     "notificacion": {"estado": "sin_correo", "detalle": None},
                     "resumen": {
-                        "total": 48,
-                        "total_evaluadas": 46,
-                        "reglas_no_aplicables": 2,
+                        "total": 49,
+                        "total_evaluadas": 43,
+                        "reglas_no_aplicables": 6,
                         "fallidos_error": 0,
                         "fallidos_warning": 2,
                     },
@@ -217,8 +217,8 @@ class ValidarResponse(BaseModel):
                     "metadatos": {
                         "archivo_nombre": "mi_tesis.docx",
                         "archivo_tamano_bytes": 123456,
-                        "reglas_evaluadas": 46,
-                        "reglas_totales": 48,
+                        "reglas_evaluadas": 43,
+                        "reglas_totales": 49,
                         "version_esquema": "2026-09-01",
                         "tipo_documento_declarado": None,
                         "tipo_documento_inferido": None,

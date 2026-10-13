@@ -313,9 +313,9 @@ def _verificar_paridad(docx_path: str) -> dict:
     ids_legacy = set(legacy)
     assert ids_legacy <= set(dsl), f"El DSL no ejecuta reglas legacy: {ids_legacy - set(dsl)}"
 
-    # F5: el DSL anexa la traza `ruta=...` al `found` de las reglas de
-    # autómata fallidas. Para los esquemas de estructura la paridad
-    # observable es solo `passed`; el resto conserva `(passed, found)`
+    # F5/F6: el DSL anexa la traza humanizada (`reconoció ...`) al `found` de
+    # las reglas de autómata fallidas. Para los esquemas de estructura la
+    # paridad observable es solo `passed`; el resto conserva `(passed, found)`
     # literal (misma razón que en test_propiedad: el contador interno
     # `headings=N` del found varía ante cambios de cabeceras).
     solo_passed = {

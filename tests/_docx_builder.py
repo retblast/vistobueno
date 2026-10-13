@@ -160,6 +160,34 @@ def _cuerpo_para(texto: str, cfg: dict) -> str:
     return f"<w:p>{pPr}{_run(texto, rpr)}</w:p>"
 
 
+def _track_change_para(cfg: dict) -> str:
+    """Párrafo del cuerpo con cambios con seguimiento pendientes (w:ins/w:del).
+
+    Conserva el formato del cuerpo para que la ÚNICA regla que cambie de
+    resultado sea `track_changes_sin_resolver`.
+    """
+    pPr = (
+        f'<w:pPr><w:spacing w:line="{cfg["interlineado"]}" w:lineRule="auto"/>'
+        f'<w:jc w:val="{cfg["jc_cuerpo"]}"/>'
+        f'<w:ind w:firstLine="{cfg["sangria"]}"/></w:pPr>'
+    )
+    rpr = (
+        f'<w:rFonts w:ascii="{cfg["fuente"]}" w:hAnsi="{cfg["fuente"]}"/>'
+        f'<w:sz w:val="{cfg["sz_cuerpo"]}"/><w:szCs w:val="{cfg["sz_cuerpo"]}"/>'
+    )
+    ins = (
+        '<w:ins w:id="1" w:author="Autor" w:date="2026-01-01T00:00:00Z">'
+        f"{_run('Texto insertado con seguimiento.', rpr)}</w:ins>"
+    )
+    dele = (
+        '<w:del w:id="2" w:author="Autor" w:date="2026-01-01T00:00:00Z">'
+        f"<w:r><w:rPr>{rpr}</w:rPr>"
+        '<w:delText xml:space="preserve">Texto eliminado con seguimiento.</w:delText>'
+        "</w:r></w:del>"
+    )
+    return f"<w:p>{pPr}{ins}{dele}</w:p>"
+
+
 def _nivel_heading(texto: str) -> int:
     if texto.startswith(("    ", "1.5 ")):
         return 3
@@ -353,6 +381,8 @@ def _document_xml(cfg: dict) -> str:
                 _cuerpo_para("Se aplicó un estudio cuantitativo con diseño experimental.", cfg)
             )
             paras.append(_cuerpo_para("Los resultados muestran una mejora significativa.", cfg))
+            if cfg.get("cambios_seguimiento"):
+                paras.append(_track_change_para(cfg))
         if h == "INDICE DE CONTENIDOS":
             paras.extend(_tdc_para(e) for e in cfg.get("tdc_entradas", []))
         if h == "RESUMEN":

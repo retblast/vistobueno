@@ -107,8 +107,8 @@ class TestRespuestaExitosa:
         assert metadatos["archivo_nombre"] == "tesis.docx"
         assert metadatos["archivo_tamano_bytes"] > 0
 
-        # Semántica nueva: reglas_evaluadas = total_evaluadas (46 para doc bueno),
-        # reglas_totales = total de reglas en YAML (48)
+        # Semántica nueva: reglas_evaluadas = total_evaluadas (43 para doc bueno),
+        # reglas_totales = total de reglas en YAML (49)
         rules_data = load_rules(REGLAS_YAML_PATH)
         resultados_motor = validate_docx(str(ruta_docx_prueba()), rules_data)
         reporte = build_report(resultados_motor)

@@ -11,7 +11,7 @@ La suite de tests debe poder demostrar dos propiedades del motor DSL de
 manera **determinista y reproducible** (sin depender de archivos DOCX reales
 externos, imposibles de versionar por binariedad/licencia):
 
-1. **El documento "bueno" pasa** las 48 reglas mecánicas (2 no aplican).
+1. **El documento "bueno" pasa** todas las reglas aplicables (de 49, 6 no aplican).
 2. **Cada desvío MÍNIMO** (`mutación`) afecta únicamente a la regla que
    pretendía romper (o a su par acoplado).
 
@@ -140,7 +140,7 @@ Explicación del comparador `_compare`:
 ```
 a = estado(base)      # rule_id → (passed, found)
 b = estado(mutado)    # idem
-assert set(a) == set(b) == set(REGLAS)          # 48 reglas presentes
+assert set(a) == set(b) == set(REGLAS)          # 49 reglas presentes
 diffs = { rid | a[rid] != b[rid] }
 assert diffs == esperado                          # solo el par esperado
 ```

@@ -517,7 +517,7 @@ Usado por `estructura_tinv_cuantitativo`, `estructura_tinv_cualitativo`,
 | `validator/compilador.py` | `CompilerDSL`, `ReglaCompilada`, `AutomataSecuencia`, `GramaticaEstructuraAnalizador`, `AutomataPila` | Compila el YAML DSL → analizadores y produce `List[RuleResult]` |
 | `validator/engine.py` | `validate_docx` (modificado) | Detecta el formato (DSL vs legacy) y delega |
 | `reglas_dsl_ejemplo.yaml` | — | Archivo de ejemplo completo del formato DSL |
-| `reglas_unt.yaml` | — | 48 reglas de producción, incluida `deteccion_tipo_documento` |
+| `reglas_unt.yaml` | — | 49 reglas de producción, incluidas `deteccion_tipo_documento` y `track_changes_sin_resolver` |
 | `reglas_unt_pendientes.yaml` | — | 5 estructuras implementadas y **sin** probar contra documentos reales (no hay plantillas de esos tipos); no lo carga la API |
 
 ---

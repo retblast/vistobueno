@@ -12,16 +12,30 @@ El nombre viene directo del corazón del producto: el semáforo verde ("visto bu
 - Si algo falla: se muestra un cartel simple (si es poco) o un reporte detallado (si hay varios problemas).
 - El operador puede indicar (opcional) el correo del estudiante y solicitar el envío de las observaciones; el reporte informa el estado del envío (`enviado`, `fallo` con detalle técnico, `sin_correo`, `no_solicitado`, `sin_observaciones` y `deshabilitado` con nota de configuración para administradores; sin badge en los dos últimos cuando no hay detalle).
 - El reporte incluye una sección **"Cómo preguntar a una IA"**: por cada problema detectado, un prompt ya armado que el estudiante puede copiar y pegar en cualquier LLM externo (ChatGPT, Claude, etc.) para corregirlo, incluyendo el fragmento de la directiva relevante como contexto. Además, un **prompt único** reúne todos los prompts visibles en una sola instrucción numerada (con su categoría) y se copia al portapapeles de una vez, con vista previa desplegable.
+- El **encargado** (operador del repositorio) puede, opcionalmente, pedir a un **módulo de IA local** que **explique y priorice** los fallos del reporte. Es advisory: nunca cambia el semáforo (ver "Módulo de IA").
 
-## Restricción de diseño clave
+## Validación determinista + asistente de IA (advisory)
 
-**No se puede correr un LLM en tiempo de ejecución** (por ahora). Esto significa:
+El **semáforo** y las reglas de formato son **100% deterministas**: medibles
+directamente desde el archivo (número, booleano, string exacto), sin "juicio" de
+un modelo. Eso no cambia.
 
-- Todas las reglas de validación deben ser **deterministas**: medibles directamente desde el archivo (número, booleano, string exacto), sin requerir "juicio" de un modelo.
-- Un LLM externo **sí se usa en tiempo de diseño**, una sola vez (o cada vez que cambie el reglamento de la universidad), para ayudar a convertir el manual de formato oficial (PDF/DOCX del reglamento de tesis) en el esquema de reglas estructurado que consume el backend. Este paso es semi-automático: el LLM propone un borrador de reglas, un humano lo revisa y ajusta.
-- La sección "Cómo preguntar a una IA" del reporte es **generada por template**, no por un LLM en el momento — se arma a partir de los resultados de las reglas que fallaron. Esto garantiza que el prompt sugerido sea siempre consistente y no dependa de que un modelo "recuerde" bien qué falló.
+Sobre esa base existe un **módulo de IA local y opt-in**, que es un asistente
+**del encargado** (no del estudiante):
 
-Si en el futuro se decide correr un LLM local en tiempo de ejecución (para checks semánticos que las reglas deterministas no pueden capturar, como "¿el resumen realmente resume el contenido?"), la arquitectura ya está pensada para agregar esa capa sin romper lo demás — ver sección "Extensiones futuras".
+- Corre **bajo demanda** (botón), nunca dentro de `POST /validar`.
+- LLM **local** (Ollama): las tesis no salen del servidor.
+- Su salida es **advisory**: se modela con tipos propios y **jamás** toca el
+  semáforo ni produce `RuleResult`.
+- Sin `OLLAMA_URL` el módulo queda **deshabilitado** (la API responde 503 y el
+  frontend muestra el botón apagado), igual que la notificación SMTP.
+
+El LLM **externo** sigue usándose **en tiempo de diseño** (convertir el manual
+de formato a YAML). La sección "Cómo preguntar a una IA" del reporte sigue
+siendo **generada por template**, no por un LLM en el momento.
+
+Ver `docs/diseno/16_modulo_ia.md` (diseño) y `docs/HANDOVER_API_IA.md`
+(contrato de la API).
 
 ## Arquitectura
 
@@ -97,12 +111,13 @@ Ambos reglamentos en PDF escaneado estaban pendientes de OCR (ver README anterio
 > - `unt_format_rules_schema.yaml` — formato **legacy** (checks con
 >   `mecanismo_verificable`). Es la fuente histórica (Semana 2); la API ya no lo
 >   carga.
-> - `reglas_unt.yaml` — formato **DSL** (autómatas/analizadores), **48 reglas**:
+> - `reglas_unt.yaml` — formato **DSL** (autómatas/analizadores), **49 reglas**:
 >   las 32 legacy migradas (F1) + 9 reglas antes no-deterministas mecanizadas
 >   a mano en la F3 (tokenizer + analizadores de conteo/lista/hipervínculo)
 >   + `indice_paginas_separadas` (paginación real por `w:lastRenderedPageBreak`)
 >   + encabezados/pies, notas al pie (F2 ítems 1-3) + `indice_apunta_secciones`
->   e `indice_numeracion_jerarquica` (F2 ítems 11-12, índice de contenidos).
+>   e `indice_numeracion_jerarquica` (F2 ítems 11-12, índice de contenidos)
+>   + `track_changes_sin_resolver` (control de cambios pendiente, `w:ins`/`w:del`).
 >   **Es el que carga la API** (`validator/api.py`, desde la **F5**, Semana 4).
 >   Para las 32 reglas compartidas, ambos motores dan resultados idénticos
 >   (paridad verificada con `scripts/evaluar_paridad_plantillas.py` contra
@@ -122,6 +137,8 @@ validator/
   checks.py           # Checks individuales (xpath, atributos, regex)
   engine.py           # Carga YAML, corre reglas, arma reporte
   prompts.py          # Generador de prompts "cómo preguntar a una IA"
+  llm.py              # Cliente LLM local (OllamaClient + StubLLM)
+  asistente.py        # Módulo de IA: explicar/priorizar (advisory, Funcionalidad 2)
   cli.py              # CLI de referencia
   exportador.py       # Exporta el reporte a Markdown y PDF
   api.py              # FastAPI endpoint POST /validar
@@ -141,6 +158,8 @@ tests/
   test_paridad_formatos.py  # Paridad legacy vs DSL
   test_propiedad.py         # Tests de propiedad (factory + mutaciones)
   test_exportador.py        # Tests de exportación a Markdown/PDF
+  test_llm.py               # Tests del cliente LLM (StubLLM + MockTransport)
+  test_asistente.py         # Tests del asistente IA (Funcionalidad 2)
   docx_factory.py           # Factory determinista de DOCX
   _docx_builder.py          # Builder interno de DOCX
   _mutations.py             # Mutaciones sincronizadas con reglas_unt.yaml
@@ -153,7 +172,7 @@ scripts/
   migrar_legacy_a_dsl.py          # Migra YAML legacy → DSL
   ocr_pdfs.py                     # OCR de reglamentos escaneados
 
-reglas_unt.yaml            # Reglas en formato DSL (48 reglas) - lo carga la API
+reglas_unt.yaml            # Reglas en formato DSL (49 reglas) - lo carga la API
 reglas_unt_pendientes.yaml # 5 estructuras implementadas y sin probar (no lo carga la API)
 reglas_dsl_ejemplo.yaml    # Ejemplo de reglas DSL
 ```
@@ -211,14 +230,14 @@ pytest tests/ --cov=validator --cov-report=term-missing
 nix flake check
 ```
 
-La suite (**381 tests**) incluye los **tests de propiedad** (F6): un factory
+La suite (**490 tests**) incluye los **tests de propiedad** (F6): un factory
 determinista de DOCX (`tests/docx_factory.py`, descompuesto en
 `tests/_xml_constants.py`, `tests/_docx_builder.py` y `tests/_mutations.py`;
 este último **sincroniza sus mutaciones con `reglas_unt.yaml` al importar`)
-genera un documento "bueno" (42 de 48 evaluadas; las 6 reglas de otros tipos
+genera un documento "bueno" (43 de 49 evaluadas; las 6 reglas de otros tipos
 —las 2 estructuras alternativas, los mínimos de referencias/anexos de
 cualitativo y revisión, y la carátula del Proyecto— no le aplican, porque el
-documento es un plan cuantitativo) y 48
+documento es un plan cuantitativo) y 49
 mutaciones de una sola propiedad
 (`tests/test_propiedad.py`), verificando que un desvío mínimo invalida solo
 su regla. Sobre eso, las **mejoras de ingeniería F4** agregaron: un **linter
@@ -234,7 +253,7 @@ ciclos épsilon), **cache de consultas XPath** por documento y la
 - **Parsing DOCX**: `python-docx`, `lxml` para casos borde.
 - **Parsing PDF**: `PyMuPDF` (fitz).
 - **Config de reglas**: YAML (`pyyaml`).
-- **Hosting**: on-premise en infraestructura de la universidad. Sin dependencias de servicios externos en tiempo de ejecución (sin llamadas a APIs de LLM en producción, bajo la restricción actual).
+- **Hosting**: on-premise en infraestructura de la universidad. Sin dependencias de servicios externos: el único LLM es **local y opt-in** (Ollama vía `OLLAMA_URL`), advisory y fuera del semáforo.
 - **Frontend tooling**: Vite + React (`frontend/`).
 - **Entorno de desarrollo**: Nix flake (`flake.nix`) — Python 3.14 + dependencias del motor + toolchain de OCR (`ocrmypdf`, `tesseract` con español, `poppler_utils`) + Node.js LTS (build del frontend) + tooling de calidad (ruff, mypy, pre-commit) y de exportación (markdown, WeasyPrint). Incluye `nix run .#test` (pytest), `nix run .#serve` (uvicorn) y `nix flake check` para verificación completa (tests + ruff + mypy + cobertura).
 
@@ -250,13 +269,38 @@ El frontend llama a `POST /validar` con `API_BASE_URL = import.meta.env.VITE_API
 
 Mientras `VITE_API_URL` quede vacío en un despliegue **sin** proxy/reverse proxy, las llamadas a `/validar` fallarán con error de red y el UI entrará en modo demo (reporte mock avisado). Errores HTTP del backend **con** cuerpo JSON (`detail`) se muestran al usuario y **no** se sustituyen por mocks.
 
+## Módulo de IA (asistente del encargado)
+
+Módulo **local y opt-in** que ayuda al encargado a revisar, decidir y comunicar
+el reporte. **Nunca toca el semáforo** ni produce `RuleResult`. Funcionalidades en alcance
+(orden de implementación 2 → 3 → 5 → 1):
+
+1. **Explicación y priorización** de los fallos del reporte.
+2. Clasificación asistida del tipo documental (con confirmación humana).
+3. Redacción de la observación para el estudiante (editable).
+4. Validación semántica advisory (coherencia resumen↔contenido, etc.).
+
+**Implementado (motor, rama `semana8-modulo-ia`)**: `validator/llm.py`
+(`LLMClient` + `OllamaClient` + `StubLLM`) y `validator/asistente.py` (Funcionalidad 2:
+`explicar_y_priorizar`), con tests sin red ni GPU. **Pendiente**: el *wiring* de
+los endpoints `GET /asistente/estado` y `POST /asistente/explicar` en la API y
+los botones del frontend (contrato en `docs/HANDOVER_API_IA.md`).
+
+Configuración: `OLLAMA_URL` (habilita el módulo), `OLLAMA_MODEL` (por defecto
+`qwen2.5:3b`; en GPU `qwen2.5:7b`) y `OLLAMA_TIMEOUT` (segundos). Sin
+`OLLAMA_URL`, el módulo queda deshabilitado.
+
 ## Extensiones futuras (fuera de alcance por ahora)
 
-- Capa de checks semánticos con un LLM local (vía Ollama o llama.cpp server, API compatible OpenAI) para validaciones que las reglas deterministas no pueden capturar: coherencia del resumen, consistencia del estilo de citas, correspondencia entre índice y títulos de capítulo reales.
-- Si se agrega, correría *después* de que el documento pase las reglas deterministas (para no gastar cómputo en documentos que ya van a fallar por formato), y solo recibiría el fragmento relevante + la regla textual específica, no el reglamento completo.
+- Checks semánticos con el mismo LLM local para lo que las reglas deterministas
+  no capturan: coherencia del resumen, consistencia del estilo de citas,
+  correspondencia índice↔títulos de capítulo.
+- **RAG del reglamento** (consulta en lenguaje natural con cita textual) y
+  **auto-fix** del DOCX: descartados por ahora (ver
+  `docs/discusion_modelo_ia.md`).
 
 ## Estado actual
 
-Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba y contra las 5 plantillas oficiales (25/32 mecanizadas PASS). Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista.
+Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba y contra las 5 plantillas oficiales (27/32 mecanizadas PASS). Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista.
 
-**API FastAPI** implementada (`POST /validar`) con validación de entrada, manejo de errores, DTOs Pydantic y suite de tests de contrato (ver `docs/CONTRATO_API.md`). **Frontend React** integrado con el backend (`Upload.jsx`, `Report.jsx`, proxy de desarrollo y manejo de errores HTTP), con campo opcional de correo del estudiante y **opt-in de notificación por correo** (casilla `notificar` + badge de estado `notificacion` en el reporte, 6 estados incluido `deshabilitado` con nota de configuración para administradores), **zona de carga con estados explícitos** (vacío, seleccionado, inválido, procesando y error de servidor) y **botón principal «Validar documento» siempre visible a todo el ancho** (deshabilitado con ayuda contextual si no hay archivo válido), **prompt único en «Cómo preguntar a una IA»** que junta todos los prompts en una sola instrucción copiable, primeros **tests automatizados del frontend con vitest** (`npm test`), mejoras de usabilidad IHC, auditoría UX integral (C1–C41: modo oscuro persistente, `aria-live` con debounce acertado a la vista, contraste AA (`--ambar` corregido en dark + `color-scheme`), barra de cumplimiento y búsqueda de reglas del wireframe —la búsqueda filtra también los prompts de IA—, ESLint configurado cubriendo `.js`/`.jsx`, favicon, mock de demo con motivo honesto `no_solicitado`, re-elección del mismo archivo con retorno de foco, y script E2E del flujo completo versionado en `scripts/e2e_flujo_completo.sh`, 11 verificaciones) y mockups de las pantallas de carga y reporte (`mockups/`). **Motor DSL** consolidado (F1–F6): 47 reglas mecanizadas (incluye paginación real `indice_paginas_separadas`, ubicación por página, encabezados/pies, notas al pie, e índice de contenidos con `indice_apunta_secciones`/`indice_numeracion_jerarquica`), linter, cache XPath, traza de autómata y tests de propiedad con factory determinista de DOCX. **Calidad de ingeniería** (ruff, mypy, coverage, pre-commit, CI con Nix: tests del backend y build, lint y tests del frontend en cada push/PR) y **exportación del reporte a Markdown/PDF** implementadas (tareas 15 y 16 del `docs/PLAN_BACKLOG_FUTURO.md`).
+**API FastAPI** implementada (`POST /validar`) con validación de entrada, manejo de errores, DTOs Pydantic y suite de tests de contrato (ver `docs/CONTRATO_API.md`). **Frontend React** integrado con el backend (`Upload.jsx`, `Report.jsx`, proxy de desarrollo y manejo de errores HTTP), con campo opcional de correo del estudiante y **opt-in de notificación por correo** (casilla `notificar` + badge de estado `notificacion` en el reporte, 6 estados incluido `deshabilitado` con nota de configuración para administradores), **zona de carga con estados explícitos** (vacío, seleccionado, inválido, procesando y error de servidor) y **botón principal «Validar documento» siempre visible a todo el ancho** (deshabilitado con ayuda contextual si no hay archivo válido), **prompt único en «Cómo preguntar a una IA»** que junta todos los prompts en una sola instrucción copiable, primeros **tests automatizados del frontend con vitest** (`npm test`), mejoras de usabilidad IHC, auditoría UX integral (C1–C41: modo oscuro persistente, `aria-live` con debounce acertado a la vista, contraste AA (`--ambar` corregido en dark + `color-scheme`), barra de cumplimiento y búsqueda de reglas del wireframe —la búsqueda filtra también los prompts de IA—, ESLint configurado cubriendo `.js`/`.jsx`, favicon, mock de demo con motivo honesto `no_solicitado`, re-elección del mismo archivo con retorno de foco, y script E2E del flujo completo versionado en `scripts/e2e_flujo_completo.sh`, 11 verificaciones) y mockups de las pantallas de carga y reporte (`mockups/`). **Motor DSL** consolidado (F1–F6): 49 reglas mecanizadas (incluye paginación real `indice_paginas_separadas`, ubicación por página, encabezados/pies, notas al pie, control de cambios, e índice de contenidos con `indice_apunta_secciones`/`indice_numeracion_jerarquica`), linter, cache XPath, traza de autómata y tests de propiedad con factory determinista de DOCX. **Calidad de ingeniería** (ruff, mypy, coverage, pre-commit, CI con Nix: tests del backend y build, lint y tests del frontend en cada push/PR) y **exportación del reporte a Markdown/PDF** implementadas (tareas 15 y 16 del `docs/PLAN_BACKLOG_FUTURO.md`). **Módulo de IA (asistente del encargado)** iniciado: cliente LLM local (`validator/llm.py`, con `StubLLM` para CI) y la Funcionalidad 2 de explicación/priorización (`validator/asistente.py`), advisory y sin tocar el semáforo; falta el *wiring* de la API (`docs/HANDOVER_API_IA.md`) y los botones del frontend.

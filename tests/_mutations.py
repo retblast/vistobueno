@@ -19,7 +19,7 @@ import yaml
 from _docx_builder import _ANADIDAS_REVISION, _HEADINGS_CUANT, _headings_insertadas
 
 # ---------------------------------------------------------------------------
-# Nombres de las reglas de reglas_unt.yaml (48).
+# Nombres de las reglas de reglas_unt.yaml (49).
 # ---------------------------------------------------------------------------
 
 REGLAS = [
@@ -69,6 +69,7 @@ REGLAS = [
     "encabezado_membrete",
     "encabezado_formato",
     "notas_al_pie_consistencia",
+    "track_changes_sin_resolver",
     "indice_apunta_secciones",
     "indice_numeracion_jerarquica",
 ]
@@ -164,7 +165,7 @@ REGLAS_ACOPLADAS = {
     # aplicables y siguen siéndolo. El paso 6 convierte el caso contradictorio en
     # un error centinela propio en vez de validar contra las tres.
     # NOTA: el centinela `tipo_documento_contradictorio` aparece en el
-    # documento mutado pero no se cuenta aquí porque no es una de las 48
+    # documento mutado pero no se cuenta aquí porque no es una de las 49
     # reglas (lo deriva la detección).
     "deteccion_tipo_documento": {
         "estructura_tinv_cuantitativo",
@@ -368,6 +369,8 @@ _MUTACIONES = {
     "encabezado_membrete": lambda c: c.update(header_logo=False),
     "encabezado_formato": lambda c: c.update(header_fuente="Arial"),
     "notas_al_pie_consistencia": lambda c: c.update(notas_pie_ids=[1, 2, 4]),
+    # track changes: insertar w:ins/w:del pendientes en el cuerpo.
+    "track_changes_sin_resolver": lambda c: c.update(cambios_seguimiento=True),
     # ítem 11 (indice_apunta_secciones): agregar una entrada que NO apunta a
     # ninguna sección real. El token significativo "DELIMITACIÓN" no está en
     # ningún título del cuerpo. Se inserta en orden (1.6 tras 1.5) para no
@@ -401,7 +404,7 @@ RUTA_REGLAS_YAML = Path(__file__).resolve().parent.parent / "reglas_unt.yaml"
 
 
 def _validar_sincronizacion() -> None:
-    """Falla el import si `_MUTACIONES` no cubre exactamente las 48 reglas.
+    """Falla el import si `_MUTACIONES` no cubre exactamente las 49 reglas.
 
     Evita la desincronización silenciosa factory↔YAML: el error ocurre en la
     recolecta de tests (cuando se importa el factory), no cuando un test
@@ -424,7 +427,7 @@ _validar_sincronizacion()
 
 
 # Conveniencia: exposición del resultado esperado del documento base.
-# Desde el paso 4 el documento base pasa las 48 reglas: no hay desvíos, solo
+# Desde el paso 4 el documento base pasa las 49 reglas: no hay desvíos, solo
 # 2 esquemas que no le aplican.
 DESVIOS_BASE = 0
 TOTAL_REGLAS = len(REGLAS)

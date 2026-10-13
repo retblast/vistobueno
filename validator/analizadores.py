@@ -482,9 +482,14 @@ class AnalizadorNotaPie(Analizador):
         if operacion != "numeracion_consistente":
             return False, f"operación '{operacion}' no soportada"
 
-        ids = [int(i) for i in extracted.xpath("document", "//w:footnoteReference/@w:id", "todos")]
-        if not ids:
+        # Buscar nodos de referencia (no solo ids) para poder localizar la página.
+        refs = extracted.xpath("document", "//w:footnoteReference", "todos")
+        if not refs:
             return True, "sin_notas_al_pie (n/a)"
+        ids = [int(r.get(W + "id")) for r in refs if r.get(W + "id")]
+
+        # El primer nodo de referencia sirve como punto de localización.
+        self.ultimo_nodo = refs[0]
 
         if len(ids) != len(set(ids)):
             return False, f"notas_ids={sorted(ids)} duplicadas=True"
