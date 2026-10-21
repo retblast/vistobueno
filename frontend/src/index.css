@@ -313,6 +313,32 @@ h1, h2, h3 { line-height: 1.25; letter-spacing: -.01em; }
   text-align: center;
 }
 .campo-correo { margin-top: 1rem; }
+/* Ficha de depósito DSpace (contrato v1.6): sección plegable con opt-in */
+.ficha-deposito { margin-top: 1rem; border: 1px solid var(--gris-oscuro); border-radius: 8px; padding: .7rem .9rem; }
+.ficha-deposito summary {
+  cursor: pointer; font-weight: 600; font-size: .85rem; min-height: 44px;
+  display: flex; align-items: center; list-style: revert;
+}
+.ficha-deposito[open] summary { margin-bottom: .4rem; }
+.ficha-deposito .check-depositar {
+  display: flex; align-items: center; gap: .5rem; font-size: .85rem; font-weight: 600;
+}
+.ficha-deposito .check-depositar.disabled { opacity: .6; }
+.ficha-campos { display: grid; gap: .45rem; margin-top: .5rem; }
+.ficha-campos label { font-size: .78rem; font-weight: 600; }
+.ficha-campos .req { color: var(--rojo); }
+.ficha-campos input, .ficha-campos textarea {
+  width: 100%; padding: .5rem .6rem; border: 1px solid var(--gris-oscuro);
+  border-radius: 6px; font: inherit; background: var(--blanco); color: inherit;
+}
+.ficha-campos input:focus-visible, .ficha-campos textarea:focus-visible {
+  outline: 2px solid var(--verde); outline-offset: 2px;
+}
+.ficha-campos input[aria-invalid='true'], .ficha-campos textarea[aria-invalid='true'] {
+  border-color: var(--rojo);
+}
+/* Badge de depósito: reutiliza los estilos de badge-notif; separación al apilar */
+.badge-notif.badge-deposito { margin-top: .35rem; }
 .campo-correo label {
   display: block;
   font-weight: 600;

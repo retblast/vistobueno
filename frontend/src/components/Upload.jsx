@@ -13,6 +13,11 @@ const MAX_BYTES = 10 * 1024 * 1024 // 10 MB, igual que el backend
 // timeout por defecto: sin esto el spinner quedaría girando para siempre si
 // el backend cuelga). Coherente con el `curl -m` del script E2E.
 const TIMEOUT_VALIDACION_MS = 30000
+// Con depósito solicitado el backend puede tardar más tras validar: envío de
+// notificación (SMTP, hasta 10 s) + alta en DSpace (httpx, 30 s por solicitud;
+// ver validator/dspace.py). El cliente espera más para no abortar un depósito
+// que el servidor terminaría igual (contrato v1.6).
+const TIMEOUT_DEPOSITO_MS = 90000
 const acceptedTypes = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]
@@ -20,6 +25,16 @@ const acceptedTypes = [
 // Si llega a llegarse con formato inválido, el backend responde 422 con
 // detail en español que el banner actual ya muestra (sin cambios).
 const esCorreoValido = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)
+
+// Ficha de depósito (contrato v1.6): DSpace exige título y autor para crear
+// el ítem; el resto es opcional. Sin esto el alta llegaría hasta DSpace y
+// fallaría con un 422 que el operador vería tarde (en el badge de deposito).
+// Exportada para su unit test (vitest): ver Upload.ficha.test.js.
+export function fichaIncompleta(ficha) {
+  const titulo = typeof ficha?.titulo === 'string' ? ficha.titulo.trim() : ''
+  const autores = typeof ficha?.autores === 'string' ? ficha.autores.trim() : ''
+  return titulo === '' || autores === ''
+}
 
 // Devuelve {titulo, texto} si el archivo no es válido; null si pasa.
 const validarArchivo = (selected) => {
@@ -67,6 +82,12 @@ function Upload({ onValidated, apiUrl }) {
   // lo pide explícitamente. Así el estudiante no recibe correo por validaciones
   // intermedias (el backend exige además correo válido, semáforo rojo y SMTP activo).
   const [notificar, setNotificar] = useState(false)
+  // Ficha de depósito DSpace (contrato v1.6): opt-in del operador con los
+  // metadatos del ítem. El backend solo deposita con semáforo verde y el
+  // ítem queda en la cola de aprobación de la sede (nunca se publica directo).
+  const [depositar, setDepositar] = useState(false)
+  const [ficha, setFicha] = useState({ titulo: '', autores: '', asesor: '', resumen: '', palabrasClave: '' })
+  const [fichaError, setFichaError] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [dragActivo, setDragActivo] = useState(false)
@@ -174,6 +195,13 @@ function Upload({ onValidated, apiUrl }) {
 
   const validate = async () => {
     if (!file || cargandoRef.current) return
+    // Defensivo: el botón ya se deshabilita con la ficha incompleta, pero el
+    // guard evita cualquier otra vía de envío con un depósito que fallaría
+    // en DSpace por ítem sin título/autor.
+    if (depositar && fichaIncompleta(ficha)) {
+      setFichaError('Para depositar, complete al menos el título y los autores.')
+      return
+    }
     cargandoRef.current = true
     setLoading(true)
     setError(null)
@@ -181,8 +209,12 @@ function Upload({ onValidated, apiUrl }) {
     const correoLimpio = (correo || '').trim()
     try {
       let res
+      // Con depósito solicitado el backend puede tardar mucho más (DSpace):
+      // el timeout se amplía para esa solicitud (contrato v1.6).
+      const depositoPedible = depositar && !fichaIncompleta(ficha)
+      const timeoutMs = depositoPedible ? TIMEOUT_DEPOSITO_MS : TIMEOUT_VALIDACION_MS
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_VALIDACION_MS)
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
       try {
         const form = new FormData()
         form.append('archivo', file)
@@ -191,6 +223,17 @@ function Upload({ onValidated, apiUrl }) {
         // Opt-in de envío: "true"/"1" solo si el operador marcó la casilla
         // (el backend lo interpreta como default: false).
         if (notificar && correoLimpio && esCorreoValido(correoLimpio)) form.append('notificar', 'true')
+        // Ficha de depósito (v1.6): los metadatos solo viajan si se pidió
+        // depositar; el backend ignora campos vacíos (solo envía con contenido).
+        if (depositar && !fichaIncompleta(ficha)) {
+          form.append('depositar', 'true')
+          const limpio = (v) => v.trim()
+          if (limpio(ficha.titulo)) form.append('titulo', limpio(ficha.titulo))
+          if (limpio(ficha.autores)) form.append('autores', limpio(ficha.autores))
+          if (limpio(ficha.asesor)) form.append('asesor', limpio(ficha.asesor))
+          if (limpio(ficha.resumen)) form.append('resumen', limpio(ficha.resumen))
+          if (limpio(ficha.palabrasClave)) form.append('palabras_clave', limpio(ficha.palabrasClave))
+        }
         res = await fetch(`${apiUrl}/validar`, {
           method: 'POST',
           body: form,
@@ -202,7 +245,7 @@ function Upload({ onValidated, apiUrl }) {
           // NO cae al mock (sería mentira decir "no se pudo conectar").
           setError({
             titulo: 'El servidor tardó demasiado.',
-            texto: 'La validación superó los 30 segundos sin respuesta. Intente nuevamente o consulte al administrador.',
+            texto: `La validación superó los ${Math.round(timeoutMs / 1000)} segundos sin respuesta. Intente nuevamente o consulte al administrador.`,
             tipo: 'servidor',
           })
           return
@@ -283,7 +326,9 @@ function Upload({ onValidated, apiUrl }) {
     ? 'Seleccione un archivo .docx para habilitar la validación.'
     : correo && correoError
       ? 'Corrija el correo del estudiante o déjelo vacío.'
-      : null
+      : depositar && fichaIncompleta(ficha)
+        ? 'Complete el título y los autores de la ficha, o desmarque «Depositar en el repositorio».'
+        : null
 
   return (
     <main>
@@ -404,6 +449,94 @@ function Upload({ onValidated, apiUrl }) {
           </div>
         </div>
 
+        {/* Ficha de depósito DSpace (contrato v1.6): opt-in del operador.
+            Solo se deposita con semáforo verde; el ítem queda en la cola de
+            aprobación de la sede (nunca se publica directo). */}
+        <details className="ficha-deposito" open={depositar}>
+          <summary>Depositar en el repositorio digital (opcional)</summary>
+          <div className="ficha-cuerpo">
+            <label className={`check-depositar ${loading ? 'disabled' : ''}`}>
+              <input
+                type="checkbox"
+                checked={depositar}
+                onChange={(e) => {
+                  setDepositar(e.target.checked)
+                  if (!e.target.checked) setFichaError(null)
+                }}
+                disabled={loading}
+                aria-describedby="depositar-ayuda"
+              />
+              <span>Depositar en el repositorio institucional (DSpace)</span>
+            </label>
+            <div id="depositar-ayuda" className="campo-ayuda">
+              Solo se deposita si el resultado es verde; el ítem queda en la cola de
+              aprobación de la sede. Título y autores son obligatorios para el ítem.
+            </div>
+            {depositar && (
+              <div className="ficha-campos">
+                <label htmlFor="ficha-titulo">
+                  Título del trabajo <span className="req">(*)</span>
+                </label>
+                <input
+                  type="text"
+                  id="ficha-titulo"
+                  value={ficha.titulo}
+                  onChange={(e) => setFicha((f) => ({ ...f, titulo: e.target.value }))}
+                  disabled={loading}
+                  aria-invalid={fichaError ? 'true' : 'false'}
+                  aria-describedby={fichaError ? 'ficha-error' : undefined}
+                />
+                <label htmlFor="ficha-autores">
+                  Autor(es) <span className="req">(*)</span>
+                </label>
+                <textarea
+                  id="ficha-autores"
+                  rows="2"
+                  placeholder="Separados por «;» o en líneas separadas"
+                  value={ficha.autores}
+                  onChange={(e) => setFicha((f) => ({ ...f, autores: e.target.value }))}
+                  disabled={loading}
+                  aria-invalid={fichaError ? 'true' : 'false'}
+                  aria-describedby={fichaError ? 'ficha-error' : undefined}
+                ></textarea>
+                <label htmlFor="ficha-asesor">Asesor(a)</label>
+                <input
+                  type="text"
+                  id="ficha-asesor"
+                  value={ficha.asesor}
+                  onChange={(e) => setFicha((f) => ({ ...f, asesor: e.target.value }))}
+                  disabled={loading}
+                />
+                <label htmlFor="ficha-resumen">Resumen</label>
+                <textarea
+                  id="ficha-resumen"
+                  rows="3"
+                  value={ficha.resumen}
+                  onChange={(e) => setFicha((f) => ({ ...f, resumen: e.target.value }))}
+                  disabled={loading}
+                ></textarea>
+                <label htmlFor="ficha-palabras">Palabras clave</label>
+                <input
+                  type="text"
+                  id="ficha-palabras"
+                  placeholder="Separadas por «;» o comas"
+                  value={ficha.palabrasClave}
+                  onChange={(e) => setFicha((f) => ({ ...f, palabrasClave: e.target.value }))}
+                  disabled={loading}
+                />
+                {fichaError ? (
+                  <div id="ficha-error" className="campo-error" role="alert">{fichaError}</div>
+                ) : (
+                  <div className="campo-ayuda">
+                    Los metadatos viajan solo con esta validación; el servidor
+                    completa la fecha y la colección de la sede.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </details>
+
         {file && (
           <div className="archivo">
             <div className="fila">
@@ -435,7 +568,7 @@ function Upload({ onValidated, apiUrl }) {
           <button
             className="btn-validar"
             onClick={validate}
-            disabled={loading || !file || !!(correo && correoError)}
+            disabled={loading || !file || !!(correo && correoError) || (depositar && fichaIncompleta(ficha))}
             aria-describedby={ayudaValidar ? 'validar-ayuda' : undefined}
           >
             {loading ? (

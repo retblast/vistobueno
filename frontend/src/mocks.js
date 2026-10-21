@@ -53,6 +53,10 @@ export const MOCK_REPORT = {
   // "enviado" permite demostrar el badge en modo demo; el detalle va en None.
   // Demo: nada se envió de verdad; no_solicitado ofrece la casilla (badge azul) sin mentir.
   notificacion: { estado: 'no_solicitado', detalle: null },
+  // Campo aditivo v1.6.0 (Contrato API): depósito en DSpace. El mock es rojo
+  // (con errores), así que sin_solicitud no pinta badge: solo con semáforo
+  // verde se ofrece la casilla (misma lógica que badgeDeposito).
+  deposito: { estado: 'sin_solicitud', detalle: null },
   resultados: MOCK_RESULTADOS,
   como_preguntar_a_una_ia: [
     { rule_id: 'margen_derecho', prompt: 'Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El margen derecho debe ser 2.5 cm\n- Valor esperado según el reglamento: 2.5 cm\n- Lo que encontró el validador: 2.5 cm aprox. (plantillas usan 708/709)\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?' },

@@ -308,6 +308,25 @@ Diagnóstico cruzado backend↔frontend (api.py/api_models.py/CONTRATO_API.md co
 
 ---
 
+### Decimotercera tanda — Contrato v1.6: ficha de depósito DSpace en la UI (2026-10-21)
+
+Actualización de `upstream/master` con el módulo de depósito en DSpace del equipo (Actividad 10, contrato v1.6.0 ya vivo en `POST /validar`) y el PR #49 de Ivan (Integrante 3). Revisión general y soporte de UI:
+
+- **Ficha de depósito (`Upload.jsx`)**: sección plegable «Depositar en el repositorio digital (opcional)» con la casilla opt-in `depositar` y los metadatos del ítem (título, autores, asesor, resumen, palabras clave). **Título y autores son obligatorios en el cliente** (`fichaIncompleta()`, exportada + 4 tests): sin ellos el alta llegaría hasta DSpace y fallaría con un 422 que el operador vería tarde. El botón «Validar documento» se deshabilita con ayuda contextual si la ficha está incompleta (mismo patrón que el correo).
+- **Badge de depósito (`Report.jsx`)**: `badgeDeposito(deposito, semaforo)` (exportada + 8 tests) con los 5 estados del contrato: `enviado` (cola de aprobación), `fallo` (detalle técnico), `no_apto` (solo verdes), `deshabilitado` (nota para administradores, solo con `detalle`) y `sin_solicitud` — que **solo** ofrece la casilla cuando el semáforo es verde (con rojo sería ruido).
+- **Timeout dinámico**: con depósito solicitado el cliente espera 90 s en vez de 30 (el backend suma SMTP ~10 s + alta DSpace ~30 s por solicitud: abortar en 30 s dejaría un depósito que el servidor terminaría igual — mismo problema anotado para Int1 en el PR #54).
+- **Regla nueva del motor (PR #49)**: `track_changes_sin_resolver` mapeada a la categoría «Control de cambios» (antes habría caído a «Otros»).
+- **Mock y E2E alineados al v1.6**: mock con `deposito.sin_solicitud`; paso 5 assertciona el campo y nuevo paso 8c verifica `depositar=true → no_apto` con semáforo rojo (12 checks ahora).
+
+**Módulo de IA (PR #49 de Ivan)**: el motor está completo (`validator/llm.py` + `asistente.py`, Func 1/2/3/5 con `StubLLM`), pero los endpoints `/asistente/*` aún no existen — el handover (`docs/HANDOVER_API_IA.md` §2.2/§6) los deja como pendiente de Integrante 1. **La UI de los botones del asistente queda bloqueada hasta ese wiring**; cuando existan, seguirá los DTOs ya acordados (`EstadoAsistenteAPI`, `ExplicacionYPrioridadAPI`, sección separada «Revisión semántica» desconectada del semáforo).
+
+#### Verificación (2026-10-21)
+
+- `npm run lint` → 0 errores · `npm test` → **32/32** (20 + 8 badgeDeposito + 4 ficha) · `npm run build` → 172.99 kB.
+- E2E completo → **12/12** (pytest 545 passed; total 50 reglas / 41 evaluadas; `deposito.estado: no_apto` verificado en vivo con `depositar=true`).
+
+---
+
 ## Evidencias
 
 - Commits: `e27e683` (mejoras IHC), `7bd0be4` (Arreglos.txt v1), `5c169ef` (v2), `6c512ec` (v3), `df05bd6` (auditoría UX C17–C29), `d306f36` + `4c9cc55` (Fase A revisión, C30–C38), `21d0ac3` (script E2E versionado, C39), `abac6b6` (lint en CI, C40, rama `ci-frontend-lint`).

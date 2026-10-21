@@ -77,7 +77,9 @@ assert r['total'] >= r['total_evaluadas'] >= 0, 'total_evaluadas incoherente'
 assert r['total'] - r['total_evaluadas'] == r.get('reglas_no_aplicables', 0), 'reglas_no_aplicables incoherente'
 assert all('aplicable' in x for x in d['resultados']), 'falta aplicable en resultados'
 m=d.get('metadatos', {})
-assert m.get('tipo_documento_estado') in ('vigente','sin_determinar','contradictorio'), f'tipo_documento_estado invalido: {m.get(\"tipo_documento_estado\")!r}'
+assert m.get('tipo_documento_estado') in ('vigente','sin_determinar','contradictorio'), f'tipo_documento_estado invalido: {m.get("tipo_documento_estado")!r}'
+# Contrato v1.6: depósito en DSpace (sin depositar=true → sin_solicitud)
+assert d.get('deposito', {}).get('estado') == 'sin_solicitud', f'deposito inesperado: {d.get("deposito")!r}'
 print('  ✅ HTTP', '$HTTP', '| total:', r['total'], '| evaluadas:', r['total_evaluadas'], '| semaforo:', d['semaforo'])
 " || { echo "  ❌ Falló validación"; exit 1; }
 
@@ -131,6 +133,20 @@ estado = d.get('notificacion', {}).get('estado')
 assert estado == 'no_solicitado', f'esperaba no_solicitado, vino: {estado!r}'
 print('  ✅ HTTP', '$HTTP', '| notificacion.estado:', estado)
 " || { echo "  ❌ no_solicitado no devuelto"; exit 1; }
+
+# 8c. depositar=true con semáforo NO verde -> deposito.estado=no_apto (contrato v1.6)
+echo "[8c/9] depositar=true con semáforo rojo (debe dar 200 + deposito.estado=no_apto)..."
+HTTP=$(curl -s -m 15 -o /tmp/dep.json -w "%{http_code}" -X POST http://127.0.0.1:5173/validar \
+  -F "archivo=@$DOCX" -F "depositar=true" -F "titulo=Tesis de prueba" -F "autores=Pérez, A.")
+python3 -c "
+import json
+assert '$HTTP' == '200', 'HTTP!=200'
+d=json.load(open('/tmp/dep.json'))
+estado = d.get('deposito', {}).get('estado')
+assert estado == 'no_apto', f'esperaba no_apto, vino: {estado!r}'
+assert d['semaforo'] == 'rojo', 'el doc de prueba debía ser rojo'
+print('  ✅ HTTP', '$HTTP', '| deposito.estado:', estado)
+" || { echo "  ❌ deposito no_apto no devuelto"; exit 1; }
 
 # 9. Backend caído -> proxy 500 body vacío -> mock avisado
 echo "[9/9] Backend caído -> proxy 500 vacío -> mock avisado..."

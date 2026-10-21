@@ -51,6 +51,7 @@ El sistema está orientado al **personal de la sede (Repositorio FECyC)**, que o
 | RF-07 | El operador debe poder cancelar la selección y elegir otro archivo | Media |
 | RF-08 | El operador debe poder ingresar el correo del estudiante (campo opcional) | Alta |
 | RF-26 | El operador debe poder solicitar el envío de observaciones por correo al estudiante (casilla opt-in, habilitada solo con correo válido) | Alta |
+| RF-28 | El operador debe poder solicitar el **depósito del documento en el repositorio institucional DSpace** (casilla opt-in con ficha de metadatos: título, autores, asesor, resumen y palabras clave; título y autores obligatorios para el ítem) | Alta |
 
 ### 4.2 Validación
 
@@ -96,7 +97,10 @@ El sistema está orientado al **personal de la sede (Repositorio FECyC)**, que o
 >
 > Los ID restantes se renumeraron de forma correlativa (RF-01…RF-25). En S7 se
 > **agregaron RF-26** (casilla opt-in de envío por correo) **y RF-27**
-> (prompt único de IA) sin renumerar el resto.
+> (prompt único de IA) sin renumerar el resto. En S8 se agregó **RF-28**
+> (ficha de depósito DSpace, contrato v1.6); el reporte informa el veredicto
+> del depósito con un badge (`deposito.estado`: enviado / fallo / no_apto /
+> deshabilitado / sin_solicitud con semáforo verde).
 
 ---
 

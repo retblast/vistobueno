@@ -58,6 +58,7 @@ const CATEGORIA_POR_ID = {
   caratula_linea_investigacion: 'Carátula',
   deteccion_tipo_documento: 'Tipo de documento',
   tipo_documento_no_determinado: 'Tipo de documento',
+  track_changes_sin_resolver: 'Control de cambios',
 }
 
 function categoriaDe(ruleId) {
@@ -150,6 +151,61 @@ export function badgeNotificacion(notif) {
   }
 }
 
+// Mapeo de `deposito.estado` (contrato v1.6, depósito en DSpace) a badge para
+// el personal del repositorio. Misma mecánica que badgeNotificacion:
+// opt-in del operador (`depositar`), best-effort (un fallo de DSpace nunca
+// rompe la respuesta) y solo procede con semáforo verde; el ítem queda en la
+// cola de aprobación de la sede, nunca se publica directo.
+// Tabla de estados del contrato (CONTRATO_API.md §"Depósito en DSpace"):
+//  - enviado:       quedó en la cola de aprobación de la sede.
+//  - fallo:         mostrar el detalle técnico para corregir y reintentar.
+//  - sin_solicitud: no se pidió; con semáforo verde se ofrece la casilla.
+//  - no_apto:       se pidió pero el semáforo no es verde.
+//  - deshabilitado: nota de configuración para administradores (si el backend
+//                   envía `detalle`).
+// Exportada para su unit test (vitest): ver Report.badgeDeposito.test.js.
+export function badgeDeposito(deposito, semaforo) {
+  if (!deposito || typeof deposito.estado !== 'string') return null
+  const detalle =
+    typeof deposito.detalle === 'string' && deposito.detalle.trim() ? deposito.detalle.trim() : null
+  switch (deposito.estado) {
+    case 'enviado':
+      return {
+        clase: 'ok',
+        texto: 'El documento quedó en la cola de aprobación del repositorio.',
+      }
+    case 'fallo':
+      return {
+        clase: 'fail',
+        texto: 'No se pudo depositar el documento en el repositorio.',
+        detalle: detalle || 'Motivo técnico no disponible; reintente o deposite manualmente.',
+      }
+    case 'no_apto':
+      return {
+        clase: 'warn',
+        texto: 'No se depositó: el documento aún tiene observaciones (solo se depositan documentos con semáforo verde).',
+      }
+    case 'deshabilitado':
+      // Igual que la notificación (hallazgo B3): sin `detalle` no se muestra nada.
+      if (!detalle) return null
+      return {
+        clase: 'info',
+        texto: 'Nota para administradores:',
+        detalle,
+      }
+    case 'sin_solicitud':
+      // Solo se ofrece la casilla cuando el documento ya es apto: con
+      // semáforo rojo no hay nada que depositar y el aviso sería ruido.
+      if (semaforo !== 'verde') return null
+      return {
+        clase: 'info',
+        texto: 'No se solicitó el depósito. Active «Depositar en el repositorio» al validar para enviarlo a DSpace.',
+      }
+    default:
+      return null
+  }
+}
+
 const ETIQUETA_FILTRO = { todos: 'Todos', error: 'Errores', warning: 'Advertencias' }
 
 // Metadatos del contrato v1.5 (archivo + tipo de documento detectado).
@@ -209,6 +265,7 @@ function Report({ data, onBack }) {
   // Un payload incompleto/inesperado NUNCA debe decir que la tesis está lista.
   const semaforo = data?.semaforo === 'verde' ? 'verde' : 'rojo'
   const notif = badgeNotificacion(data?.notificacion)
+  const dep = badgeDeposito(data?.deposito, semaforo)
   // Metadatos (archivo y tipo de documento detectado): nunca bloquean nada,
   // solo informan. El estado "contradictorio" se destaca por su clase.
   const meta = data?.metadatos
@@ -386,6 +443,12 @@ function Report({ data, onBack }) {
               <div className={`badge-notif ${notif.clase}`} role="status">
                 {notif.texto}
                 {notif.detalle && <span className="badge-notif-detalle">{notif.detalle}</span>}
+              </div>
+            )}
+            {dep && (
+              <div className={`badge-notif badge-deposito ${dep.clase}`} role="status">
+                {dep.texto}
+                {dep.detalle && <span className="badge-notif-detalle">{dep.detalle}</span>}
               </div>
             )}
           </div>

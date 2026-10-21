@@ -49,6 +49,13 @@
 │  │  (habilitada solo con correo válido; el envío se intenta           │   │
 │  │  solo con errores bloqueantes y notificaciones activas)            │   │
 │  │                                                                    │   │
+│  │  ▸ Depositar en el repositorio digital (opcional)                  │   │
+│  │    ☐ Depositar en el repositorio institucional (DSpace)            │   │
+│  │    (solo se deposita con semáforo verde; el ítem queda en la       │   │
+│  │    cola de aprobación de la sede)                                  │   │
+│  │    Ficha (al marcar): Título*, Autor(es)*, Asesor, Resumen,        │   │
+│  │    Palabras clave — * obligatorios para el ítem                    │   │
+│  │                                                                    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -165,6 +172,9 @@
 │  │  ┌─────┐                                                            │   │
 │  │  │  ✕  │  Requiere correcciones antes de entregar                                 │   │
 │  │  └─────┘  Se detectaron errores de formato que bloquean la entrega  │   │
+│  │                                                                     │   │
+│  │  [badge notificación] [badge depósito: enviado/fallo/no_apto/       │   │
+│  │   deshabilitado/sin_solicitud (verde)]                             │   │
 │  │                                                                     │   │
 │  │  Cumplimiento                                            76%       │   │
 │  │  ████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   │   │
