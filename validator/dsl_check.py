@@ -13,13 +13,19 @@ Detecta:
   de bucle infinito en el reconocedor greedy de DFA/PDA;
 - contexto entre reglas: `aplicar_si` mal formado o apuntando a una clave
   que nadie expone, `expone` duplicado, y `expone` + `aplicar_si` en la
-  misma regla.
+  misma regla;
+- `aplicar_si` con un valor que no es un tipo documental declarado: la
+  regla no aplicaría nunca y el semáforo quedaría verde sin comprobar;
+- secciones mal escritas (la regla desaparecería del reporte en silencio);
+- prefijos de namespace desconocidos en los XPath;
+- `severidad` fuera del catálogo y `id` de regla duplicado.
 
 El compilador invoca `linter_o_alzar` al principio de `compilar()`.
 """
 
 from __future__ import annotations
 
+import difflib
 import re
 
 # Las mismas secciones que conoce el compilador (sin importarlo para
@@ -47,6 +53,52 @@ _SECCIONES = (
 
 # Campos interpretados como expresiones regulares por los analizadores.
 _CAMPOS_REGEX = ("patron", "filtro", "regex_indice")
+
+# Claves de nivel de REGLA (no de sección) que el motor reconoce. Cualquier
+# otra clave es o una sección mal escrita o un error de configuración.
+_CLAVES_REGLA = frozenset(
+    {
+        "id",
+        "tipo",
+        "descripcion",
+        "severidad",
+        "valor_esperado",
+        "ubicacion",
+        "fuente",
+        "cita",
+        "expone",
+        "aplicar_si",
+        "mecanismo_verificable",
+    }
+)
+
+# Severidades válidas (las de `validator.models.Severity`).
+_SEVERIDADES = frozenset({"error", "warning"})
+
+# Prefijos de namespace que el extractor declara y que lxml puede resolver.
+# Copia local de `validator.extractor.NS` para no introducir una dependencia
+# circular (extractor -> ... -> dsl_check).
+_PREFIXOS_NAMESPACE = frozenset({"w", "r", "a", "pic"})
+
+# Ejes de XPath que llevan dos puntos y NO son prefijos de namespace.
+# Se ignoran al validar prefijos: `following-sibling::w:p` es correcto.
+_EJES_XPATH = frozenset(
+    {
+        "ancestor",
+        "ancestor-or-self",
+        "attribute",
+        "child",
+        "descendant",
+        "descendant-or-self",
+        "following",
+        "following-sibling",
+        "namespace",
+        "parent",
+        "preceding",
+        "preceding-sibling",
+        "self",
+    }
+)
 
 
 class DSLValidationError(ValueError):
@@ -219,6 +271,7 @@ def _lint_contexto(rules: list[dict], hallazgos: list[str]) -> None:
     # Segunda pasada: las condiciones se validan contra el conjunto COMPLETO de
     # claves expuestas. La evaluación es en dos fases, así que una regla
     # condicionada puede declararse antes que la regla que produce su clave.
+    tipos_declarados = _tipos_declarados(rules)
     for rule in rules:
         rule_id = rule.get("id", "<sin id>")
         if "aplicar_si" not in rule:
@@ -237,6 +290,67 @@ def _lint_contexto(rules: list[dict], hallazgos: list[str]) -> None:
                 )
         for clave, valor in aplicar_si.items():
             _lintar_valor_aplicar_si(valor, clave, hallazgos, rule_id)
+            _lintar_valor_tipo_documento(valor, clave, tipos_declarados, hallazgos, rule_id)
+
+
+def _tipos_declarados(rules: list[dict]) -> dict[str, set[str]]:
+    """Claves de tipo documental y los tipos que cada una puede tomar.
+
+    Solo las reglas con sección `deteccion_tipo` declaran tipos: su `expone`
+    es la clave que publica el tipo detectado, y sus `firmas` enumeran los
+    tipos válidos. Las demás claves expuestas no son de tipo documental y no
+    se pueden contrastar contra un catálogo.
+    """
+    declarados: dict[str, set[str]] = {}
+    for rule in rules:
+        config = rule.get("deteccion_tipo")
+        if not isinstance(config, dict):
+            continue
+        clave = config.get("expone")
+        if not isinstance(clave, str) or not clave.strip():
+            continue
+        firmas = config.get("firmas")
+        if not isinstance(firmas, list):
+            continue
+        tipos = {
+            firma["tipo"]
+            for firma in firmas
+            if isinstance(firma, dict) and isinstance(firma.get("tipo"), str)
+        }
+        declarados.setdefault(clave, set()).update(tipos)
+    return declarados
+
+
+def _lintar_valor_tipo_documento(
+    valor: object,
+    clave: str,
+    tipos_declarados: dict[str, set[str]],
+    hallazgos: list[str],
+    rule_id: str,
+) -> None:
+    """Comprueba que el valor de la condición sea un tipo documental válido.
+
+    Una condición con un valor que no existe (`tinv_cuantitativa` en vez de
+    `tinv_cuantitativo`) no casa con nada: la regla NO se aplica nunca, y
+    el estudiante ve un semáforo verde sobre una comprobación que jamás se
+    hizo. El linter ya detectaba la clave mal escrita; este cierra el caso
+    del valor mal escrito.
+    """
+    validos = tipos_declarados.get(clave)
+    if not validos:
+        return
+    if isinstance(valor, list):
+        for v in valor:
+            if isinstance(v, str) and v not in validos:
+                hallazgos.append(
+                    f"[{rule_id}] aplicar_si: '{v}' no es un tipo documental válido "
+                    f"para '{clave}' (tipos declarados: {sorted(validos)})"
+                )
+    elif isinstance(valor, str) and valor not in validos:
+        hallazgos.append(
+            f"[{rule_id}] aplicar_si: '{valor}' no es un tipo documental válido "
+            f"para '{clave}' (tipos declarados: {sorted(validos)})"
+        )
 
 
 def _lintar_valor_aplicar_si(valor: object, clave: str, hallazgos: list[str], rule_id: str) -> None:
@@ -377,12 +491,157 @@ def _lint_deteccion_tipo(
                         )
 
 
+def _lint_lista_obligatoria(config: dict, hallazgos: list[str], rule_id: str) -> None:
+    """Valida la sección `lista_obligatoria`.
+
+    `items` debe ser una lista no vacía: una lista vacía no comprueba nada y
+    la regla pasaría siempre (falso verde silencioso).
+    """
+    items = config.get("items")
+    if not isinstance(items, list) or not items:
+        hallazgos.append(
+            f"[{rule_id}] lista_obligatoria: 'items' debe ser una lista no vacía "
+            "(si no, la regla no comprueba nada y pasa siempre)"
+        )
+    elif not all(isinstance(it, str) and it.strip() for it in items):
+        hallazgos.append(f"[{rule_id}] lista_obligatoria: 'items' solo admite textos no vacíos")
+
+
+def _lint_paginacion(config: dict, hallazgos: list[str], rule_id: str) -> None:
+    """Valida la sección `paginacion`.
+
+    `xpaths` debe traer al menos 2 entradas: la sección compara la página
+    física de los párrafos objetivo, así que con menos no hay nada que
+    comparar y la regla no puede sino fallar.
+    """
+    xpaths = config.get("xpaths")
+    if not isinstance(xpaths, list) or len(xpaths) < 2:
+        hallazgos.append(
+            f"[{rule_id}] paginacion: 'xpaths' debe ser una lista con al menos 2 "
+            "entradas (la regla compara la página física de los párrafos objetivo)"
+        )
+    elif not all(isinstance(x, str) and x.strip() for x in xpaths):
+        hallazgos.append(f"[{rule_id}] paginacion: 'xpaths' solo admite textos no vacíos")
+
+
+def _prefijos_de_xpath(xpath: str) -> set[str]:
+    """Prefijos de namespace usados en un XPath.
+
+    Se ignoran los ejes (`following-sibling::w:p`), que también llevan dos
+    puntos pero no son prefijos: confundirlos daría falsos positivos.
+    """
+    prefijos: set[str] = set()
+    for coincidencia in re.finditer(r"([A-Za-z_][\w.-]*):", xpath):
+        candidato = coincidencia.group(1)
+        if candidato in _EJES_XPATH:
+            continue
+        prefijos.add(candidato)
+    return prefijos
+
+
+def _lint_xpath(config: dict, hallazgos: list[str], rule_id: str, seccion: str) -> None:
+    """Valida que los prefijos de namespace de un XPath existan.
+
+    Un XPath con un prefijo desconocido (`//wp:ind`) no lo detecta lxml al
+    parsear el YAML: revienta al EVALUAR contra el documento, con un
+    `XPathEvalError` que la API muestra al estudiante como si fuera un
+    defecto de su tesis. Con el linter, el error aparece al cargar las
+    reglas, que es donde pertenece.
+    """
+    valores: list[str] = []
+    xpath = config.get("xpath")
+    if isinstance(xpath, str):
+        valores.append(xpath)
+    xpaths = config.get("xpaths")
+    if isinstance(xpaths, list):
+        valores.extend(x for x in xpaths if isinstance(x, str))
+    for valor in valores:
+        for prefijo in sorted(_prefijos_de_xpath(valor)):
+            if prefijo not in _PREFIXOS_NAMESPACE:
+                hallazgos.append(
+                    f"[{rule_id}] {seccion}: prefijo de namespace desconocido "
+                    f"'{prefijo}' en el XPath '{valor}' "
+                    f"(prefijos válidos: {sorted(_PREFIXOS_NAMESPACE)})"
+                )
+
+
+def _lint_severidad(config: dict, hallazgos: list[str], rule_id: str) -> None:
+    """Valida el campo `severidad` de la regla.
+
+    `Severity(...)` se construye al EVALUAR: una severidad mal escrita
+    reventaba en runtime, con el estudiante esperando el resultado. Se
+    comprueba al cargar, donde el error es de configuración y no del
+    documento.
+    """
+    severidad = config.get("severidad")
+    if severidad is None:
+        return
+    if not isinstance(severidad, str) or severidad not in _SEVERIDADES:
+        hallazgos.append(
+            f"[{rule_id}] severidad: '{severidad}' no es válida "
+            f"(valores admitidos: {sorted(_SEVERIDADES)})"
+        )
+
+
+def _lint_secciones_desconocidas(rules: list[dict], hallazgos: list[str]) -> None:
+    """Detecta secciones mal escritas y reglas que no declaran ninguna.
+
+    Una sección mal escrita (por ejemplo `atributo_xmls` en vez de
+    `atributo_xml`) no la reconoce el compilador: la regla se salta en
+    silencio y DESAPARECE del reporte sin ningún aviso. Para el estudiante
+    eso es indistinguishable de "cumplió la regla".
+
+    Se distinguen tres situaciones:
+    - la clave parece una sección (comparación difusa) → se sugiere la
+      correcta, que es el error más probable;
+    - la clave no se parece a nada conocido → se descarta, porque el DSL
+      admite campos propios de cada analizador;
+    - la regla no declara ninguna sección → se descarta, porque las reglas
+      no mecanizadas son legítimas (el campo `mecanismo_verificable` las
+      marca).
+    """
+    for rule in rules:
+        rule_id = rule.get("id", "<sin id>")
+        for clave in rule:
+            if clave in _SECCIONES or clave in _CLAVES_REGLA:
+                continue
+            cercania = difflib.get_close_matches(clave, _SECCIONES, n=1, cutoff=0.75)
+            if cercania:
+                hallazgos.append(
+                    f"[{rule_id}] sección desconocida '{clave}' (¿quiso decir '{cercania[0]}'?)"
+                )
+
+
+def _lint_ids_duplicados(rules: list[dict], hallazgos: list[str]) -> None:
+    """Detecta ids de regla repetidos.
+
+    Un id duplicado hace que dos reglas compartan identificador: el
+    estudiante ve dos observaciones indistinguibles con el mismo id, y el
+    resumen cuenta la misma regla dos veces.
+    """
+    vistos: dict[str, int] = {}
+    duplicados: set[str] = set()
+    for rule in rules:
+        rule_id = rule.get("id")
+        if not isinstance(rule_id, str) or not rule_id:
+            continue
+        if rule_id in vistos:
+            duplicados.add(rule_id)
+        vistos[rule_id] = vistos.get(rule_id, 0) + 1
+    for rule_id in sorted(duplicados):
+        hallazgos.append(
+            f"[{rule_id}] id duplicado: aparece {vistos[rule_id]} veces en el archivo "
+            "(las reglas deben tener identificadores únicos)"
+        )
+
+
 def linter(rules_data: dict) -> list[str]:
     """Devuelve la lista de hallazgos (vacía si el DSL está sano)."""
     hallazgos: list[str] = []
     rules = rules_data.get("reglas", [])
     for rule in rules:
         rule_id = rule.get("id", "<sin id>")
+        _lint_severidad(rule, hallazgos, rule_id)
         for seccion in _SECCIONES:
             cfg = rule.get(seccion)
             if cfg is None:
@@ -400,7 +659,14 @@ def linter(rules_data: dict) -> list[str]:
                     _lint_automata_pila(c, hallazgos, rule_id)
                 elif seccion == "deteccion_tipo":
                     _lint_deteccion_tipo(c, hallazgos, rule_id, rule)
+                elif seccion == "lista_obligatoria":
+                    _lint_lista_obligatoria(c, hallazgos, rule_id)
+                elif seccion == "paginacion":
+                    _lint_paginacion(c, hallazgos, rule_id)
+                _lint_xpath(c, hallazgos, rule_id, seccion)
     _lint_contexto(rules, hallazgos)
+    _lint_secciones_desconocidas(rules, hallazgos)
+    _lint_ids_duplicados(rules, hallazgos)
     return hallazgos
 
 
