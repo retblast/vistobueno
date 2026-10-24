@@ -366,6 +366,7 @@ class TestContratoMotor:
                 "location",
                 "fuente",
                 "cita",
+                "ficha",
             }
         finally:
             Path(path).unlink(missing_ok=True)
@@ -375,7 +376,7 @@ class TestContratoMotor:
         try:
             resultados = validate_docx(path, TestCompiladorDSL.RULES_SECUENCIA)
             reporte = build_report(resultados)
-            assert set(reporte.keys()) == {"semaforo", "resultados", "resumen"}
+            assert set(reporte.keys()) == {"semaforo", "resultados", "resumen", "ficha"}
             assert reporte["semaforo"] == "rojo"
             assert reporte["resumen"]["total"] == 1
             assert reporte["resumen"]["fallidos_error"] == 1

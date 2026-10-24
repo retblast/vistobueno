@@ -435,11 +435,15 @@ class TestGuardiaContrato:
             "semaforo",
             "notificacion",
             "deposito",
+            "ficha_deposito",
             "resumen",
             "resultados",
             "como_preguntar_a_una_ia",
             "metadatos",
         }
+        # v1.7.0: este documento base da semáforo verde → la ficha
+        # materializa; con rojo sería null (invariante).
+        assert respuesta.json()["ficha_deposito"] is not None
         # Documento base con rojo + correo válido, pero sin opt-in del
         # operador: el envío es explícito (`notificar`), no automático.
         notificacion = respuesta.json()["notificacion"]

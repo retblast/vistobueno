@@ -1,0 +1,13 @@
+{
+	"name": "@vistobueno/dspace-fill",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Rellenador del formulario de depósito DSpace para VistoBueno (userscript + tests)",
+	"scripts": {
+		"build": "node dev/build.js",
+		"test": "node dev/build.js && node --test"
+	},
+	"devDependencies": {
+		"jsdom": "^24.1.0"
+	}
+}

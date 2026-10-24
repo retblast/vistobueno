@@ -1,0 +1,136 @@
+# Reglas de CAPTURA de la ficha de depósito (diseño 17).
+#
+# Estas reglas NO validan: su único fin es publicar el texto completo de un
+# dato del DOCX para pre-llenar el formulario oficial de DSpace. Todas usan la
+# sección `extraccion` sobre `AnalizadorExtraccion` (siempre `passed=True`,
+# nunca tocan el semáforo). `build_report` las reúne en `reporte["ficha"]`
+# como `dict[campo] = {"valor", "pagina", "detectado"}` (contrato de
+# `docs/HANDOVER_MOTOR_FICHA_DEPOSITO.md` §4).
+#
+# Claves acordadas (PLAN_FICHA §4.2): dc.title, dc.contributor.author,
+# dc.contributor.advisor, dc.description.abstract, dc.subject,
+# dc.date.issued, escuela, renati.juror.
+#
+# No están en `reglas_unt.yaml` a propósito: allí cada regla debe tener una
+# mutación (tests/_mutations.py) y una captura read-only no tiene desvío
+# mínimo con sentido. La API las carga con `load_ficha_rules()` y las pasa a
+# `validate_docx(..., ficha_data=...)`.
+
+reglas:
+
+- id: ficha_titulo
+  tipo: estructura
+  descripcion: Captura del título del trabajo (dc.title)
+  valor_esperado: texto del título en carátula
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Carátula, Título del Trabajo de Investigación (párr. 177)
+  cita: '"Título del Trabajo de Investigación"'
+  extraccion:
+    parte: document
+    contexto: caratula
+    campo: dc.title
+    modo: texto
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'tesis') and string-length(normalize-space(.)) < 40)][1]
+
+- id: ficha_autores
+  tipo: estructura
+  descripcion: Captura de los autores (dc.contributor.author)
+  valor_esperado: lista de nombres de autor(es)
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Carátula, Apellidos y Nombres del autor (párr. 179)
+  cita: '"Apellidos y Nombres del autor(a/es/as)"'
+  extraccion:
+    parte: document
+    contexto: caratula
+    campo: dc.contributor.author
+    modo: lista
+    separador: \s*(?:,|;|\by\b|\be\b)\s*
+    xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]
+
+- id: ficha_asesor
+  tipo: estructura
+  descripcion: Captura del asesor (dc.contributor.advisor)
+  valor_esperado: nombre del asesor
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Carátula, Apellidos y nombres del asesor (párr. 180)
+  cita: '"Apellidos y nombres del/a asesor(a)"'
+  extraccion:
+    parte: document
+    contexto: caratula
+    campo: dc.contributor.advisor
+    modo: texto
+    quitar_prefijo: ^\s*asesor\(a\)\s*:?\s*|^\s*asesor(?:a)?\s*:?\s*
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')][1]
+
+- id: ficha_escuela
+  tipo: estructura
+  descripcion: Captura de la escuela profesional (columna ESCUELAS del registro)
+  valor_esperado: nombre de la escuela profesional
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Carátula, Facultad y Escuela Profesional (párr. 175)
+  cita: '"Facultad y Escuela Profesional"'
+  extraccion:
+    parte: document
+    contexto: caratula
+    campo: escuela
+    modo: texto
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa')][1]
+
+- id: ficha_anio
+  tipo: estructura
+  descripcion: Captura del año de emisión (dc.date.issued)
+  valor_esperado: año de la carátula
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Carátula, Ciudad y año (párr. 182)
+  cita: '"Ciudad y país"'
+  # Se busca la línea "TRUJILLO - PERÚ, 2026" y se extrae el año con `patron`.
+  # El XPath excluye la línea "UNIVERSIDAD NACIONAL DE TRUJILLO" (contiene
+  # "trujillo"): se pide que la línea también traiga un año de 4 dígitos
+  # (quirk heredado del reglamento, handover issue #4).
+  extraccion:
+    parte: document
+    contexto: caratula
+    campo: dc.date.issued
+    modo: texto
+    patron: \b(?:19|20)\d{2}\b
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'trujillo') and translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü') != 'universidad nacional de trujillo'][1]
+
+- id: ficha_resumen
+  tipo: estructura
+  descripcion: Captura del resumen (dc.description.abstract)
+  valor_esperado: texto completo del resumen
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Sección Resumen (párr. 201)
+  cita: '"Resumen"'
+  extraccion:
+    campo: dc.description.abstract
+    modo: texto
+    unir: true
+    filtro: ^(?!\s*palabras\s+clave)
+    seccion:
+      inicio: ^\s*resumen\s*$
+
+- id: ficha_palabras_clave
+  tipo: estructura
+  descripcion: Captura de las palabras clave (dc.subject)
+  valor_esperado: lista de palabras clave
+  severidad: warning
+  fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+  ubicacion: Resumen, "Palabras clave" (párr. 201)
+  cita: '"Palabras clave"'
+  # La línea "Palabras clave: a, b, c" se parte por el separador tras la
+  # etiqueta; el modo lista devuelve cada clave.
+  extraccion:
+    campo: dc.subject
+    modo: lista
+    etiqueta: palabras clave
+    separador: \s*[,;]\s*
+    filtro: ^\s*palabras\s+clave
+    seccion:
+      inicio: ^\s*resumen\s*$

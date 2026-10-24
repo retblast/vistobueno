@@ -1,6 +1,6 @@
 """Modelos de datos para resultados de validación."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 
@@ -38,6 +38,16 @@ class RuleResult:
     location: str | None = None
     fuente: str = ""
     cita: str = ""
+    # Datos capturados para la ficha de depósito (diseño 17). Cada entrada es
+    # `{"campo": str, "valor": str | list[str], "pagina": int | None,
+    # "detectado": bool}`. Es un canal de LECTURA: no participa del semáforo ni
+    # de `passed`. Vacío para la inmensa mayoría de reglas.
+    ficha: list[dict] = field(default_factory=list)
+    # True si el resultado proviene de una regla de CAPTURA (`reglas_ficha.yaml`,
+    # sección `extraccion`) y no de una regla de validación. `build_report` los
+    # excluye del semáforo y del `resumen`: no son reglas que se cumplen o
+    # fallan, solo datos que se leen.
+    captura: bool = False
 
     def to_dict(self) -> dict:
         # `aplicable` NO se expone aquí: el contrato por regla es estable y
@@ -54,4 +64,5 @@ class RuleResult:
             "location": self.location,
             "fuente": self.fuente,
             "cita": self.cita,
+            "ficha": list(self.ficha),
         }

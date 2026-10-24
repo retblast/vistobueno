@@ -10,20 +10,29 @@ Uso:
     uvicorn validator.api:app --reload
 """
 
+import os
 import re
 import tempfile
 import zipfile
 from functools import cache
 from pathlib import Path
+from typing import Literal
 
 from email_validator import EmailNotValidError, validate_email
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from .api_models import (
+    CampoExtraidoFicha,
+    CampoManualFicha,
+    ConstanciaRequest,
     DepositoAPI,
+    DepositoRecibido,
     EstadoDepositoAPI,
     EstadoNotificacionAPI,
+    FichaDeposito,
+    FilaRegistroRequest,
+    FilasRegistroResponse,
     MetadatosValidacion,
     NotificacionAPI,
     PromptIA,
@@ -32,9 +41,25 @@ from .api_models import (
     SeveridadAPI,
     ValidarResponse,
 )
+from .buzon import Buzon
+from .constancia import (
+    MIME_DOCX as MIME_DOCX_CONSTANCIA,
+)
+from .constancia import (
+    DatosConstancia,
+    ErrorConfiguracionConstancia,
+    ErrorDatosConstancia,
+    _nombre_seguro,
+    constancia_en_zip,
+    constancias_por_autor,
+    filas_a_csv,
+    filas_a_tsv,
+    filas_a_xlsx,
+    llenar_constancia,
+)
 from .dsl_check import DSLValidationError
 from .dspace import ConfigDSpace, depositar_documento, metadatos_desde_formulario
-from .engine import build_report, load_rules, validate_docx
+from .engine import build_report, load_ficha_rules, load_rules, validate_docx
 from .models import RuleResult
 from .notificacion import ConfigSMTP, enviar_notificacion
 from .prompts import build_ai_help_section
@@ -59,11 +84,41 @@ TIPOS_ACEPTADOS = {
 
 EXTENSION_ACEPTADA = ".docx"
 
+# Claves acordadas de la ficha de depósito (v1.7.0, PLAN_FICHA §4).
+# Los extraídos los publica el motor en reporte["ficha"] (handover
+# HANDOVER_MOTOR_FICHA_DEPOSITO §4); los manuales los teclea el operador.
+CAMPOS_EXTRAIDOS_FICHA = (
+    "dc.title",
+    "dc.contributor.author",
+    "dc.contributor.advisor",
+    "dc.description.abstract",
+    "dc.subject",
+    "dc.date.issued",
+    "escuela",
+    "renati.juror",
+)
+CAMPOS_MANUALES_FICHA = (
+    "matricula",
+    "renati.author.dni",
+    "renati.advisor.dni",
+    "renati.advisor.orcid",
+)
+
 
 @cache
 def _get_rules() -> dict:
     """Carga el YAML de reglas una sola vez (cacheado en memoria)."""
     return load_rules(REGLAS_YAML_PATH)
+
+
+@cache
+def _get_ficha_rules() -> dict:
+    """Carga el ruleset de captura de la ficha (diseño 17), una sola vez.
+
+    Devuelve ``{}`` si el archivo no existe (despliegue sin ficha): la
+    respuesta sigue trayendo los campos acordados con ``detectado=false``.
+    """
+    return load_ficha_rules()
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +192,34 @@ def _extraer_metadata_tipo_documento(
     }
 
 
+def _ficha_desde_reporte(reporte: dict) -> FichaDeposito:
+    """Construye la ficha de depósito a partir del reporte del motor.
+
+    El motor publicará las extracciones en `reporte["ficha"]` como un
+    dict campo→dato, cada dato con la forma acordada del handover §4:
+    `{"valor": …, "pagina": …, "detectado": …}`. Hasta esa entrega, la
+    ficha viaja completa pero con todos los extraídos en `detectado=false`:
+    el contrato es estable y el frontend puede construirse ya.
+
+    Los manuales siempre viajan vacíos desde el servidor: los llena el
+    operador en la pantalla.
+    """
+    datos_motor = reporte.get("ficha") or {}
+    extraidos = []
+    for campo in CAMPOS_EXTRAIDOS_FICHA:
+        dato = datos_motor.get(campo) or {}
+        extraidos.append(
+            CampoExtraidoFicha(
+                campo=campo,
+                valor=dato.get("valor"),
+                pagina=dato.get("pagina"),
+                detectado=bool(dato.get("detectado")),
+            )
+        )
+    manuales = [CampoManualFicha(campo=c, valor=None) for c in CAMPOS_MANUALES_FICHA]
+    return FichaDeposito(extraidos=extraidos, manuales=manuales)
+
+
 def _construir_respuesta(
     resultados_motor: list,
     reporte: dict,
@@ -146,8 +229,19 @@ def _construir_respuesta(
     rules_data: dict,
 ) -> ValidarResponse:
     """Ensambla la respuesta completa de la API a partir de la salida del motor."""
-    resultados_dto = [_rule_result_a_dto(r) for r in resultados_motor]
+    resultados_dto = [
+        _rule_result_a_dto(r)
+        for r in resultados_motor
+        # Las reglas de CAPTURA (diseño 17) no son reglas de validación:
+        # no viajan en `resultados`; sus datos van en `ficha_deposito`.
+        if not r.captura
+    ]
     resumen_motor = reporte["resumen"]
+
+    # La ficha solo materializa con semáforo verde (invariante del
+    # contrato v1.7.0): un documento con errores bloqueantes no se
+    # deposita, y no hay nada que pre-llenar.
+    ficha = _ficha_desde_reporte(reporte) if reporte["semaforo"] == "verde" else None
 
     return ValidarResponse(
         semaforo=reporte["semaforo"],
@@ -170,6 +264,7 @@ def _construir_respuesta(
             version_esquema=rules_data.get("version", "desconocido"),
             **_extraer_metadata_tipo_documento(resultados_motor),
         ),
+        ficha_deposito=ficha,
     )
 
 
@@ -210,7 +305,7 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.6.0",
+    version="1.7.0",
 )
 
 
@@ -243,6 +338,10 @@ async def validar(
             "Destinatario de las observaciones cuando se solicita el envío "
             "(campo `notificar`)."
         ),
+        # Swagger prellenaba "string" y un Execute sin editar enviaba
+        # basura; con ejemplo vacío el campo se deja en blanco solo
+        # (revisión del PR #55, hallazgo 2).
+        examples=[""],
     ),
     notificar: bool = Form(
         default=False,
@@ -263,6 +362,7 @@ async def validar(
     titulo: str | None = Form(
         default=None,
         description="Título del trabajo: metadato dc.title del depósito (opcional)",
+        examples=[""],
     ),
     autores: str | None = Form(
         default=None,
@@ -270,20 +370,24 @@ async def validar(
             "Autor(es), separados por ';' o saltos de línea: metadato "
             "dc.contributor.author del depósito (opcional)"
         ),
+        examples=[""],
     ),
     asesor: str | None = Form(
         default=None,
         description="Asesor(a): metadato dc.contributor.advisor del depósito (opcional)",
+        examples=[""],
     ),
     resumen: str | None = Form(
         default=None,
         description="Resumen: metadato dc.description.abstract del depósito (opcional)",
+        examples=[""],
     ),
     palabras_clave: str | None = Form(
         default=None,
         description=(
             "Palabras clave, separadas por ';' o ',': metadato dc.subject del depósito (opcional)"
         ),
+        examples=[""],
     ),
 ):
     # --- Validación: ¿hay archivo? ---
@@ -373,9 +477,13 @@ async def validar(
         # genérico del bloque exterior.
         # El motor es síncrono y CPU-intenso (recompila el DSL en cada
         # request): se despacha al threadpool para no congelar el event
-        # loop mientras dura la validación.
+        # loop mientras dura la validación. Se pasa el ruleset de captura
+        # de la ficha (diseño 17) en la MISMA pasada: sus capturas viajan
+        # en reporte["ficha"] y no afectan semáforo ni resumen.
         try:
-            resultados_motor = await run_in_threadpool(validate_docx, tmp_path, rules_data)
+            resultados_motor = await run_in_threadpool(
+                validate_docx, tmp_path, rules_data, _get_ficha_rules()
+            )
         except DSLValidationError as e:
             # Reglas rotas = error de configuración del servidor, no del
             # documento del estudiante.
@@ -530,6 +638,276 @@ async def validar(
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Buzón de una ranura: comunicación con el userscript de depósito
+# ---------------------------------------------------------------------------
+
+# Instancia única del buzón (una ranura de ficha + una de depósito, TTL 1h).
+# Es la única pieza de estado del servidor: ver docs/PLAN_FICHA_DEPOSITO.md §6.
+_BUZON = Buzon()
+
+
+@app.post(
+    "/ficha-pendiente",
+    status_code=204,
+    summary="Publicar la ficha completada en el buzón",
+    description=(
+        "La SPA publica la ficha (extraídos + manuales) para que el "
+        "userscript de depósito la lea desde el navegador del operador. "
+        "El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo "
+        "reemplaza la ficha anterior ('última gana')."
+    ),
+)
+async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
+    _BUZON.publicar_ficha(ficha.model_dump())
+
+
+@app.get(
+    "/ficha-pendiente",
+    response_model=FichaDeposito,
+    summary="Leer la ficha pendiente del buzón",
+    description=(
+        "El userscript lee aquí la ficha a rellenar en el formulario "
+        "oficial de DSpace. 404 cuando no hay ficha o la publicada "
+        "expiró (TTL de 1 hora)."
+    ),
+    responses={404: {"description": "Sin ficha pendiente: vacía o expirada"}},
+)
+async def leer_ficha_pendiente() -> FichaDeposito:
+    ficha = _BUZON.leer_ficha()
+    if ficha is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Sin ficha pendiente: vacía o expirada (TTL de 1 hora).",
+        )
+    return FichaDeposito(**ficha)
+
+
+@app.post(
+    "/deposito",
+    status_code=204,
+    summary="Reportar un depósito realizado",
+    description=(
+        "El userscript reporta el depósito desde la página del ítem "
+        "archivado: handle del ítem, título y el timestamp del clic en "
+        "Depositar. La SPA lo recoge sondeando GET /deposito y arma la "
+        "constancia y la fila del registro."
+    ),
+)
+async def reportar_deposito(datos: DepositoRecibido) -> None:
+    _BUZON.reportar_deposito(datos.model_dump())
+
+
+@app.get(
+    "/deposito",
+    response_model=DepositoRecibido,
+    summary="Leer el depósito reportado",
+    description=(
+        "La SPA sondea aquí mientras espera el handle del ítem. 404 "
+        "cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, "
+        "la SPA debe cotejar el `titulo` reportado con la ficha en vuelo "
+        "antes de usar el handle."
+    ),
+    responses={404: {"description": "Sin depósito reportado: vacío o expirado"}},
+)
+async def leer_deposito_reportado() -> DepositoRecibido:
+    datos = _BUZON.leer_deposito()
+    if datos is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Sin depósito reportado: vacío o expirado (TTL de 1 hora).",
+        )
+    return DepositoRecibido(**datos)
+
+
+# ---------------------------------------------------------------------------
+# Constancia de depósito (Modelo B) y fila de registro
+# ---------------------------------------------------------------------------
+
+# Plantilla oficial de la constancia. Vive en recursos/ (no versionada:
+# es un artefacto institucional). Ruta sobreescribible por entorno.
+PLANTILLA_CONSTANCIA_POR_DEFECTO = (
+    Path(__file__).resolve().parent.parent / "recursos" / "TESIS DIGITAL MODELO B-2026.docx"
+)
+
+
+def _ruta_plantilla_constancia() -> Path:
+    """Ruta de la plantilla del Modelo B (configurable por entorno)."""
+    return Path(
+        os.environ.get("VISTOBUENO_PLANTILLA_CONSTANCIA", str(PLANTILLA_CONSTANCIA_POR_DEFECTO))
+    )
+
+
+def _firma_operador() -> str:
+    """Firma del responsable (columna FIRMA del registro), por entorno."""
+    return os.environ.get("VISTOBUENO_FIRMA", "").strip()
+
+
+def _constancias_de_solicitud(solicitud: FilaRegistroRequest) -> list[DatosConstancia]:
+    """Valida la solicitud y arma los datos: una constancia por autor.
+
+    Errores:
+
+    - 422: timestamp que no es ISO 8601, o falta un dato de la ficha
+      (título, autores, matrículas alineadas).
+    - 500: configuración del servidor (firma o plantilla).
+    """
+    try:
+        momento = _parsear_timestamp(solicitud.timestamp)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Timestamp inválido: '{solicitud.timestamp}'. Use ISO 8601 (p. ej. 2026-10-19T18:10:00).",
+        ) from e
+
+    firma = _firma_operador()
+    if not firma:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "El servidor no tiene la firma del responsable configurada: "
+                "defina VISTOBUENO_FIRMA (nombre que va en la columna FIRMA del registro)."
+            ),
+        )
+
+    try:
+        return constancias_por_autor(solicitud.ficha.model_dump(), solicitud.handle, momento, firma)
+    except ErrorDatosConstancia as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+def _parsear_timestamp(texto: str):
+    """Parsea el timestamp ISO 8601 reportado por el userscript."""
+    from datetime import datetime
+
+    return datetime.fromisoformat(texto)
+
+
+def _nombre_archivo_constancia(datos: DatosConstancia) -> str:
+    """Nombre de descarga: 'constancia - {autor sanitizado}.docx'.
+
+    Delega a _nombre_seguro en constancia.py para que el nombre del
+    zip y el del docx sean consistentes entre sí.
+    """
+    return f"constancia - {_nombre_seguro(datos.autor)}.docx"
+
+
+@app.post(
+    "/constancia",
+    summary="Descargar la constancia de UN autor (Modelo B lleno, o paquete zip)",
+    description=(
+        "Genera la constancia de depósito del Modelo B con los MERGEFIELD "
+        "reemplazados por los valores de la ficha. Una constancia POR "
+        "AUTOR: la SPA descarga una por cada estudiante iterando "
+        "`indice_autor`. Devuelve el .docx como descarga binaria. Con "
+        "`formato=zip` devuelve en su lugar un paquete con la constancia "
+        ".docx y la fila del registro del autor como .csv (hallazgo 11: "
+        '"POST /constancia podría incluirlo").'
+    ),
+    responses={
+        200: {"description": "Constancia .docx (o paquete .zip con formato=zip)"},
+        422: {
+            "description": "Timestamp inválido, falta un dato de la ficha o índice fuera de rango"
+        },
+        500: {"description": "Firma o plantilla sin configurar en el servidor"},
+    },
+)
+async def descargar_constancia(
+    solicitud: ConstanciaRequest,
+    formato: Literal["docx", "zip"] = Query(
+        default="docx",
+        description=(
+            "docx: la constancia (retrocompatible). zip: constancia + "
+            "registro.csv del autor en un solo paquete (hallazgo 11: "
+            "'la constancia podría incluirlo')"
+        ),
+    ),
+) -> Response:
+    datos = _constancias_de_solicitud(solicitud)
+    if solicitud.indice_autor >= len(datos):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"indice_autor={solicitud.indice_autor} fuera de rango: "
+                f"la ficha trae {len(datos)} autor(es)."
+            ),
+        )
+    objetivo = datos[solicitud.indice_autor]
+    try:
+        if formato == "zip":
+            return Response(
+                content=constancia_en_zip(_ruta_plantilla_constancia(), objetivo),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": (
+                        f'attachment; filename="{_nombre_archivo_constancia(objetivo)}.zip"'
+                    )
+                },
+            )
+        contenido = llenar_constancia(_ruta_plantilla_constancia(), objetivo)
+    except ErrorConfiguracionConstancia as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return Response(
+        content=contenido,
+        media_type=MIME_DOCX_CONSTANCIA,
+        headers={
+            "Content-Disposition": f'attachment; filename="{_nombre_archivo_constancia(objetivo)}"'
+        },
+    )
+
+
+@app.post(
+    "/fila-registro",
+    response_model=FilasRegistroResponse,
+    summary="Generar las filas del registro (TSV, una por autor)",
+    description=(
+        "Devuelve las filas listas para pegar en el registro oficial de la "
+        "biblioteca (XLSX): una por autor, en el orden exacto de columnas. "
+        "La app JAMÁS escribe el registro oficial: el operador pega la fila. "
+        "Con `formato` en `tsv`, `csv` o `xlsx` devuelve en su lugar un "
+        "ARCHIVO descargable listo para abrir en Excel/LibreOffice "
+        "(hallazgo 11 de la revisión del PR #55): elimina los errores de "
+        "pegado (encoding, tabs perdidos, columnas desalineadas)."
+    ),
+    responses={
+        200: {"description": "Lista de filas TSV (json) o archivo descargable (tsv/csv/xlsx)"},
+        422: {"description": "Timestamp inválido, falta un dato de la ficha o formato desconocido"},
+        500: {"description": "Firma sin configurar en el servidor"},
+    },
+)
+async def generar_fila_registro(
+    solicitud: FilaRegistroRequest,
+    formato: Literal["json", "tsv", "csv", "xlsx"] = Query(
+        default="json",
+        description="json: la lista TSV (retrocompatible). tsv/csv/xlsx: archivo descargable",
+    ),
+):
+    datos = _constancias_de_solicitud(solicitud)
+    filas = [d.fila_registro() for d in datos]
+
+    if formato == "json":
+        return FilasRegistroResponse(filas=filas)
+
+    if formato == "tsv":
+        return Response(
+            content=filas_a_tsv(filas).encode("utf-8"),
+            media_type="text/tab-separated-values; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.tsv"'},
+        )
+    if formato == "csv":
+        return Response(
+            content=filas_a_csv(filas).encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.csv"'},
+        )
+    # formato == "xlsx"
+    return Response(
+        content=filas_a_xlsx(filas),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.xlsx"'},
+    )
 
 
 # ---------------------------------------------------------------------------

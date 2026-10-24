@@ -56,6 +56,12 @@ Módulo de IA (asistente del encargado — opt-in, advisory, NUNCA toca el semá
 | **Reglas** | `unt_format_rules_schema.yaml` | 44 reglas, 32 ejecutables (fuente de verdad legacy) |
 | **Reglas DSL (producción)** | `reglas_unt.yaml` | 49 reglas verificables (F1–F6 + F2 ítems 1-3 y 11-12) |
 | **Reglas DSL pendientes** | `reglas_unt_pendientes.yaml` | 5 estructuras implementadas y sin probar; no lo carga la API |
+| **Reglas ficha depósito** | `reglas_ficha.yaml` | 7 capturas (diseño 17): `dc.title`, `dc.contributor.author`, `dc.contributor.advisor`, `dc.description.abstract`, `dc.subject`, `dc.date.issued`, `escuela`; `renati.juror` no se captura fiable. |
+| **Buzón de ficha** | `validator/buzon.py` | Módulo buzón de ficha (una ranura, TTL 1h), `publicar_ficha`/`leer_ficha`; forma parte del handover v1.7.0. |
+| **Constancias** | `validator/constancia.py` | Genera constancias por autor usando plantilla oficial (Modelo B) y MERGEFIELDs a texto plano; forma parte del endpoint `POST /constancia`. |
+| **Userscript de depósito** | `tools/dspace-fill/` | Rellena el formulario oficial de DSpace desde la ficha del buzón (`GM_xmlhttpRequest` con `@connect localhost`, auto-relleno gated con toast, timestamp del clic Depositar, reporte del handle del ítem). Artefacto instalable en `dist/` (commiteado, el CI verifica drift), núcleo puro testeado en node con jsdom; ensayo general con `nix run .#mock-dspace` (checklist en `dev/mock-dspace/README.md`) y de un comando con `nix run .#test-ficha-deposito` (driver jsdom en `dev/e2e_ensayo.js`). |
+| **Ensayo general de un comando** | `scripts/e2e_ficha_deposito.sh` | Corre el flujo completo de punta a punta: valida el doc bueno del factory, publica la ficha, corre el userscript contra el mock, verifica el handle en el buzón y genera constancia + registro descargables. Salida esperada: "✅ FLUJO COMPLETO OK". En CI como paso propio (revisión PR #55, hallazgo 16b). |
+| **Handover frontend ficha** | `docs/HANDOVER_FRONTEND_FICHA_DEPOSITO.md` | Pedido a Int2: pantalla de ficha (extraídos + manuales por autor), "Preparar depósito", panel de espera con sondeo del buzón, descargas de constancias y registro. |
 
 ---
 
@@ -236,6 +242,8 @@ Al entrar, el shellHook muestra los comandos disponibles. Herramientas principal
 | `nix run .#test -- tests/ -v` | Ejecuta la suite de tests |
 | `nix run .#serve -- validator.api:app --reload` | Inicia la API en desarrollo |
 | `nix run .#smtp-dev` | Sink SMTP local (aiosmtpd en 127.0.0.1:8025) para probar notificaciones |
+| `nix run .#mock-dspace` | Mock de DSpace para el ensayo general manual (:8080) |
+| `nix run .#test-ficha-deposito` | Ensayo general de UN comando (flujo completo S8: ficha → buzón → userscript → constancia) |
 | `nix flake check` | Verificación completa (tests + lint del flake) |
 | `pytest tests/ -v` | Tests directos (requiere `nix develop` activo) |
 | `uvicorn validator.api:app --reload` | API directa (requiere `nix develop` activo) |
@@ -327,11 +335,12 @@ menos de 50 caracteres, la rasteriza y aplica Tesseract (spa+eng). Si
 - `error`: bloquea la entrega (semáforo rojo).
 - `warning`: no bloquea, pero se muestra en el reporte.
 
-3 reglas bajadas de `error` a `warning` por desvío documentado entre manual y plantillas oficiales.
-> Los conteos declarados aquí (49 reglas, doc bueno 0 fallos, suite 547 tests) se
-> mantienen sincronizados con `tests/_mutations.py` y `docs/diseno/00_indice_diseno.md`.
+4 reglas ajustadas de `error` a `warning` por desvío documentado entre manual y plantillas oficiales (2 de ellas por nuevas capturas de la ficha de depósito que no aplican al doc bueno estándar).
+> Los conteos declarados aquí (49 reglas, doc bueno 0 fallos) se mantienen
+> sincronizados con `tests/_mutations.py` y `docs/diseno/00_indice_diseno.md`.
 > Del doc bueno se evalúan 43 de 49: las 6 reglas de otros tipos de documento
-> (las 2 estructuras alternativas, los mínimos de referencias/anexos de
+> (2 de ellas por nuevas capturas de la ficha de depósito que no aplican al doc bueno estándar, diseño 17)
+> más (las 2 estructuras alternativas, los mínimos de referencias/anexos de
 > cualitativo y revisión, y la carátula del Proyecto) no le aplican porque el
 > documento es un plan cuantitativo.
 
@@ -372,7 +381,7 @@ Cada integrante tiene su área para evitar conflictos de merge:
 
 | Integrante | Puede modificar | No debe modificar (sin coordinar) |
 |------------|-----------------|-----------------------------------|
-| Integrante 1 (Backend) | `api.py`, `api_models.py`, `notificacion.py`, `dspace.py`, `scripts/verificar_secretos.py`, `tests/`, `docs/CONTRATO_API.md`, `docs/FLUJO_API.md` | `extractor.py`, `checks.py` (coordina con Int3) |
+| Integrante 1 (Backend) | `api.py`, `api_models.py`, `buzon.py`, `constancia.py`, `notificacion.py`, `dspace.py`, `tools/dspace-fill/`, `scripts/verificar_secretos.py`, `tests/`, `docs/CONTRATO_API.md`, `docs/FLUJO_API.md` | `extractor.py`, `checks.py` (coordina con Int3) |
 | Integrante 2 (Frontend) | `frontend/` (React), `docs/` | `validator/` (coordina con Int1) |
 | Integrante 3 (Motor) | `engine.py`, `models.py`, `extractor.py`, `checks.py`, `prompts.py`, `tokenizer.py`, `analizadores.py`, `automata.py`, `compilador.py`, `dsl_check.py`, `llm.py`, `asistente.py`, YAML de reglas | `api.py`, `api_models.py` (coordina con Int1) |
 
@@ -408,6 +417,7 @@ vistobueno/
 ├── unt_format_rules_schema.yaml       # 44 reglas de formato (fuente de verdad legacy)
 ├── reglas_unt.yaml                    # Reglas en formato DSL (49 reglas)
 ├── reglas_unt_pendientes.yaml         # 5 estructuras pendientes, sin probar
+├── reglas_ficha.yaml                  # 7 capturas de la ficha de depósito (diseño 17)
 ├── reglas_dsl_ejemplo.yaml            # Ejemplo de reglas DSL
 ├── validator/
 │   ├── __init__.py                    # Docstring del paquete
@@ -421,6 +431,8 @@ vistobueno/
 │   ├── exportador.py                  # Exporta reportes a Markdown y PDF
 │   ├── notificacion.py                # Notificación de observaciones por SMTP (Actividad 6)
 │   ├── dspace.py                       # Depósito del .docx validado en DSpace (Actividad 10)
+│   ├── buzon.py                       # Buzón de una ranura: ficha pendiente + depósito reportado (TTL 1h)
+│   ├── constancia.py                  # Constancia del Modelo B por autor + fila TSV del registro
 │   ├── api.py                         # FastAPI endpoint POST /validar
 │   ├── api_models.py                  # Pydantic DTOs (ValidarResponse, etc.)
 │   ├── cli.py                         # CLI de referencia
@@ -440,6 +452,8 @@ vistobueno/
 │   ├── test_exportador.py             # Tests de exportación a Markdown/PDF
 │   ├── test_notificacion.py           # Tests unitarios + E2E de notificación (sink aiosmtpd)
 │   ├── test_dspace.py                 # Tests del módulo de depósito (stub HAL) + guardia de contrato
+│   ├── test_api_buzon.py              # Tests del buzón: TTL, última-gana, invariante sin CORS
+│   ├── test_constancia.py             # Tests de la constancia: golden files, multi-autor, 422/500
 │   ├── test_llm.py                    # Tests del cliente LLM (Stub + MockTransport)
 │   ├── test_asistente.py              # Tests del asistente IA (Funcionalidad 2)
 │   ├── test_verificar_secretos.py     # Tests del escáner de secretos SMTP
@@ -469,7 +483,10 @@ vistobueno/
 │   ├── migrar_legacy_a_dsl.py         # Migra YAML legacy → DSL
 │   ├── ocr_pdfs.py                    # OCR de reglamentos escaneados
 │   ├── verificar_secretos.py          # Escáner de credenciales SMTP (pre-commit + CI)
-│   └── generate_openapi.py            # Regenerar especificación OpenAPI
+│   ├── generate_openapi.py            # Regenerar especificación OpenAPI
+│   └── e2e_ficha_deposito.sh          # Ensayo general de un comando (flujo ficha → constancia)
+├── tools/
+│   └── dspace-fill/                   # Userscript del formulario de depósito (núcleo puro + dist + mock-dspace + ensayo e2e)
 ├── frontend/                          # React + Vite (en desarrollo)
 │   ├── src/
 │   │   ├── App.jsx
@@ -565,6 +582,14 @@ Al revisar un PR, verificar que:
 
 ---
 
+## Próximos pasos propuestos
+
+1. **Int1**: auth/rate-limit en `POST /validar` (documentar/limitar) y arreglar el test de paridad vacuo.
+2. **Int3**: cachear el DSL compilado — *descartado vía medición (1.5%); si hay perfilado futuro, atacar la extracción/evaluación (~98.5%)*. **`load_rules` con manejo de errores: resuelto** (PR actual).
+3. **Int2**: `AbortController` en el upload y foco del dropzone bajo `StrictMode`.
+
+---
+
 ## Evidencia para pasantía
 
 Cada integrante debe poder demostrar:
@@ -575,3 +600,14 @@ Cada integrante debe poder demostrar:
 | Estructura de Datos | Modelos de datos, serialización, mapeo motor→API |
 | Redes de Computadoras I | HTTP, REST, multipart, códigos de estado |
 | Ingeniería de Software I | Documentación técnica, contratos de API |
+
+---
+
+### Arquitectura complementaria (después de la Semana 9)
+
+| Módulo | Archivo | Responsabilidad |
+|--------|---------|-----------------|
+| **Reglas ficha depósito** | `reglas_ficha.yaml` | 7 capturas para el formulario de DSpace (diseño 17): `dc.title`, `dc.contributor.author`, `dc.contributor.advisor`, `dc.description.abstract`, `dc.subject`, `dc.date.issued`, `escuela`. `renati.juror` no se captura fiable. |
+| **Buzón de ficha** | `validator/buzon.py` | Módulo buzón de ficha (una ranura, TTL 1h), `publicar_ficha`/`leer_ficha`; forma parte del handover v1.7.0. |
+| **Constancias** | `validator/constancia.py` | Genera constancias por autor usando plantilla oficial (Modelo B) y MERGEFIELDs a texto plano; forma parte del endpoint `POST /constancia`. |
+

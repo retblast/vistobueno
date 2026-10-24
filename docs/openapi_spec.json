@@ -3,7 +3,7 @@
   "info": {
     "title": "VistoBueno API",
     "description": "API de validación automática de formato de tesis — UNT FECyC",
-    "version": "1.6.0"
+    "version": "1.7.0"
   },
   "paths": {
     "/validar": {
@@ -63,6 +63,216 @@
           }
         }
       }
+    },
+    "/ficha-pendiente": {
+      "get": {
+        "summary": "Leer la ficha pendiente del buzón",
+        "description": "El userscript lee aquí la ficha a rellenar en el formulario oficial de DSpace. 404 cuando no hay ficha o la publicada expiró (TTL de 1 hora).",
+        "operationId": "leer_ficha_pendiente_ficha_pendiente_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FichaDeposito"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin ficha pendiente: vacía o expirada"
+          }
+        }
+      },
+      "post": {
+        "summary": "Publicar la ficha completada en el buzón",
+        "description": "La SPA publica la ficha (extraídos + manuales) para que el userscript de depósito la lea desde el navegador del operador. El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo reemplaza la ficha anterior ('última gana').",
+        "operationId": "publicar_ficha_pendiente_ficha_pendiente_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FichaDeposito"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/deposito": {
+      "get": {
+        "summary": "Leer el depósito reportado",
+        "description": "La SPA sondea aquí mientras espera el handle del ítem. 404 cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, la SPA debe cotejar el `titulo` reportado con la ficha en vuelo antes de usar el handle.",
+        "operationId": "leer_deposito_reportado_deposito_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositoRecibido"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Sin depósito reportado: vacío o expirado"
+          }
+        }
+      },
+      "post": {
+        "summary": "Reportar un depósito realizado",
+        "description": "El userscript reporta el depósito desde la página del ítem archivado: handle del ítem, título y el timestamp del clic en Depositar. La SPA lo recoge sondeando GET /deposito y arma la constancia y la fila del registro.",
+        "operationId": "reportar_deposito_deposito_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepositoRecibido"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/constancia": {
+      "post": {
+        "summary": "Descargar la constancia de UN autor (Modelo B lleno, o paquete zip)",
+        "description": "Genera la constancia de depósito del Modelo B con los MERGEFIELD reemplazados por los valores de la ficha. Una constancia POR AUTOR: la SPA descarga una por cada estudiante iterando `indice_autor`. Devuelve el .docx como descarga binaria. Con `formato=zip` devuelve en su lugar un paquete con la constancia .docx y la fila del registro del autor como .csv (hallazgo 11: \"POST /constancia podría incluirlo\").",
+        "operationId": "descargar_constancia_constancia_post",
+        "parameters": [
+          {
+            "name": "formato",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "docx",
+                "zip"
+              ],
+              "type": "string",
+              "description": "docx: la constancia (retrocompatible). zip: constancia + registro.csv del autor en un solo paquete (hallazgo 11: 'la constancia podría incluirlo')",
+              "default": "docx",
+              "title": "Formato"
+            },
+            "description": "docx: la constancia (retrocompatible). zip: constancia + registro.csv del autor en un solo paquete (hallazgo 11: 'la constancia podría incluirlo')"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstanciaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Constancia .docx (o paquete .zip con formato=zip)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Timestamp inválido, falta un dato de la ficha o índice fuera de rango"
+          },
+          "500": {
+            "description": "Firma o plantilla sin configurar en el servidor"
+          }
+        }
+      }
+    },
+    "/fila-registro": {
+      "post": {
+        "summary": "Generar las filas del registro (TSV, una por autor)",
+        "description": "Devuelve las filas listas para pegar en el registro oficial de la biblioteca (XLSX): una por autor, en el orden exacto de columnas. La app JAMÁS escribe el registro oficial: el operador pega la fila. Con `formato` en `tsv`, `csv` o `xlsx` devuelve en su lugar un ARCHIVO descargable listo para abrir en Excel/LibreOffice (hallazgo 11 de la revisión del PR #55): elimina los errores de pegado (encoding, tabs perdidos, columnas desalineadas).",
+        "operationId": "generar_fila_registro_fila_registro_post",
+        "parameters": [
+          {
+            "name": "formato",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "json",
+                "tsv",
+                "csv",
+                "xlsx"
+              ],
+              "type": "string",
+              "description": "json: la lista TSV (retrocompatible). tsv/csv/xlsx: archivo descargable",
+              "default": "json",
+              "title": "Formato"
+            },
+            "description": "json: la lista TSV (retrocompatible). tsv/csv/xlsx: archivo descargable"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilaRegistroRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de filas TSV (json) o archivo descargable (tsv/csv/xlsx)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilasRegistroResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Timestamp inválido, falta un dato de la ficha o formato desconocido"
+          },
+          "500": {
+            "description": "Firma sin configurar en el servidor"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -85,7 +295,10 @@
               }
             ],
             "title": "Correo",
-            "description": "Correo electrónico del estudiante (opcional). Destinatario de las observaciones cuando se solicita el envío (campo `notificar`)."
+            "description": "Correo electrónico del estudiante (opcional). Destinatario de las observaciones cuando se solicita el envío (campo `notificar`).",
+            "examples": [
+              ""
+            ]
           },
           "notificar": {
             "type": "boolean",
@@ -109,7 +322,10 @@
               }
             ],
             "title": "Titulo",
-            "description": "Título del trabajo: metadato dc.title del depósito (opcional)"
+            "description": "Título del trabajo: metadato dc.title del depósito (opcional)",
+            "examples": [
+              ""
+            ]
           },
           "autores": {
             "anyOf": [
@@ -121,7 +337,10 @@
               }
             ],
             "title": "Autores",
-            "description": "Autor(es), separados por ';' o saltos de línea: metadato dc.contributor.author del depósito (opcional)"
+            "description": "Autor(es), separados por ';' o saltos de línea: metadato dc.contributor.author del depósito (opcional)",
+            "examples": [
+              ""
+            ]
           },
           "asesor": {
             "anyOf": [
@@ -133,7 +352,10 @@
               }
             ],
             "title": "Asesor",
-            "description": "Asesor(a): metadato dc.contributor.advisor del depósito (opcional)"
+            "description": "Asesor(a): metadato dc.contributor.advisor del depósito (opcional)",
+            "examples": [
+              ""
+            ]
           },
           "resumen": {
             "anyOf": [
@@ -145,7 +367,10 @@
               }
             ],
             "title": "Resumen",
-            "description": "Resumen: metadato dc.description.abstract del depósito (opcional)"
+            "description": "Resumen: metadato dc.description.abstract del depósito (opcional)",
+            "examples": [
+              ""
+            ]
           },
           "palabras_clave": {
             "anyOf": [
@@ -157,7 +382,10 @@
               }
             ],
             "title": "Palabras Clave",
-            "description": "Palabras clave, separadas por ';' o ',': metadato dc.subject del depósito (opcional)"
+            "description": "Palabras clave, separadas por ';' o ',': metadato dc.subject del depósito (opcional)",
+            "examples": [
+              ""
+            ]
           }
         },
         "type": "object",
@@ -165,6 +393,123 @@
           "archivo"
         ],
         "title": "Body_validar_validar_post"
+      },
+      "CampoExtraidoFicha": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo",
+            "description": "Clave acordada (dc.title, escuela, …)"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor",
+            "description": "Texto completo o lista de textos (autores, palabras clave); None si no detectado"
+          },
+          "pagina": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pagina",
+            "description": "Página de origen en el DOCX, si el motor la conoce"
+          },
+          "detectado": {
+            "type": "boolean",
+            "title": "Detectado",
+            "description": "True si el motor encontró el elemento",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo"
+        ],
+        "title": "CampoExtraidoFicha",
+        "description": "Valor extraído del DOCX por el motor (ficha de depósito, v1.7.0).\n\nHasta que el motor publique sus extracciones (handover\nHANDOVER_MOTOR_FICHA_DEPOSITO), todos los campos extraídos viajan con\n`detectado=false` y `valor=null`; la forma del contrato es estable."
+      },
+      "CampoManualFicha": {
+        "properties": {
+          "campo": {
+            "type": "string",
+            "title": "Campo",
+            "description": "Clave acordada (matricula, renati.author.dni, …)"
+          },
+          "valor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valor",
+            "description": "Valor tecleado por el operador; None hasta que lo llene. `matricula` y `renati.author.dni` aceptan una LISTA alineada por posición con los autores (una por estudiante): las tesis con dos autores generan dos constancias y dos filas"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campo"
+        ],
+        "title": "CampoManualFicha",
+        "description": "Campo que el operador teclea en la pantalla de ficha (v1.7.0).\n\nMatrícula, DNI del autor/asesor y ORCID no salen del DOCX: el\noperador los escribe UNA vez aquí y fluyen al formulario de DSpace\n(vía userscript), a la constancia y a la fila del registro."
+      },
+      "ConstanciaRequest": {
+        "properties": {
+          "ficha": {
+            "$ref": "#/components/schemas/FichaDeposito",
+            "description": "La ficha completada por el operador (extraídos corregidos + manuales llenos)"
+          },
+          "handle": {
+            "type": "string",
+            "title": "Handle",
+            "description": "URI del ítem depositado (https://hdl.handle.net/…)"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "description": "Momento del clic en Depositar (ISO 8601), reportado por el userscript"
+          },
+          "indice_autor": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Indice Autor",
+            "description": "Índice (0-based) del autor cuya constancia se descarga",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "ficha",
+          "handle",
+          "timestamp"
+        ],
+        "title": "ConstanciaRequest",
+        "description": "Solicitud de UNA constancia (Modelo B) en particular (v1.7.0).\n\nUna constancia por autor: la SPA descarga una por cada estudiante,\niterando `indice_autor` sobre la lista de autores de la ficha."
       },
       "DepositoAPI": {
         "properties": {
@@ -192,6 +537,39 @@
         "title": "DepositoAPI",
         "description": "Estado del depósito del documento en DSpace (Actividad 10).\n\nMisma forma que NotificacionAPI: `estado` describe qué pasó con el\ndepósito para que el operador pueda informar al estudiante o reintentar.\nCon \"enviado\", el `detalle` recuerda que el ítem queda en la cola de\naprobación de la sede; con \"fallo\" o \"deshabilitado\", el `detalle`\ntrae el motivo técnico o la nota de configuración."
       },
+      "DepositoRecibido": {
+        "properties": {
+          "handle": {
+            "type": "string",
+            "title": "Handle",
+            "description": "URI del ítem (https://hdl.handle.net/…)"
+          },
+          "titulo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Titulo",
+            "description": "Título de la tesis depositada; la SPA lo coteja con la ficha en vuelo"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "description": "Momento del clic en Depositar (ISO 8601), capturado por el userscript"
+          }
+        },
+        "type": "object",
+        "required": [
+          "handle",
+          "timestamp"
+        ],
+        "title": "DepositoRecibido",
+        "description": "Depósito reportado por el userscript desde la página del ítem (v1.7.0).\n\nEl userscript detecta el handle del ítem archivado y lo reporta al\nbuzón; la SPA lo recoge sondeando GET /deposito y arma la constancia\ny la fila del registro. El `titulo` permite a la SPA confirmar que\nel handle corresponde a la ficha en vuelo (por seguridad, la\ncoincidencia se verifica contra el título de la ficha preparada)."
+      },
       "EstadoDepositoAPI": {
         "type": "string",
         "enum": [
@@ -216,6 +594,90 @@
         ],
         "title": "EstadoNotificacionAPI",
         "description": "Estado del envío del correo de observaciones al estudiante.\n\nLa herramienta es de uso interno (personal del repositorio): el estado\ndescribe qué pasó con el envío para que el operador pueda informar al\nestudiante o reintentar manualmente. El envío es opt-in por solicitud\n(campo `notificar`): el operador decide cuándo el reporte está listo\npara llegarle al estudiante."
+      },
+      "FichaDeposito": {
+        "properties": {
+          "extraidos": {
+            "items": {
+              "$ref": "#/components/schemas/CampoExtraidoFicha"
+            },
+            "type": "array",
+            "title": "Extraidos",
+            "description": "Valores extraídos del DOCX por el motor (título, autores, asesor, resumen, palabras clave, año, escuela, jurado)"
+          },
+          "manuales": {
+            "items": {
+              "$ref": "#/components/schemas/CampoManualFicha"
+            },
+            "type": "array",
+            "title": "Manuales",
+            "description": "Campos que el operador teclea (matrícula, DNI del autor, DNI del asesor, ORCID del asesor)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "extraidos",
+          "manuales"
+        ],
+        "title": "FichaDeposito",
+        "description": "Ficha de depósito: valores detectados + campos manuales (v1.7.0).\n\nLa SPA la recibe en la respuesta de POST /validar (solo con semáforo\nverde), el operador la corrige y completa, y viaja intacta por el\nbuzón hasta el userscript que rellena el formulario oficial."
+      },
+      "FilaRegistroRequest": {
+        "properties": {
+          "ficha": {
+            "$ref": "#/components/schemas/FichaDeposito",
+            "description": "La ficha completada por el operador (extraídos corregidos + manuales llenos)"
+          },
+          "handle": {
+            "type": "string",
+            "title": "Handle",
+            "description": "URI del ítem depositado (https://hdl.handle.net/…)"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "description": "Momento del clic en Depositar (ISO 8601), reportado por el userscript"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ficha",
+          "handle",
+          "timestamp"
+        ],
+        "title": "FilaRegistroRequest",
+        "description": "Solicitud de la fila de registro (v1.7.0).\n\nLa SPA la envía cuando el buzón reporta el depósito (handle +\ntimestamp del clic en Depositar). El timestamp alimenta DD/MM/AA,\nHORA, AÑO y la fecha del documento, igual que en el registro\noficial de la biblioteca."
+      },
+      "FilasRegistroResponse": {
+        "properties": {
+          "filas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Filas",
+            "description": "Filas TSV (una por autor) con los valores separados por tabuladores"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filas"
+        ],
+        "title": "FilasRegistroResponse",
+        "description": "Filas TSV listas para pegar en el registro oficial (v1.7.0).\n\nUna fila por autor, en el orden exacto de columnas del registro\n(N°, TESIS/TSP, BACHILLER/LICENCIADO, N° MATRIC., DD, MM, AA, HORA,\nDIRECCION URL, FIRMA, FECHA DEL DOC., ESCUELAS, AÑO). La columna N°\nva vacía: la numeración es del registro de la biblioteca."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
       },
       "MetadatosValidacion": {
         "properties": {
@@ -502,6 +964,17 @@
             "$ref": "#/components/schemas/DepositoAPI",
             "description": "Estado del depósito del documento en el repositorio institucional DSpace (actividad 10). Opt-in del operador (campo `depositar`): solo se intenta con semáforo verde y configuración completa en el servidor. El ítem queda en la cola de aprobación de la sede, no se publica directo."
           },
+          "ficha_deposito": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FichaDeposito"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ficha de depósito detectada (v1.7.0). SOLO materializa con semáforo \"verde\": en cualquier otro caso es null. Contiene los valores extraídos del DOCX (listos para que el operador los corrija) y los campos manuales que el operador debe llenar (matrícula, DNI, ORCID)."
+          },
           "resumen": {
             "$ref": "#/components/schemas/ResumenValidacion",
             "description": "Resumen cuantitativo"
@@ -577,6 +1050,46 @@
             "semaforo": "verde"
           }
         ]
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   }

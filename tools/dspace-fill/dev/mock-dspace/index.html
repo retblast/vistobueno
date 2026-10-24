@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<title>Repositorio UNT (MOCK — ensayo general)</title>
+	<style>
+		body { font: 15px/1.5 sans-serif; max-width: 720px; margin: 40px auto; padding: 0 20px; }
+		.pasos { background: #f0f4f8; border: 1px solid #c0d0e0; border-radius: 8px; padding: 16px 24px; margin: 16px 0; }
+		.pasos ol { padding-left: 20px; }
+		.pasos li { margin: 6px 0; }
+		.boton { display: inline-block; background: #28a745; color: #fff; text-decoration: none;
+			padding: 12px 24px; border-radius: 8px; font-size: 16px; margin: 8px 8px 8px 0; }
+		.boton.secundario { background: #0069c0; }
+		code { background: #e8ecf0; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+	</style>
+</head>
+<body>
+	<h1>Repositorio UNT — MOCK del ensayo general</h1>
+	<p>
+		Imitación local de DSpace para ejercitar el userscript de VistoBueno
+		sin Tampermonkey y sin tocar la instancia real. Todo corre sobre la
+		API real de VistoBueno (:8000) a través del proxy del mock.
+	</p>
+
+	<div class="pasos">
+		<strong>Flujo de la mano (sin terminal):</strong>
+		<ol>
+			<li>Abre el <a href="/mock/submit">formulario de envío</a></li>
+			<li>Pulsa <strong>"Publicar ficha de prueba"</strong> (el botón azul)</li>
+			<li>El formulario se auto-rellena con el toast de resumen</li>
+			<li>Revisa: título, autor, DNI, año, <em>Acceso abierto</em></li>
+			<li>Marca <em>Confirmo la licencia</em> y pulsa <strong>Depositar</strong></li>
+			<li>En el ítem, el handle se reporta al buzón automáticamente</li>
+			<li>El papeleo se genera con <code>nix run .#test-ficha-deposito</code>,
+			    o con la API real (<code>POST /constancia</code> y
+			    <code>POST /fila-registro</code>)</li>
+		</ol>
+		<p>
+			La versión automatizada (todo el flujo de punta a punta con
+			verificaciones) sigue siendo
+			<code>nix run .#test-ficha-deposito</code>.
+			Checklist completo: <code>tools/dspace-fill/dev/mock-dspace/README.md</code>.
+		</p>
+	</div>
+
+	<p>
+		<a class="boton" href="/mock/submit">Nuevo envío (formulario)</a>
+		<a class="boton secundario" href="/mock/item">Ver ítem archivado</a>
+		<a class="boton secundario" href="http://127.0.0.1:8000/docs" target="_blank">Swagger de la API real ↗</a>
+	</p>
+</body>
+</html>

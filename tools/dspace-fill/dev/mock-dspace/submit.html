@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<title>Editar envío (MOCK)</title>
+</head>
+<body>
+	<h1>Nuevo envío (MOCK)</h1>
+
+	<!-- Realismo del envío real: el operador publica la ficha desde
+	     VistoBueno y el userscript la lee del buzón. Aquí, el botón
+	     hace el "Preparar depósito" completo: publica una ficha de
+	     prueba (con manuales) vía el proxy del buzón. El userscript
+	     la recoge y auto-rellena (o pulsa su botón flotante verde). -->
+	<div id="panel-publicar" style="background:#e8f4fd;border:1px solid #b0d4f1;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+		<strong>Ficha del buzón</strong>
+		<p id="estado-ficha" style="margin:6px 0;font-size:14px;color:#555">
+			Consultando el buzón…
+		</p>
+		<button type="button" id="btn-publicar-ficha"
+			style="background:#0069c0;color:#fff;border:none;padding:10px 20px;border-radius:8px;font:14px sans-serif;cursor:pointer">
+			Publicar ficha de prueba
+		</button>
+		<button type="button" id="btn-recargar"
+			style="background:#6c757d;color:#fff;border:none;padding:10px 20px;border-radius:8px;font:14px sans-serif;cursor:pointer;margin-left:8px">
+			Consultar de nuevo
+		</button>
+	</div>
+
+	<!-- El shim primero: define GM_* para que el userscript corra como
+	     script común y use el proxy same-origin del servidor del mock. -->
+	<script src="/shim-gm.js"></script>
+	<script src="/userscript.js"></script>
+
+	<form id="editSubmissionForm">
+		<p><label>Título<br><input type="text" name="dc.title" id="10_array-0-dc_title"></label></p>
+
+		<div id="grupo-autores">
+			<label>Autores<br><input type="text" name="dc.contributor.author" id="11_array-0-dc_contributor_author"></label>
+			<button type="button" class="add-button" data-grupo="grupo-autores" data-plantilla="input[name='dc.contributor.author']">+ Agregar autor</button>
+		</div>
+
+		<p><label>Asesor<br><input type="text" name="dc.contributor.advisor" id="15_array-0-dc_contributor_advisor"></label></p>
+		<p><label>Resumen<br><textarea name="dc.description.abstract" id="37_array-0-dc_description_abstract"></textarea></label></p>
+
+		<div id="grupo-palabras">
+			<label>Palabras clave<br><input type="text" name="dc.subject" id="43_array-0-dc_subject"></label>
+			<button type="button" class="add-button" data-grupo="grupo-palabras" data-plantilla="input[name='dc.subject']">+ Agregar palabra clave</button>
+		</div>
+
+		<div id="grupo-dni-autor">
+			<label>DNI autor: tipo<br>
+				<select name="renati.author_QUALDROP_METADATA" id="13_array-0-renati_author_QUALDROP_METADATA">
+					<option value=""></option>
+					<option value="0: renati.author.dni">DNI</option>
+					<option value="1: renati.author.cext">CE-Carné de extranjería</option>
+					<option value="2: renati.author.pasaporte">Pasaporte</option>
+					<option value="3: renati.author.cedula">Cédula de identidad</option>
+				</select>
+			</label>
+			<label>número<br><input type="text" name="renati.author_QUALDROP_VALUE" id="13_array-0-renati_author_QUALDROP_VALUE"></label>
+			<button type="button" class="add-button" data-grupo="grupo-dni-autor" data-plantilla="select[name='renati.author_QUALDROP_METADATA'],input[name='renati.author_QUALDROP_VALUE']">+ Agregar DNI</button>
+		</div>
+
+		<p><label>DNI asesor: tipo<br>
+			<select name="renati.advisor_QUALDROP_METADATA" id="17_array-0-renati_advisor_QUALDROP_METADATA">
+				<option value=""></option>
+				<option value="0: renati.advisor.dni">DNI</option>
+				<option value="1: renati.advisor.cext">CE-Carné de extranjería</option>
+			</select></label>
+			<label>número<br><input type="text" name="renati.advisor_QUALDROP_VALUE" id="17_array-0-renati_advisor_QUALDROP_VALUE"></label>
+		</p>
+		<p><label>ORCID asesor<br><input type="text" name="renati.advisor.orcid" id="19_array-0-renati_advisor_orcid"></label></p>
+		<p><label>Año<br><input type="text" id="dc_date_issued_year" maxlength="4" placeholder="Año"></label></p>
+
+		<p><label>Nivel de acceso (combobox simulado)<br>
+			<input type="text" id="dc_rights" name="dc.rights" autocomplete="off"></label></p>
+		<ul id="combobox_dc_rights_listbox"></ul>
+
+		<!-- Realismo del envío real (hallazgo 7 de la revisión): el
+		     operador arrastra el .docx y marca "Confirmo la licencia"
+		     antes de Depositar. El userscript NO toca ninguno de los
+		     dos — son acciones del operador — pero el ensayo debe
+		     ensayar el gesto completo. -->
+		<p><label>Archivo .docx de la tesis<br><input type="file" id="bitstream" accept=".docx"></label></p>
+		<p>
+			<input type="checkbox" id="granted" name="granted" required>
+			<label for="granted">Confirmo la licencia</label>
+		</p>
+
+		<p>
+			<button type="button" id="deposit">Depositar</button>
+		</p>
+	</form>
+
+	<script>
+		// JS mínimo del mock (sin Angular): hace crecer las filas, simula
+		// el filtrado del combobox y navega al "ítem archivado".
+
+		// Botones "+": clonan la última fila del grupo y limpian los campos.
+		document.querySelectorAll(".add-button").forEach(function (boton) {
+			boton.addEventListener("click", function () {
+				const grupo = document.getElementById(boton.dataset.grupo);
+				const ultimo = grupo.querySelector(":scope > label:last-of-type");
+				const clon = ultimo.cloneNode(true);
+				clon.querySelectorAll("input,select,textarea").forEach(function (el) {
+					if (el.type !== "button") el.value = "";
+				});
+				// Re-etiquetar el id para no duplicar: se deja el name igual
+				// (así querySelectorAll junta todas las filas por name).
+				clon.querySelectorAll("[id]").forEach(function (el) {
+					el.id = el.id + "_" + Date.now();
+				});
+				ultimo.after(clon);
+			});
+		});
+
+		// Combobox: al tipear, "Angular" renderiza las opciones un instante
+		// después (setTimeout), como en la instancia real.
+		const opcionesDerechos = [
+			"Acceso abierto",
+			"Acceso embargado",
+			"Acceso restringido",
+		];
+		document.getElementById("dc_rights").addEventListener("input", function (e) {
+			const listbox = document.getElementById("combobox_dc_rights_listbox");
+			listbox.innerHTML = "";
+			const texto = e.target.value.toLowerCase();
+			if (!texto) return;
+			setTimeout(function () {
+				listbox.innerHTML = "";
+				for (const etiqueta of opcionesDerechos) {
+					if (etiqueta.toLowerCase().includes(texto)) {
+						const opcion = document.createElement("button");
+						opcion.type = "button";
+						opcion.textContent = etiqueta;
+						opcion.addEventListener("click", function () {
+							document.getElementById("dc_rights").value = etiqueta;
+							listbox.innerHTML = "";
+						});
+						listbox.appendChild(opcion);
+					}
+				}
+			}, 100);
+		});
+
+		// Depositar: simula el fin del envío y salta al ítem archivado.
+		document.getElementById("deposit").addEventListener("click", function () {
+			window.location.href = "/mock/item";
+		});
+
+		// --- Botones de "comfy testing" (hallazgo 1 de la revisión) ---
+		// El operador de ensayo no usa terminal: estos botones hacen el
+		// trabajo que el checklist antes pedía por curl.
+
+		const FICHA_DEMO = {
+			extraidos: [
+				{ campo: "dc.title", valor: "Título del trabajo de investigación: Estrategias lúdicas para el desarrollo de la motricidad fina.", pagina: 1, detectado: true },
+				{ campo: "dc.contributor.author", valor: ["Ana María Pérez García"], pagina: 1, detectado: true },
+				{ campo: "dc.contributor.advisor", valor: "Mag. Carlos Alberto RODRÍGUEZ MIRANDA", pagina: 1, detectado: true },
+				{ campo: "dc.description.abstract", valor: "Resumen del trabajo de investigación para el ensayo general del flujo de ficha de depósito.", pagina: 3, detectado: true },
+				{ campo: "dc.subject", valor: ["motricidad fina", "estrategias lúdicas", "educación inicial"], pagina: 4, detectado: true },
+				{ campo: "dc.date.issued", valor: "2026", pagina: 1, detectado: true },
+				{ campo: "escuela", valor: "ESCUELA PROFESIONAL DE EDUCACIÓN INICIAL", pagina: 1, detectado: true },
+				{ campo: "renati.juror", valor: null, pagina: null, detectado: false },
+			],
+			manuales: [
+				{ campo: "matricula", valor: "10584011-18" },
+				{ campo: "renati.author.dni", valor: "12345678" },
+				{ campo: "renati.advisor.dni", valor: "11222333" },
+				{ campo: "renati.advisor.orcid", valor: "0000-0002-1825-0097" },
+			],
+		};
+
+		const estadoFicha = document.getElementById("estado-ficha");
+
+		async function consultarFicha() {
+			estadoFicha.textContent = "Consultando el buzón…";
+			try {
+				const r = await fetch("/api-proxy/ficha-pendiente");
+				if (r.status === 200) {
+					const ficha = await r.json();
+					const titulo = (ficha.extraidos || []).find(function (e) { return e.campo === "dc.title"; });
+					estadoFicha.innerHTML = "✅ <strong>Ficha en el buzón</strong> — \"" +
+						(titulo ? String(titulo.valor || "").slice(0, 60) : "?") + "…\" — el userscript la usará.";
+				} else if (r.status === 404) {
+					estadoFicha.innerHTML = "Sin ficha en el buzón (vacía o expirada). <strong>Publica una con el botón azul.</strong>";
+				} else {
+					estadoFicha.textContent = "El buzón respondió HTTP " + r.status + ".";
+				}
+			} catch (e) {
+				estadoFicha.textContent = "No se pudo consultar el buzón (¿está la API en :8000?).";
+			}
+		}
+
+		document.getElementById("btn-publicar-ficha").addEventListener("click", async function () {
+			estadoFicha.textContent = "Publicando ficha de prueba…";
+			try {
+				const r = await fetch("/api-proxy/ficha-pendiente", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(FICHA_DEMO),
+				});
+				if (r.status === 204) {
+					estadoFicha.innerHTML = "✅ <strong>Ficha publicada</strong> — pulsa el botón verde flotante " +
+						"<strong>\"Rellenar\"</strong> (arriba a la derecha) para llenar el formulario con esta ficha.";
+				} else if (r.status === 502) {
+					estadoFicha.textContent = "La API no responde en :8000 — ¿corrió nix run .#serve?";
+				} else {
+					estadoFicha.textContent = "Error al publicar: HTTP " + r.status + ".";
+				}
+			} catch (e) {
+				estadoFicha.textContent = "No se pudo publicar (¿está la API en :8000?).";
+			}
+		});
+
+		document.getElementById("btn-recargar").addEventListener("click", consultarFicha);
+		consultarFicha();
+	</script>
+</body>
+</html>

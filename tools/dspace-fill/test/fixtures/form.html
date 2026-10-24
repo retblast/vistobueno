@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!-- Fixture sintético del formulario tradicionalPeruOne: mismos name/id
+     que el DOM real (evidencia: captura del formulario oficial), sin PII
+     y sin Angular — se commitea para CI. El combobox de derechos se deja
+     SIN opciones para probar el fallo visible (el caso "el listbox no
+     coopera → el operador selecciona a mano"). -->
+<html>
+<body>
+	<form id="editSubmissionForm">
+		<input type="text" name="dc.title" id="10_array-0-dc_title">
+		<input type="text" name="dc.contributor.author" id="11_array-0-dc_contributor_author">
+		<input type="text" name="dc.contributor.advisor" id="15_array-0-dc_contributor_advisor">
+		<textarea name="dc.description.abstract" id="37_array-0-dc_description_abstract"></textarea>
+		<input type="text" name="dc.subject" id="43_array-0-dc_subject">
+
+		<select name="renati.author_QUALDROP_METADATA" id="13_array-0-renati_author_QUALDROP_METADATA">
+			<option value="0: renati.author.dni">DNI</option>
+			<option value="1: renati.author.cext">CE-Carné de extranjería</option>
+			<option value="2: renati.author.pasaporte">Pasaporte</option>
+			<option value="3: renati.author.cedula">Cédula de identidad</option>
+		</select>
+		<input type="text" name="renati.author_QUALDROP_VALUE" id="13_array-0-renati_author_QUALDROP_VALUE">
+
+		<select name="renati.advisor_QUALDROP_METADATA" id="17_array-0-renati_advisor_QUALDROP_METADATA">
+			<option value=""></option>
+			<option value="0: renati.advisor.dni">DNI</option>
+			<option value="1: renati.advisor.cext">CE-Carné de extranjería</option>
+		</select>
+		<input type="text" name="renati.advisor_QUALDROP_VALUE" id="17_array-0-renati_advisor_QUALDROP_VALUE">
+
+		<input type="text" name="renati.advisor.orcid" id="19_array-0-renati_advisor_orcid">
+
+		<input type="text" id="dc_date_issued_year" maxlength="4" placeholder="Año">
+
+		<!-- Combobox de nivel de acceso (bug dc.rights): input + listbox vacío -->
+		<input type="text" id="dc_rights" name="dc.rights">
+		<ul id="combobox_dc_rights_listbox"></ul>
+
+		<button type="button" id="deposit">Depositar</button>
+	</form>
+</body>
+</html>

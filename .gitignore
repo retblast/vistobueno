@@ -18,6 +18,17 @@ result
 .env.*
 *.eml
 
+# Sesiones de navegador exportadas: los .har traen cookies, tokens y
+# cuerpos POST completos (docs/DSPACE_API.md §11)
+*.har
+
 # IDE
 .vscode/
 .idea/
+
+# Documentos locales de trabajo (tesis, planes PPP, portafolio): no son
+# parte del código ni de la documentación del proyecto
+ESTRUCTURA_PORTAFOLIO.md
+Plan_PPP_*.docx
+TESIS_*.docx
+TESIS_*.pdf

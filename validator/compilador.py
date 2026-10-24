@@ -42,6 +42,7 @@ from .analizadores import (
     Analizador,
     AnalizadorCantidadPatron,
     AnalizadorConteoNodos,
+    AnalizadorExtraccion,
     AnalizadorHipervinculo,
     AnalizadorImagen,
     AnalizadorLista,
@@ -79,6 +80,7 @@ SECCIONES_ANALIZADOR = (
     "toc_apunta",
     "toc_numeracion",
     "deteccion_tipo",
+    "extraccion",
 )
 
 
@@ -438,6 +440,7 @@ _FABRICAS: dict[str, Callable[[dict], Analizador]] = {
     "toc_apunta": AnalizadorTocApunta,
     "toc_numeracion": AnalizadorTocNumeracion,
     "deteccion_tipo": DeteccionTipo,
+    "extraccion": AnalizadorExtraccion,
 }
 
 
@@ -616,7 +619,31 @@ class ReglaCompilada:
             location=ubicacion or None,
             fuente=self.rule.get("fuente", ""),
             cita=self.rule.get("cita", ""),
+            ficha=self._ficha(extracted),
+            captura=isinstance(self.rule.get("extraccion"), dict),
         )
+
+    def _ficha(self, extracted: ExtractedDocx) -> list[dict]:
+        """Datos de la ficha de depósito capturados por los analizadores.
+
+        Cada analizador puede haber dejado en `ficha` items con el nodo
+        objetivo; aquí se resuelve la página física y se normaliza al formato
+        del contrato (`campo`, `valor`, `pagina`, `detectado`). Las reglas sin
+        captura devuelven una lista vacía.
+        """
+        capturado: list[dict] = []
+        for an in self.analizadores:
+            for item in getattr(an, "ficha", []):
+                nodo = item.get("nodo")
+                capturado.append(
+                    {
+                        "campo": item.get("campo", ""),
+                        "valor": item.get("valor"),
+                        "pagina": extracted.pagina_de(nodo) if nodo is not None else None,
+                        "detectado": True,
+                    }
+                )
+        return capturado
 
 
 # Los dos estados en que la detección NO pudo clasificar el documento. Son

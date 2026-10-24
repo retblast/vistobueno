@@ -195,6 +195,132 @@ class DepositoAPI(BaseModel):
     )
 
 
+class CampoExtraidoFicha(BaseModel):
+    """Valor extraído del DOCX por el motor (ficha de depósito, v1.7.0).
+
+    Hasta que el motor publique sus extracciones (handover
+    HANDOVER_MOTOR_FICHA_DEPOSITO), todos los campos extraídos viajan con
+    `detectado=false` y `valor=null`; la forma del contrato es estable.
+    """
+
+    campo: str = Field(..., description="Clave acordada (dc.title, escuela, …)")
+    valor: str | list[str] | None = Field(
+        default=None,
+        description="Texto completo o lista de textos (autores, palabras clave); None si no detectado",
+    )
+    pagina: int | None = Field(
+        default=None, description="Página de origen en el DOCX, si el motor la conoce"
+    )
+    detectado: bool = Field(default=False, description="True si el motor encontró el elemento")
+
+
+class CampoManualFicha(BaseModel):
+    """Campo que el operador teclea en la pantalla de ficha (v1.7.0).
+
+    Matrícula, DNI del autor/asesor y ORCID no salen del DOCX: el
+    operador los escribe UNA vez aquí y fluyen al formulario de DSpace
+    (vía userscript), a la constancia y a la fila del registro.
+    """
+
+    campo: str = Field(..., description="Clave acordada (matricula, renati.author.dni, …)")
+    valor: str | list[str] | None = Field(
+        default=None,
+        description=(
+            "Valor tecleado por el operador; None hasta que lo llene. "
+            "`matricula` y `renati.author.dni` aceptan una LISTA alineada "
+            "por posición con los autores (una por estudiante): las tesis "
+            "con dos autores generan dos constancias y dos filas"
+        ),
+    )
+
+
+class FichaDeposito(BaseModel):
+    """Ficha de depósito: valores detectados + campos manuales (v1.7.0).
+
+    La SPA la recibe en la respuesta de POST /validar (solo con semáforo
+    verde), el operador la corrige y completa, y viaja intacta por el
+    buzón hasta el userscript que rellena el formulario oficial.
+    """
+
+    extraidos: list[CampoExtraidoFicha] = Field(
+        ...,
+        description="Valores extraídos del DOCX por el motor (título, autores, asesor, resumen, palabras clave, año, escuela, jurado)",
+    )
+    manuales: list[CampoManualFicha] = Field(
+        ...,
+        description="Campos que el operador teclea (matrícula, DNI del autor, DNI del asesor, ORCID del asesor)",
+    )
+
+
+class DepositoRecibido(BaseModel):
+    """Depósito reportado por el userscript desde la página del ítem (v1.7.0).
+
+    El userscript detecta el handle del ítem archivado y lo reporta al
+    buzón; la SPA lo recoge sondeando GET /deposito y arma la constancia
+    y la fila del registro. El `titulo` permite a la SPA confirmar que
+    el handle corresponde a la ficha en vuelo (por seguridad, la
+    coincidencia se verifica contra el título de la ficha preparada).
+    """
+
+    handle: str = Field(..., description="URI del ítem (https://hdl.handle.net/…)")
+    titulo: str | None = Field(
+        default=None,
+        description="Título de la tesis depositada; la SPA lo coteja con la ficha en vuelo",
+    )
+    timestamp: str = Field(
+        ...,
+        description="Momento del clic en Depositar (ISO 8601), capturado por el userscript",
+    )
+
+
+class FilaRegistroRequest(BaseModel):
+    """Solicitud de la fila de registro (v1.7.0).
+
+    La SPA la envía cuando el buzón reporta el depósito (handle +
+    timestamp del clic en Depositar). El timestamp alimenta DD/MM/AA,
+    HORA, AÑO y la fecha del documento, igual que en el registro
+    oficial de la biblioteca.
+    """
+
+    ficha: FichaDeposito = Field(
+        ...,
+        description="La ficha completada por el operador (extraídos corregidos + manuales llenos)",
+    )
+    handle: str = Field(..., description="URI del ítem depositado (https://hdl.handle.net/…)")
+    timestamp: str = Field(
+        ...,
+        description="Momento del clic en Depositar (ISO 8601), reportado por el userscript",
+    )
+
+
+class ConstanciaRequest(FilaRegistroRequest):
+    """Solicitud de UNA constancia (Modelo B) en particular (v1.7.0).
+
+    Una constancia por autor: la SPA descarga una por cada estudiante,
+    iterando `indice_autor` sobre la lista de autores de la ficha.
+    """
+
+    indice_autor: int = Field(
+        default=0,
+        ge=0,
+        description="Índice (0-based) del autor cuya constancia se descarga",
+    )
+
+
+class FilasRegistroResponse(BaseModel):
+    """Filas TSV listas para pegar en el registro oficial (v1.7.0).
+
+    Una fila por autor, en el orden exacto de columnas del registro
+    (N°, TESIS/TSP, BACHILLER/LICENCIADO, N° MATRIC., DD, MM, AA, HORA,
+    DIRECCION URL, FIRMA, FECHA DEL DOC., ESCUELAS, AÑO). La columna N°
+    va vacía: la numeración es del registro de la biblioteca.
+    """
+
+    filas: list[str] = Field(
+        ..., description="Filas TSV (una por autor) con los valores separados por tabuladores"
+    )
+
+
 class ValidarResponse(BaseModel):
     """Respuesta completa del endpoint POST /validar.
 
@@ -223,6 +349,16 @@ class ValidarResponse(BaseModel):
             "(campo `depositar`): solo se intenta con semáforo verde y "
             "configuración completa en el servidor. El ítem queda en la "
             "cola de aprobación de la sede, no se publica directo."
+        ),
+    )
+    ficha_deposito: FichaDeposito | None = Field(
+        default=None,
+        description=(
+            "Ficha de depósito detectada (v1.7.0). SOLO materializa con "
+            'semáforo "verde": en cualquier otro caso es null. Contiene los '
+            "valores extraídos del DOCX (listos para que el operador los "
+            "corrija) y los campos manuales que el operador debe llenar "
+            "(matrícula, DNI, ORCID)."
         ),
     )
     resumen: ResumenValidacion = Field(..., description="Resumen cuantitativo")

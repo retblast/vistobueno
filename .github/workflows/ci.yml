@@ -74,3 +74,22 @@ jobs:
       # lint. Aditivo: no toca ni relaja ningún paso existente.
       - name: Test frontend (vitest)
         run: nix develop --command sh -c "cd frontend && npm run test"
+
+      # Userscript del flujo de depósito (Semana 8): área con verificación
+      # propia, paso propio (AGENTS.md, "Protección del CI"). `npm test`
+      # reconstruye el dist y corre el núcleo con node --test (jsdom fijada
+      # por package-lock.json); el diff verifica que el dist commiteado no
+      # quede desincronizado (mismo criterio que openapi_spec.json).
+      # Aditivo: no toca ni relaja ningún paso existente.
+      - name: Test userscript dspace-fill (node --test + drift del dist)
+        run: |
+          nix develop --command sh -c "cd tools/dspace-fill && npm ci && npm test"
+          git diff --exit-code -- tools/dspace-fill/dist/ || (echo "Drift en dist/: reconstruir con 'npm run build' y commitear" && exit 1)
+
+      # Ensayo general del flujo de ficha de depósito (hallazgo 16b):
+      # la verificación más completa del PR — valida el doc bueno,
+      # publica la ficha, corre el userscript contra el mock, verifica
+      # el handle en el buzón y genera constancia + registro. El paso
+      # es aditivo: no toca ni relaja ningún paso existente.
+      - name: Ensayo general ficha-deposito (e2e jsdom)
+        run: nix run .#test-ficha-deposito

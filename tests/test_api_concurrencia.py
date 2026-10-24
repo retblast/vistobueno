@@ -56,7 +56,7 @@ class TestTrabajoBloqueanteFueraDelEventLoop:
         """validate_docx debe correr en un hilo de trabajo, no en el loop."""
         en_loop: dict = {}
 
-        def validate_docx_sonda(docx_path, rules_data):
+        def validate_docx_sonda(docx_path, rules_data, ficha_data=None):
             en_loop["motor"] = _corrio_en_event_loop()
             return []
 
@@ -75,7 +75,7 @@ class TestTrabajoBloqueanteFueraDelEventLoop:
         """enviar_notificacion (smtplib bloqueante) debe ir al threadpool."""
         en_loop: dict = {}
 
-        def validate_docx_sonda(docx_path, rules_data):
+        def validate_docx_sonda(docx_path, rules_data, ficha_data=None):
             en_loop["motor"] = _corrio_en_event_loop()
             return _resultado_rojo()
 

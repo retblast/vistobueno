@@ -12,6 +12,7 @@ Ambos formatos producen el mismo contrato: `List[RuleResult]`.
 """
 
 from collections.abc import Iterable
+from pathlib import Path
 
 import yaml
 
@@ -22,11 +23,52 @@ from .models import RuleResult, Severity
 
 
 def load_rules(yaml_path: str) -> dict:
-    with open(yaml_path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    """Carga el YAML de reglas con manejo de errores controlado.
+
+    Lanza `ValueError` con un mensaje claro si el archivo no existe, no es un
+    YAML válido o su contenido no es un diccionario (en lugar de una excepción
+    cruda de PyYAML o TypeError).
+    """
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        raise ValueError(f"No se encontró el archivo de reglas: {yaml_path}") from e
+    except yaml.YAMLError as e:
+        raise ValueError(
+            f"El archivo de reglas {yaml_path} tiene sintaxis YAML inválida: {e}"
+        ) from e
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"El archivo de reglas {yaml_path} no devolvió un diccionario "
+            f"(contenido: {type(data).__name__})"
+        )
+    return data
 
 
-def validate_docx(docx_path: str, rules_data: dict) -> list[RuleResult]:
+# Reglas de captura de la ficha de depósito (diseño 17). Viven en un archivo
+# aparte de `reglas_unt.yaml` a propósito: son LECTURA (nunca fallan, no
+# entran en el semáforo ni en el conteo de reglas verificables), así que no
+# comparten el invariante de mutaciones de `tests/_mutations.py`.
+REGLAS_FICHA_PATH = str(Path(__file__).resolve().parent.parent / "reglas_ficha.yaml")
+
+
+def load_ficha_rules(yaml_path: str = REGLAS_FICHA_PATH) -> dict:
+    """Carga el ruleset de captura de la ficha de depósito.
+
+    Devuelve `{}` si el archivo no existe: un despliegue sin ficha (p. ej.
+    la CLI de referencia) sigue funcionando y `validate_docx` no captura nada.
+    """
+    if not Path(yaml_path).exists():
+        return {}
+    return load_rules(yaml_path)
+
+
+def validate_docx(
+    docx_path: str,
+    rules_data: dict,
+    ficha_data: dict | None = None,
+) -> list[RuleResult]:
     """Ejecuta todas las reglas mecanizadas contra un DOCX.
 
     Si `rules_data` usa el formato DSL (`reglas`), delega en `CompilerDSL`.
@@ -35,15 +77,29 @@ def validate_docx(docx_path: str, rules_data: dict) -> list[RuleResult]:
     Las reglas sin mecanismo verificable (contenido semántico) se omiten
     en ambos formatos — no son verificables por estructura de archivo.
     Ver la sección `no_deterministas` del YAML.
+
+    `ficha_data` es el ruleset de captura de la ficha de depósito
+    (`reglas_ficha.yaml`, diseño 17). Si se pasa, se evalúa sobre el MISMO
+    DOCX ya extraído y sus resultados (siempre `passed=True`, read-only) se
+    anexan al final: `build_report` recoge sus capturas en el campo `ficha`.
+    Es `None` en la validación pura (CLI, tests de reglas), de modo que ese
+    camino queda idéntico al de siempre.
     """
     extracted = extract(docx_path)
 
     # Formato DSL (nuevo, declarativo con analizadores/autómatas).
     if "reglas" in rules_data:
-        return CompilerDSL().ejecutar(rules_data, extracted)
+        resultados = CompilerDSL().ejecutar(rules_data, extracted)
+    else:
+        # Formato legacy.
+        resultados = _validate_legacy(rules_data, extracted)
 
-    # Formato legacy.
-    return _validate_legacy(rules_data, extracted)
+    # Captura de la ficha de depósito: segunda pasada sobre el mismo árbol
+    # extraído. No valida ni altera el semáforo (sus resultados son passed).
+    if ficha_data is not None:
+        resultados = resultados + CompilerDSL().ejecutar(ficha_data, extracted)
+
+    return resultados
 
 
 def _validate_legacy(rules_data: dict, extracted) -> list[RuleResult]:
@@ -93,6 +149,30 @@ def filter_by_severity(
     return [r for r in results if r.severity in wanted]
 
 
+def _agregar_ficha(results: list[RuleResult]) -> dict:
+    """Reúne las capturas de ficha (`RuleResult.ficha`) en un dict por campo.
+
+    Cada regla puede haber capturado uno o más datos para la ficha de
+    depósito (diseño 17). El contrato de la API (handover §4) espera un
+    `dict[campo] = {"valor", "pagina", "detectado"}`; aquí se colapsan los
+    items de todas las reglas. Si un campo aparece más de una vez gana el
+    primero (las reglas de carátula y las de cuerpo no capturan la misma
+    clave). Siempre es un dict, vacío si no hubo capturas.
+    """
+    ficha: dict[str, dict] = {}
+    for r in results:
+        for item in r.ficha:
+            campo = item.get("campo")
+            if not campo or campo in ficha:
+                continue
+            ficha[campo] = {
+                "valor": item.get("valor"),
+                "pagina": item.get("pagina"),
+                "detectado": bool(item.get("detectado")),
+            }
+    return ficha
+
+
 def build_report(results: list[RuleResult], severities: list[str] | None = None) -> dict:
     """Arma el reporte final.
 
@@ -106,7 +186,13 @@ def build_report(results: list[RuleResult], severities: list[str] | None = None)
     junto a cuántas sí se evaluaron. Sin eso, un total fijo haría creer al
     estudiante que 4 reglas se cumplieron cuando en realidad no se miraron
     (decisión 5 del diseño, docs/diseno/15_tipo_documento_grupos.md).
+
+    Los resultados de **captura** (ficha de depósito, diseño 17) se excluyen
+    del semáforo y del resumen: no son reglas que se cumplen o fallan, solo
+    datos que se leen. Sus capturas sí viajan en el campo `ficha`.
     """
+    ficha = _agregar_ficha(results)
+    results = [r for r in results if not r.captura]
     hay_error_bloqueante = any((not r.passed) and r.severity == Severity.ERROR for r in results)
     evaluadas = [r for r in results if r.aplicable]
     omitidas = len(results) - len(evaluadas)
@@ -115,6 +201,7 @@ def build_report(results: list[RuleResult], severities: list[str] | None = None)
     return {
         "semaforo": "rojo" if hay_error_bloqueante else "verde",
         "resultados": [r.to_dict() for r in reporte_resultados],
+        "ficha": ficha,
         "resumen": {
             "total": len(results),
             "total_evaluadas": len(evaluadas),

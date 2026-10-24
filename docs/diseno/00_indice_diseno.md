@@ -71,8 +71,12 @@ flowchart LR
         O["15_tipo_documento_grupos.md<br/>Tipo de documento + grupos excluyentes"]
     end
 
+    subgraph SEMANA9["Semana 9 — ficha de depósito"]
+        P["17_extraccion_ficha.md<br/>Extracción de la ficha (sección DSL extraccion)"]
+    end
+
     subgraph IADISENO["Semana 7/8 — diseño previo"]
-        P["16_modulo_ia.md<br/>Módulo IA local (asistente)"]
+        Q["16_modulo_ia.md<br/>Módulo IA local (asistente)"]
     end
 
     subgraph FUTURO["F5 (implementada)"]
@@ -88,6 +92,7 @@ flowchart LR
     I -.-> A
     N -.-> O
     O -.-> COMPILACION
+    P -.-> COMPILACION
 ```
 
 | Doc | Área | Diagramas clave | Público |
@@ -108,6 +113,7 @@ flowchart LR
 | **14** | Índice de contenidos | `AnalizadorTocApunta`/`AnalizadorTocNumeracion` (ítems 11-12) | Todo el equipo |
 | **15** | Tipo de documento + grupos excluyentes | DFA de detección (Moore), evaluación en dos fases | LFA / Compiladores |
 | **16** | Módulo de IA local (asistente del encargado) | Cliente LLM (Ollama/Stub), 4 funcionalidades advisory, contrato v1.6.0 | Inteligencia Artificial / Redes |
+| **17** | Extracción de la ficha de depósito | Sección DSL `extraccion`, mapa campo→valor/página | Motor / API |
 
 ## 2.1 Fases de diseño F1–F6 (E)
 
@@ -164,12 +170,14 @@ flowchart LR
 3. **05** explica cómo se compila y se valida contra un documento.
 4. **06** (migración), **07** (tests) y **08** (OCR) son procesos transversales.
 5. **09** es la única propuesta a futuro (F5): el resto documenta lo ya
-      implementado y verificado por la suite (547 tests).
+      implementado y verificado por la suite (611 tests).
 6. **15** es el único documento con diseño **previo** a la implementación: se
    escribió antes de escribir código, porque detecta un defecto de correctitud
    (una tesis conforme se reporta en rojo). Su plan de ejecución por pasos está
    en `docs/PLAN_TIPO_DOCUMENTO.md`.
-7. **16** (módulo de IA) es el segundo documento con diseño **previo**; se
+7. **17** documenta la extracción de la ficha de depósito (sección DSL
+   `extraccion`), de solo lectura: no toca el semáforo.
+8. **16** (módulo de IA) es el segundo documento con diseño **previo**; se
    deriva de la discusión en `docs/discusion_modelo_ia.md`. El Paso 0 (cliente
    LLM) y las Funcionalidades 1 (validación semántica), 2 (explicar/priorizar),
    3 (clasificación asistida) y 5 (redacción de la respuesta) ya están

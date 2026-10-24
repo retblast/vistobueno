@@ -179,3 +179,29 @@ if "reglas" in rules_data:
     return CompilerDSL().ejecutar(rules_data, extracted)
 return _validate_legacy(rules_data, extracted)
 ```
+
+---
+
+## Buzón de una ranura (ficha de depósito, v1.7.0)
+
+Comunicación entre la SPA y el userscript que corre sobre las páginas de
+DSpace en el navegador del operador. Sin archivos, sin pegar, sin
+sesiones: una ranura en memoria del proceso, TTL de 1 hora, "última
+gana". La app nunca escribe a la API de DSpace; el formulario oficial
+construye todas las peticiones.
+
+```
+SPA                        buzón (api.py)              userscript (DSpace)
+────                       ───────────────            ────────────────────
+[Preparar depósito] ──► POST /ficha-pendiente ──►
+                                                      GET /ficha-pendiente
+                                                        → rellena el formulario
+(panel en espera) ◄──── GET /deposito ◄────────────  POST /deposito
+                            (sondeo)                   (handle del ítem)
+```
+
+- La ficha solo existe con semáforo verde (invariante con test).
+- `POST /deposito` viaja con el título: la SPA lo coteja con la ficha
+  en vuelo antes de usar el handle.
+- El buzón no emite CORS: una página web cualquiera del navegador no
+  puede leer la ficha (datos personales del estudiante).

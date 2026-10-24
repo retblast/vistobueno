@@ -25,8 +25,54 @@ NS = {
 }
 
 
+# Cota de tamaño DESCOMPRIMIDO por parte del paquete OPC (defensa zip bomb,
+# revisión 2026-10-13, hallazgo R2): la API limita la subida a 10 MB
+# comprimidos, pero un ZIP hostil puede declarar entradas de pocos KB que se
+# expanden a GBs al leerlas, agotando la memoria del servidor. 50 MB es un
+# techo holgado para cualquier tesis real (document.xml rara vez pasa de unos
+# pocos MB) y sobre el que ninguna parte legítima del formato Office tripa.
+TAMANO_MAXIMO_PARTE_BYTES = 50 * 1024 * 1024
+
+
+def _leer_parte(z: zipfile.ZipFile, nombre: str) -> bytes:
+    """Lee una parte del paquete OPC acotando el tamaño descomprimido.
+
+    El tope se aplica DURANTE la lectura, no sobre el `file_size` declarado
+    en el central directory: ese campo puede estar falseado en un ZIP
+    malicioso. Se leen como máximo `TAMANO_MAXIMO_PARTE_BYTES + 1` bytes;
+    si la parte real es mayor, se lanza `zipfile.BadZipFile` (que la API
+    ya traduce a 422 sin necesidad de manejo adicional).
+
+    Args:
+        z: Instancia `ZipFile` abierta sobre el documento DOCX.
+        nombre: Nombre de la parte dentro del ZIP (ej. "word/document.xml").
+
+    Returns:
+        El contenido descomprimido de la parte.
+
+    Raises:
+        zipfile.BadZipFile: Si la parte descomprimida supera
+            `TAMANO_MAXIMO_PARTE_BYTES` (posible zip bomb).
+    """
+    with z.open(nombre) as f:
+        datos = f.read(TAMANO_MAXIMO_PARTE_BYTES + 1)
+    if len(datos) > TAMANO_MAXIMO_PARTE_BYTES:
+        raise zipfile.BadZipFile(
+            f"parte '{nombre}' excede el límite de descompresión "
+            f"({TAMANO_MAXIMO_PARTE_BYTES} bytes): posible zip bomb"
+        )
+    return datos
+
+
 def text_of(node) -> str:
-    """Concatena el texto de todos los w:t descendientes de un nodo."""
+    """Concatena el texto de todos los nodos ``w:t`` descendientes de un nodo.
+
+    Args:
+        node: Nodo XML del que extraer el texto.
+
+    Returns:
+        El texto concatenado de todos los ``w:t`` encontrados.
+    """
     return "".join(t.text or "" for t in node.iter(W + "t"))
 
 
@@ -41,6 +87,13 @@ def es_heading(val: str | None) -> bool:
     extractor (contextos de cuerpo y carátula), el tokenizer (inferencia de
     tipo del DSL) y el check legacy `secuencia_titulos`, de modo que todos
     hablen del mismo criterio (revisión PR #45, punto 3).
+
+    Args:
+        val: Valor del atributo `w:pStyle` del párrafo (puede ser None).
+
+    Returns:
+        True si `val` corresponde a un estilo de encabezado; False si es
+        None, vacío o un estilo distinto.
     """
     if not val:
         return False
@@ -359,29 +412,48 @@ class ExtractedDocx:
 
 
 def extract(docx_path: str) -> ExtractedDocx:
-    """Abre un .docx (zip OPC) y devuelve sus partes XML relevantes ya
-    parseadas, listas para que checks.run_check las consulte.
+    """Extrae y normaliza un DOCX para el motor de reglas.
 
-    Además de los árboles XML, calcula la paginación física real (párrafo ->
-    página) a partir de los saltos de página que Word persiste en el XML,
-    para que el motor pueda correlacionar texto con número de página sin
-    renderizar el documento.
+    Abre el paquete OPC (zip) del documento y devuelve sus partes XML
+    relevantes ya parseadas, listas para que ``checks.run_check`` las
+    consulte. Además de los árboles XML, calcula la paginación física real
+    (párrafo -> página) a partir de los saltos de página que Word persiste
+    en el XML, para que el motor pueda correlacionar texto con número de
+    página sin renderizar el documento.
+
+    La extracción es robusta: soporta documentos con y sin heading
+    "Introducción", maneja carátulas y secciones, y descarta párrafos
+    vacíos, headings y captions de tabla ("Nota."/"Fuente.") que el manual
+    no prescribe.
+
+    Args:
+        docx_path: Ruta al archivo .docx a extraer.
+
+    Returns:
+        Un ``ExtractedDocx`` con los árboles XML, la caché de consultas
+        XPath, la paginación física y los metadatos del documento.
+
+    Raises:
+        zipfile.BadZipFile: Si el archivo no es un ZIP válido o una parte
+            supera el límite de descompresión (posible zip bomb).
+        KeyError: Si falta document.xml u otra parte esencial del DOCX.
     """
     with zipfile.ZipFile(docx_path) as z:
         names = z.namelist()
-        document = etree.fromstring(z.read("word/document.xml"))
+        document = etree.fromstring(_leer_parte(z, "word/document.xml"))
         headers = [
-            etree.fromstring(z.read(n))
+            etree.fromstring(_leer_parte(z, n))
             for n in sorted(x for x in names if x.startswith("word/header") and x.endswith(".xml"))
         ]
         footers = [
-            etree.fromstring(z.read(n))
+            etree.fromstring(_leer_parte(z, n))
             for n in sorted(x for x in names if x.startswith("word/footer") and x.endswith(".xml"))
         ]
+        footnotes_xml = (
+            _leer_parte(z, "word/footnotes.xml") if "word/footnotes.xml" in names else None
+        )
         footnotes = (
-            etree.fromstring(z.read("word/footnotes.xml"))
-            if "word/footnotes.xml" in names
-            else None
+            etree.fromstring(footnotes_xml) if footnotes_xml and len(footnotes_xml) > 0 else None
         )
 
     return ExtractedDocx(

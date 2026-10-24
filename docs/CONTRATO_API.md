@@ -1,6 +1,6 @@
 # Contrato de API — VistoBueno
 
-**Versión**: 1.6.0 (Semana 7 — actividad 10, depósito en DSpace)  
+**Versión**: 1.7.0 (Semana 8 — ficha de depósito y buzón de una ranura)  
 **Fecha**: 2026-10-14  
 **Estado**: Implementado
 
@@ -71,6 +71,19 @@ El archivo se procesó correctamente y se evaluaron las reglas.
     "estado": "sin_solicitud",
     "detalle": null
   },
+  "ficha_deposito": {
+    "extraidos": [
+      {"campo": "dc.title", "valor": "Taller de dramatización de títeres…", "pagina": 1, "detectado": true},
+      {"campo": "dc.contributor.author", "valor": ["Br. Apellido, Nombre"], "pagina": 1, "detectado": true},
+      {"campo": "dc.date.issued", "valor": null, "pagina": null, "detectado": false}
+    ],
+    "manuales": [
+      {"campo": "matricula", "valor": null},
+      {"campo": "renati.author.dni", "valor": null},
+      {"campo": "renati.advisor.dni", "valor": null},
+      {"campo": "renati.advisor.orcid", "valor": null}
+    ]
+  },
   "resumen": {
     "total": 49,
     "total_evaluadas": 43,
@@ -136,6 +149,13 @@ El archivo se procesó correctamente y se evaluaron las reglas.
 | `notificacion.detalle` | `string?` | Motivo técnico cuando `estado` es `"fallo"`; nota de configuración cuando es `"deshabilitado"`; `null` en el resto de casos |
 | `deposito.estado` | `string` | Veredicto del depósito en DSpace (ver sección "Depósito en DSpace") |
 | `deposito.detalle` | `string?` | Nota de seguimiento cuando se depositó (cola de aprobación); motivo técnico cuando `"fallo"`; nota de configuración cuando `"deshabilitado"`; `null` en el resto de casos |
+| `ficha_deposito` | `object?` | Ficha de depósito (v1.7.0). **Solo con semáforo `"verde"`; `null` en cualquier otro caso**. Valores detectados del DOCX listos para que el operador los corrija (ver sección "Ficha de depósito") |
+| `ficha_deposito.extraidos[].campo` | `string` | Clave acordada: `dc.title`, `dc.contributor.author`, `dc.contributor.advisor`, `dc.description.abstract`, `dc.subject`, `dc.date.issued`, `escuela`, `renati.juror` |
+| `ficha_deposito.extraidos[].valor` | `string \| array \| null` | Texto completo o lista de textos (autores, palabras clave); `null` si no detectado |
+| `ficha_deposito.extraidos[].pagina` | `int?` | Página de origen en el DOCX, si el motor la conoce |
+| `ficha_deposito.extraidos[].detectado` | `bool` | `true` si el motor encontró el elemento (publicación vía `reglas_ficha.yaml`, diseño 17; `renati.juror` viaja `false`) |
+| `ficha_deposito.manuales[].campo` | `string` | Clave acordada: `matricula`, `renati.author.dni`, `renati.advisor.dni`, `renati.advisor.orcid` |
+| `ficha_deposito.manuales[].valor` | `string?` | Valor tecleado por el operador en pantalla; `null` desde el servidor |
 | `resumen.total` | `int` | Total de reglas presentes en el YAML de reglas |
 | `resumen.total_evaluadas` | `int` | Reglas realmente evaluadas sobre el documento |
 | `resumen.reglas_no_aplicables` | `int` | Reglas omitidas porque no aplican al tipo de documento detectado |
@@ -492,7 +512,151 @@ El motor interno (`validator.engine`) devuelve `RuleResult` (dataclass) y `build
 
 ---
 
+## Ficha de depósito (Semana 8, v1.7.0)
+
+Objeto `ficha_deposito` en la respuesta de `POST /validar`, **solo con
+semáforo `"verde"`** (invariante: con `"rojo"` el campo es `null` — un
+documento con errores bloqueantes no se deposita y no hay nada que
+pre-llenar).
+
+### Comportamiento
+
+- Contiene los valores que el operador necesita para el depósito:
+  **extraídos** del DOCX por el motor (título, autores, asesor, resumen,
+  palabras clave, año de emisión, escuela y jurado opcional) y
+  **manuales** (matrícula, DNI del autor, DNI del asesor, ORCID), que
+  viajan vacíos y el operador llena en pantalla.
+- Los extraídos los publica el motor vía la sección DSL `extraccion`
+  (`reglas_ficha.yaml`, diseño 17): 7 campos capturados sobre el mismo
+  árbol del documento, sin afectar el semáforo ni el resumen.
+  `renati.juror` viaja con `detectado=false` (viabilidad negativa
+  documentada en el diseño 17: la sección de firmas no es confiable);
+  el operador lo teclea. Un despliegue sin `reglas_ficha.yaml` responde
+  la ficha completa con todos los extraídos en `detectado=false`.
+- 16 campos del formulario oficial de DSpace no viajan en la ficha: el
+  servidor de DSpace los pre-llena según la colección destino
+  (`docs/DSPACE_API.md` §11 y `docs/PLAN_FICHA_DEPOSITO.md` §4.1).
+- La SPA edita la ficha y la publica al buzón (endpoint
+  `POST /ficha-pendiente`) para que el userscript la lea y rellene el
+  formulario oficial. Ver la sección siguiente.
+
+## Buzón de una ranura (comunicación con el userscript)
+
+Mecanismo de intercambio entre la SPA y el userscript que corre sobre
+las páginas de DSpace en el navegador del operador. Sin archivos, sin
+pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
+"última gana"**. Supuesto documentado: un operador, una tesis en vuelo.
+
+### Endpoints
+
+| Endpoint | Método | Quién llama | Qué hace |
+|----------|--------|-------------|----------|
+| `/ficha-pendiente` | `POST` (204) | la SPA | Publica la ficha completada (reemplaza la anterior) |
+| `/ficha-pendiente` | `GET` → `FichaDeposito` | el userscript | Lee la ficha a rellenar; `404` si vacía o expirada |
+| `/deposito` | `POST` (204) | el userscript | Reporta `{handle, titulo, timestamp}` del ítem archivado |
+| `/deposito` | `GET` → `DepositoRecibido` | la SPA | Sondea el reporte; `404` si vacío o expirado |
+
+- `DepositoRecibido.handle`: URI del ítem (`https://hdl.handle.net/…`).
+- `DepositoRecibido.titulo`: la SPA lo **coteja con la ficha en vuelo**
+  antes de usar el handle (defensa contra un handle ajeno).
+- `DepositoRecibido.timestamp`: momento del clic en "Depositar"
+  capturado por el userscript (ISO 8601); alimenta la columna HORA del
+  registro y la constancia.
+
+### Seguridad
+
+- **El buzón no emite cabeceras CORS** (invariante con test): una página
+  web cualquiera del navegador del operador no puede leer la ficha, que
+  contiene datos personales del estudiante. El userscript lo lee por
+  `GM_xmlhttpRequest`, que corre en el contexto de la extensión.
+- Peor caso de un `POST` ciego desde una página maliciosa: basura
+  visible en el botón/toast del userscript, recuperable publicando de
+  nuevo. No hay ruta de exfiltración.
+- El buzón es la única pieza de estado del servidor: un reinicio del
+  proceso lo vacía (el operador re-valida y re-prepara).
+
+## Constancia de depósito (Semana 8, v1.7.0)
+
+Los dos endpoints que producen el papeleo del registro a partir de la
+ficha completada y del reporte del buzón. Entrada común
+(`FilaRegistroRequest`): la `ficha` (extraídos corregidos + manuales
+llenos), el `handle` del ítem y el `timestamp` del clic en Depositar
+(ISO 8601; alimenta DD/MM/AA, HORA, AÑO y la fecha del documento).
+
+**Convención por autor** (evidencia del registro oficial): una fila y
+una constancia POR ESTUDIANTE. `matricula` y `renati.author.dni`
+aceptan una lista alineada por posición con los autores; las tesis con
+dos autores generan dos constancias y dos filas con el mismo handle.
+
+### `POST /constancia` → descarga binaria (o paquete zip)
+
+- Cuerpo: `FilaRegistroRequest` + `indice_autor` (`int`, 0-based).
+- Respuesta 200: el `.docx` del Modelo B con los 11 MERGEFIELD
+  reemplazados por texto plano (título, autor, matrícula, fecha, hora,
+  handle, escuela, fecha del documento). La plantilla oficial vive en
+  `recursos/` (ruta configurable por
+  `VISTOBUENO_PLANTILLA_CONSTANCIA`); se llena en copia.
+- **`?formato=zip`** (revisión del PR #55: "la constancia podría
+  incluirlo"): un paquete por autor con la constancia .docx y SU fila
+  del registro como `registro.csv` (BOM UTF-8, separador `;`). Una
+  descarga = todo el papeleo del estudiante.
+- 422: timestamp inválido, falta un dato de la ficha (título, autores,
+  matrículas alineadas) o `indice_autor` fuera de rango.
+- 500: configuración del servidor — `VISTOBUENO_FIRMA` (columna FIRMA)
+  o plantilla ausente; el `detail` nombra exactamente qué falta.
+
+### `POST /fila-registro` → `{"filas": […]}` o archivo descargable
+
+- Por defecto (`formato=json`, retrocompatible): una fila TSV por autor,
+  en el orden exacto de columnas del registro oficial: N°, TESIS/TSP,
+  BACHILLER/LICENCIADO, N° MATRIC., DD, MM, AA, HORA, DIRECCION URL,
+  FIRMA, FECHA DEL DOC., ESCUELAS, AÑO.
+- `?formato=tsv|csv|xlsx` (hallazgo 11 de la revisión del PR #55):
+  devuelve un **archivo descargable** listo para abrir en
+  Excel/LibreOffice — elimina los errores de pegado (encoding, tabs
+  perdidos, columnas desalineadas):
+  - `tsv`: `text/tab-separated-values` con BOM UTF-8.
+  - `csv`: `text/csv` con BOM UTF-8, separador `;` (regional español)
+    y citas RFC 4180 para los campos que contienen `;`.
+  - `xlsx`: libro de una hoja con la fila de encabezado
+    (`COLUMNAS_REGISTRO`, 13 columnas).
+- La columna N° va vacía: la numeración pertenece al registro de la
+  biblioteca. DD y MM llevan barra final ("20/", "01/") y HORA va en
+  24 h, igual que las celdas existentes.
+- La app JAMÁS escribe el XLSX oficial: el operador pega la fila o
+  copia las celdas del archivo descargado.
+
 ## Changelog
+
+### v1.7.0 (2026-10-19 — Semana 8: ficha de depósito y buzón)
+
+Ficha de depósito y mecanismo de comunicación con el userscript que
+rellena el formulario oficial de DSpace. Cambio aditivo: ningún campo
+existente desaparece ni cambia de tipo.
+
+- **Nuevo objeto `ficha_deposito` en la respuesta** (`null` salvo con
+  semáforo `verde`): `extraidos` (8 claves acordadas con el motor) +
+  `manuales` (4 claves que el operador llena en pantalla; `matricula` y
+  `renati.author.dni` aceptan lista alineada por autor). Los extraídos
+  los publica el motor (`reglas_ficha.yaml`, diseño 17, entrega de
+  Int3): 7 campos capturados; `renati.juror` viaja `detectado=false`
+  (viabilidad negativa documentada).
+- **Nuevos endpoints del buzón**: `POST/GET /ficha-pendiente` y
+  `POST/GET /deposito` (una ranura, TTL de 1 hora, "última gana").
+- **Nuevos endpoints del papeleo**: `POST /constancia` (descarga del
+  Modelo B lleno, una por autor, índice 0-based) y `POST /fila-registro`
+  (filas TSV en el orden de columnas del registro; con `?formato=tsv |
+  csv | xlsx` devuelve un archivo descargable — revisión del PR #55,
+  hallazgo 11). Configuran `VISTOBUENO_FIRMA` y opcionalmente
+  `VISTOBUENO_PLANTILLA_CONSTANCIA`.
+- **Ensayo general de un comando** (revisión del PR #55, hallazgo 10):
+  `nix run .#test-ficha-deposito` corre el flujo completo contra el mock
+  de DSpace y verifica el papeleo de punta a punta.
+- **Invariante de seguridad**: el buzón no emite cabeceras CORS (con
+  test que lo protege contra regresiones).
+- Contexto y decisiones: `docs/PLAN_FICHA_DEPOSITO.md` (v0.2, congelado);
+  hallazgos del formulario real en `docs/DSPACE_API.md` §11.
+- `docs/openapi_spec.json` regenerado (el CI verifica el drift).
 
 ### v1.6.0 (2026-10-14 — Semana 7, actividad 10: depósito en DSpace)
 

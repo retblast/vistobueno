@@ -42,9 +42,12 @@ segundos; un cliente HTTP programático NO (curl recibe el `302` aunque
 envíe las cookies de la sesión).
 
 **Implicancia para el módulo de depósito (Actividad 10):** el cliente
-programático no debe resolver el desafío en producción. Se requiere una
-**excepción de la sede**: allowlist de IP del servidor de VistoBueno o
-bypass del desafío para `/server/*`. **PENDIENTE (Salcedo Quiñones)**.
+programático no debe resolver el desafío en producción. ~~Se requiere una
+**excepción de la sede**~~ **CANCELADO (2026-10-19)**: el depósito en esta
+instancia se hace con el userscript sobre la sesión del operador; la ruta
+REST queda como condición de activación (`PLAN_FICHA_DEPOSITO.md` §9.2).
+Re-verificado el 2026-10-19: el `302 → /challenge` persiste incluso con
+User-Agent de navegador y sin cookies previas.
 
 Para trabajo exploratorio sin navegador, se usó Chrome headless (ver §9).
 
@@ -167,10 +170,14 @@ la sección del formulario (ver §4).
    `422` (validación del formulario; p. ej. metadato obligatorio faltante).
    Los `422` de sección indican exactamente qué campo falla.
 
-**PENDIENTE (primer login)**: los nombres exactos de las secciones del
-formulario de la instancia (`GET /server/api/config/submissionsections`
-requiere autenticación; responde `401` anónimo). En DSpace 8 el formulario
-típico se llama `traditionalpageone`, pero es configuración por instancia.
+**Secciones confirmadas (captura del 2026-10-19, ver §11)**: el envío tiene
+tres secciones — `traditionalPeruOne` (metadatos; el formulario típico
+`traditionalpageone` NO aplica en esta instancia), `upload` (bitstreams) y
+`license` (aceptación de la licencia de distribución: un checkbox
+"Confirmo la licencia", no una subida de archivo). El payload de la
+aceptación de licencia y del POST al workflow no se capturaron (el
+operador no llegó a depositar); solo interesan a la ruta REST aparcada
+(`PLAN_FICHA_DEPOSITO.md` §9.2).
 
 ---
 
@@ -237,17 +244,24 @@ instancia) se completa en la Actividad 10 con el primer login.
 
 ## 7. Preguntas abiertas (gestión ante la sede)
 
-1. **Cuenta de servicio** con permiso de envío (Submit) en las colecciones
-   de tesis FECyC, y cómo se le proveen las credenciales (en VistoBueno se
-   inyectan por variables de entorno; nunca viven en el repositorio).
-2. **Excepción BunkerWeb** para `/server/api` desde el servidor de
-   VistoBueno (allowlist de IP o bypass del desafío).
-3. **Política de depósito**: confirmar colecciones destino, metadatos
-   obligatorios del formulario y procedimiento institucional a seguir.
-4. **Método de autenticación** de la cuenta (password vs Shibboleth; el
-   header `WWW-Authenticate` lo revela en el primer `401`).
-5. **Secciones del formulario** de la instancia (`GET /server/api/config/submissionsections`,
-   requiere el login de la cuenta de servicio).
+1. **Cuenta de servicio** — **YA NO REQUERIDA** para este despliegue
+   (2026-10-19): el depósito usa la sesión del operador. Queda como
+   requisito de la ruta REST aparcada (`PLAN_FICHA_DEPOSITO.md` §9.2);
+   las credenciales se inyectan por variables de entorno, nunca viven en
+   el repositorio.
+2. **Excepción BunkerWeb** — **CANCELADA** para este despliegue, por la
+   misma razón. El re-probe del 2026-10-19 confirma el `302` para
+   clientes programáticos.
+3. **Política de depósito**: las colecciones destino son las de tesis
+   FECyC (§5); el operador elige en el flujo oficial como siempre. El
+   flujo aprobado mantiene a la persona de la sede en el circuito
+   (aprueba el workflow, firma la constancia).
+4. **Método de autenticación** — **CONFIRMADO password**: la captura del
+   2026-10-19 incluye el login `POST /authn/login` con
+   `user`/`password` form-urlencoded; la UI de login es el formulario
+   estándar de DSpace (email + contraseña).
+5. **Secciones del formulario** — **CONFIRMADO** `traditionalPeruOne` +
+   `upload` + `license` (§4 y §11).
 
 ---
 
@@ -313,3 +327,51 @@ sesión (cookie `DSPACE-XSRF`/sesión BunkerWeb).
   - Depósito: `submission.md` (workspaceitems, secciones, workflowitems)
   - Metadatos del formulario: `workspaceitem-data-metadata.md` (JSON Patch)
 - Instancia: <https://repositorio.unitru.edu.pe> (DSpace 8.1)
+
+---
+
+## 11. Captura del 2026-10-19: hallazgos del formulario real
+
+Fuente: HAR exportado del navegador del operador durante un "Nuevo envío"
+en la colección "Tesis de Ciencias de la Comunicación"
+(`d26aecbf-f733-4682-9fbd-1174e944f2c3`). El análisis estructural vive en
+`recursos/har-analisis/` (local, no versionado).
+
+Hallazgos:
+
+1. **Creación del workspaceitem**: `POST /submission/workspaceitems?owningCollection={uuid}`
+   con cuerpo JSON vacío `{}` (la UI no usa multipart en la creación).
+2. **Secciones**: `traditionalPeruOne` + `upload` + `license` (§4).
+3. **Pre-llenos del servidor (16 campos)**: el workspaceitem nace con
+   `dc.publisher`, `dc.publisher.country`, `dc.type`, `dc.type.version`,
+   `dc.format`, `dc.language.iso`, `dc.rights`, `dc.rights.uri`,
+   `dc.source`, `dc.subject.ocde`, `renati.type`, `renati.level`,
+   `renati.discipline`, `thesis.degree.name`, `thesis.degree.discipline` y
+   `thesis.degree.grantor`. Los valores dependen de la colección destino
+   (tabla completa en `PLAN_FICHA_DEPOSITO.md` §4.1).
+4. **Vocabularios controlados cerrados con valores URI**:
+   `common_types_peru` (COAR), `common_version`, `common_format`,
+   `common_iso_languages_peru`, `common_publisher`, `common_rights`,
+   `dc_subject_ocde` (FORD), `renati_level_identifier`,
+   `renati_type_identifier`. El formulario envía URIs, nunca texto de
+   presentación.
+5. **Bug de `dc.rights`**: el default configurado es
+   `http://purl.org/coar/access_right/c_abf2`, pero el vocabulario
+   `common_rights` solo contiene `https://…` (la consulta de resolución
+   del UI devuelve vacía). El operador debe re-seleccionar "Acceso
+   abierto" a mano en cada envío; el userscript lo corrige. Pendiente
+   informar a la sede para que corrija la configuración del formulario.
+6. **QUALDROP de documentos de identidad**:
+   `renati.author.[dni|cext|pasaporte|cedula]` y
+   `renati.advisor.[…]`: un dropdown (tipo de documento) + un valor
+   (número) por entrada.
+7. **`dc.date.issued`**: input tipo fecha (día/mes/año).
+8. **Licencia de depósito**: texto Creative Commons de la colección +
+   checkbox "Confirmo la licencia" (obligatorio). No es subida de
+   archivo.
+
+> **Advertencia operativa**: el export "sanitized" de Chrome NO elimina
+> los cuerpos POST (el HAR capturado contenía el usuario y la contraseña
+> del login en texto plano, y el JWT en las cabeceras de respuesta).
+> Todo archivo `.har` se maneja como secreto: canal privado, extracción
+> fuera del repo, destrucción posterior. `*.har` está en `.gitignore`.

@@ -42,6 +42,7 @@ _SECCIONES = (
     "toc_apunta",
     "toc_numeracion",
     "deteccion_tipo",
+    "extraccion",
 )
 
 # Campos interpretados como expresiones regulares por los analizadores.

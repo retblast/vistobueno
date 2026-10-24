@@ -269,6 +269,75 @@ El frontend llama a `POST /validar` con `API_BASE_URL = import.meta.env.VITE_API
 
 Mientras `VITE_API_URL` quede vacío en un despliegue **sin** proxy/reverse proxy, las llamadas a `/validar` fallarán con error de red y el UI entrará en modo demo (reporte mock avisado). Errores HTTP del backend **con** cuerpo JSON (`detail`) se muestran al usuario y **no** se sustituyen por mocks.
 
+## Operación en la biblioteca (flujo de ficha de depósito)
+
+El flujo de depósito corre en la PC del operador contra la API local
+(`uvicorn` hace bind a `127.0.0.1` por defecto: el loopback ES el control
+de acceso del MVP; la frontera de confianza es el usuario del sistema
+operativo). La app nunca escribe a la API de DSpace: el formulario
+oficial construye todas las peticiones; el userscript solo teclea.
+
+### Requisitos
+
+- Plantillas oficiales en `recursos/` (no versionadas): la del Modelo B
+  de la constancia (`TESIS DIGITAL MODELO B-2026.docx`) y las de tesis
+  para las pruebas.
+- Variables de entorno:
+  - `VISTOBUENO_FIRMA` — nombre del responsable (columna FIRMA del
+    registro y la constancia). Obligatoria para el papeleo.
+  - `VISTOBUENO_PLANTILLA_CONSTANCIA` — opcional, si la plantilla vive
+    fuera de `recursos/`.
+- Userscript en Tampermonkey: crear un script nuevo y pegar el contenido
+  de `tools/dspace-fill/dist/vistobueno-dspace-fill.user.js`. El script
+  solo se conecta a `localhost` (`@connect localhost`).
+
+### Ensayo general (sin tocar la instancia real)
+
+De un solo comando (revisión del PR #55, hallazgo 10):
+
+```
+nix run .#test-ficha-deposito
+```
+
+Valida el doc bueno del factory, publica la ficha, corre el userscript
+real contra el mock de DSpace, verifica el handle en el buzón y genera
+constancia + registro descargables. Salida esperada: "✅ FLUJO COMPLETO
+OK". La evidencia (logs, archivos generados) queda en un tmp que el
+propio comando imprime.
+
+Manual, para recorrerlo con calma: `nix run .#serve --
+validator.api:app --port 8000` en una terminal, `nix run .#mock-dspace`
+en otra (mock de las páginas de DSpace en `http://127.0.0.1:8080`) y el
+checklist de 10 pasos de `tools/dspace-fill/dev/mock-dspace/README.md`.
+El mock imita el DOM del formulario oficial; los comportamientos del
+Angular real se validan en el piloto (borrador descartable, con el
+operador presente).
+
+### Flujo real (contrato v1.7.0)
+
+1. Validar el DOCX: con semáforo verde, la respuesta trae la ficha
+   (`ficha_deposito`) con los valores detectados.
+2. El operador revisa la ficha, completa los manuales (matrícula, DNIs,
+   ORCID) y la publica al buzón (`POST /ficha-pendiente`; la UI de este
+   paso llega con el slice del frontend).
+3. En DSpace, el userscript pre-llena el formulario (toast con el
+   resumen: lleno / a mano / sin dato) y corrige el nivel de acceso
+   ("Acceso abierto").
+4. El operador arrastra el .docx, marca "Confirmo la licencia" y pulsa
+   Depositar; el clic queda registrado como timestamp.
+5. Al abrir el ítem, el userscript reporta el handle al buzón
+   (`POST /deposito`).
+6. Con la ficha + handle + timestamp: `POST /fila-registro` (filas TSV
+   para pegar en el XLSX oficial — la app JAMÁS escribe el registro) y
+   `POST /constancia` (una descarga por autor). Con `?formato=tsv |
+   csv | xlsx`, `/fila-registro` devuelve el archivo descargable
+   directo.
+
+Nota de seguridad operativa: los `.har` exportados del navegador traen
+cookies, tokens y cuerpos POST completos (incluso con el export
+"sanitized" de Chrome). Se manejan como secretos: canal privado,
+extracción fuera del repo, destrucción posterior.
+
 ## Módulo de IA (asistente del encargado)
 
 Módulo **local y opt-in** que ayuda al encargado a revisar, decidir y comunicar
@@ -303,4 +372,4 @@ Configuración: `OLLAMA_URL` (habilita el módulo), `OLLAMA_MODEL` (por defecto
 
 Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba y contra las 5 plantillas oficiales (27/32 mecanizadas PASS). Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista.
 
-**API FastAPI** implementada (`POST /validar`) con validación de entrada, manejo de errores, DTOs Pydantic y suite de tests de contrato (ver `docs/CONTRATO_API.md`). **Frontend React** integrado con el backend (`Upload.jsx`, `Report.jsx`, proxy de desarrollo y manejo de errores HTTP), con campo opcional de correo del estudiante y **opt-in de notificación por correo** (casilla `notificar` + badge de estado `notificacion` en el reporte, 6 estados incluido `deshabilitado` con nota de configuración para administradores), **opt-in de depósito en el repositorio institucional DSpace** (campo `depositar` con metadatos opcionales + objeto `deposito` en la respuesta con 5 estados; el ítem entra a la cola de aprobación de la sede, no se publica directo — contrato v1.6.0, ver `docs/CONTRATO_API.md` y `docs/DSPACE_API.md`), **zona de carga con estados explícitos** (vacío, seleccionado, inválido, procesando y error de servidor) y **botón principal «Validar documento» siempre visible a todo el ancho** (deshabilitado con ayuda contextual si no hay archivo válido), **prompt único en «Cómo preguntar a una IA»** que junta todos los prompts en una sola instrucción copiable, primeros **tests automatizados del frontend con vitest** (`npm test`), mejoras de usabilidad IHC, auditoría UX integral (C1–C41: modo oscuro persistente, `aria-live` con debounce acertado a la vista, contraste AA (`--ambar` corregido en dark + `color-scheme`), barra de cumplimiento calculada solo sobre las reglas evaluadas (contrato v1.5: las no aplicables al tipo de documento detectado no se listan como cumplidas), metadatos del archivo y del tipo de documento en el encabezado del reporte, y búsqueda de reglas del wireframe —la búsqueda filtra también los prompts de IA—, ESLint configurado cubriendo `.js`/`.jsx`, favicon, mock de demo con motivo honesto `no_solicitado`, re-elección del mismo archivo con retorno de foco, y script E2E del flujo completo versionado en `scripts/e2e_flujo_completo.sh`, 11 verificaciones) y mockups de las pantallas de carga y reporte (`mockups/`). **Motor DSL** consolidado (F1–F6): 49 reglas mecanizadas (incluye paginación real `indice_paginas_separadas`, ubicación por página, encabezados/pies, notas al pie, control de cambios, e índice de contenidos con `indice_apunta_secciones`/`indice_numeracion_jerarquica`), linter, cache XPath, traza de autómata y tests de propiedad con factory determinista de DOCX. **Calidad de ingeniería** (ruff, mypy, coverage, pre-commit, CI con Nix: tests del backend y build, lint y tests del frontend en cada push/PR) y **exportación del reporte a Markdown/PDF** implementadas (tareas 15 y 16 del `docs/PLAN_BACKLOG_FUTURO.md`). **Módulo de IA (asistente del encargado)** iniciado: cliente LLM local (`validator/llm.py`, con `StubLLM` para CI) y la Funcionalidad 2 de explicación/priorización (`validator/asistente.py`), advisory y sin tocar el semáforo; falta el *wiring* de la API (`docs/HANDOVER_API_IA.md`) y los botones del frontend.
+**API FastAPI** implementada (`POST /validar`) con validación de entrada, manejo de errores, DTOs Pydantic y suite de tests de contrato (ver `docs/CONTRATO_API.md`). **Frontend React** integrado con el backend (`Upload.jsx`, `Report.jsx`, proxy de desarrollo y manejo de errores HTTP), con campo opcional de correo del estudiante y **opt-in de notificación por correo** (casilla `notificar` + badge de estado `notificacion` en el reporte, 6 estados incluido `deshabilitado` con nota de configuración para administradores), **opt-in de depósito en el repositorio institucional DSpace** (campo `depositar` con metadatos opcionales + objeto `deposito` en la respuesta con 5 estados; el ítem entra a la cola de aprobación de la sede, no se publica directo — contrato v1.6.0, ver `docs/CONTRATO_API.md` y `docs/DSPACE_API.md`), **ficha de depósito y buzón de una ranura** (contrato v1.7.0: objeto `ficha_deposito` en la respuesta solo con semáforo verde —valores detectados del DOCX vía el diseño 17 + campos manuales del operador— y endpoints `POST/GET /ficha-pendiente` · `POST/GET /deposito` con TTL de 1 hora para el userscript que pre-llena el formulario oficial de DSpace; plan congelado en `docs/PLAN_FICHA_DEPOSITO.md`), **constancia de depósito y fila de registro** (endpoints `POST /constancia` —Modelo B oficial lleno, una constancia por autor, MERGEFIELD reemplazados por texto plano— y `POST /fila-registro` —filas TSV en el orden de columnas del registro de la biblioteca; el XLSX oficial jamás se escribe desde la app), **zona de carga con estados explícitos** (vacío, seleccionado, inválido, procesando y error de servidor) y **botón principal «Validar documento» siempre visible a todo el ancho** (deshabilitado con ayuda contextual si no hay archivo válido), **prompt único en «Cómo preguntar a una IA»** que junta todos los prompts en una sola instrucción copiable, primeros **tests automatizados del frontend con vitest** (`npm test`), mejoras de usabilidad IHC, auditoría UX integral (C1–C41: modo oscuro persistente, `aria-live` con debounce acertado a la vista, contraste AA (`--ambar` corregido en dark + `color-scheme`), barra de cumplimiento calculada solo sobre las reglas evaluadas (contrato v1.5: las no aplicables al tipo de documento detectado no se listan como cumplidas), metadatos del archivo y del tipo de documento en el encabezado del reporte, y búsqueda de reglas del wireframe —la búsqueda filtra también los prompts de IA—, ESLint configurado cubriendo `.js`/`.jsx`, favicon, mock de demo con motivo honesto `no_solicitado`, re-elección del mismo archivo con retorno de foco, y script E2E del flujo completo versionado en `scripts/e2e_flujo_completo.sh`, 11 verificaciones) y mockups de las pantallas de carga y reporte (`mockups/`). **Motor DSL** consolidado (F1–F6): 49 reglas mecanizadas (incluye paginación real `indice_paginas_separadas`, ubicación por página, encabezados/pies, notas al pie, control de cambios, e índice de contenidos con `indice_apunta_secciones`/`indice_numeracion_jerarquica`), linter, cache XPath, traza de autómata y tests de propiedad con factory determinista de DOCX. **Calidad de ingeniería** (ruff, mypy, coverage, pre-commit, CI con Nix: tests del backend y build, lint y tests del frontend en cada push/PR) y **exportación del reporte a Markdown/PDF** implementadas (tareas 15 y 16 del `docs/PLAN_BACKLOG_FUTURO.md`). **Módulo de IA (asistente del encargado)** iniciado: cliente LLM local (`validator/llm.py`, con `StubLLM` para CI) y la Funcionalidad 2 de explicación/priorización (`validator/asistente.py`), advisory y sin tocar el semáforo; falta el *wiring* de la API (`docs/HANDOVER_API_IA.md`) y los botones del frontend. **Userscript del formulario de depósito** (`tools/dspace-fill/`): núcleo puro testeado en node con jsdom, artefacto instalable en `dist/` (el CI verifica el drift) y ensayo general con `nix run .#mock-dspace` (mock local de las páginas de DSpace con checklist de 10 pasos).

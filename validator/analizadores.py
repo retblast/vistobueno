@@ -61,6 +61,12 @@ class Analizador(ABC):
         # personas, asi que no sirve para decidir condiciones `aplicar_si`.
         # Los analizadores de deteccion lo rellenan; los demas lo dejan None.
         self.valor: str | None = None
+        # Datos capturados para la ficha de depósito (diseño 17). Cada item es
+        # `{"campo": str, "valor": str | list[str], "nodo": nodo | None}`; el
+        # compilador resuelve la página con `extracted.pagina_de(nodo)`. Solo
+        # `AnalizadorExtraccion` y los analizadores con `extraccion` anidada lo
+        # rellenan.
+        self.ficha: list[dict] = []
 
     @abstractmethod
     def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]: ...
@@ -989,3 +995,136 @@ class DeteccionTipo(Analizador):
             if len(encontradas) >= minimo:
                 return firma.get("tipo"), encontradas
         return None, []
+
+
+class AnalizadorExtraccion(Analizador):
+    """Captura el texto de los nodos que su XPath/sección localiza (diseño 17).
+
+    Es un analizador de **lectura**, no de validación: siempre pasa, nunca
+    produce fallos, nunca toca el semáforo. Su único fin es poblar `ficha`
+    con `{"campo", "valor", "nodo"}` para que el motor arme la ficha de
+    depósito (contrato del handover `HANDOVER_MOTOR_FICHA_DEPOSITO.md`).
+
+    Config (sección DSL `extraccion`):
+      campo:          clave acordada con la API (p. ej. `dc.title`).
+      xpath:          XPath que localiza el nodo o nodos a capturar.
+      parte:          `document` (default).
+      contexto:       `todos` (default), `caratula`, `cuerpo`, ...
+      seccion:        alternativa al xpath: `{inicio, fin}` de títulos; captura
+                      el texto de los párrafos de esa sección (tokenizer).
+      modo:           `texto` (default, un valor: texto del primer nodo) o
+                      `lista` (varios valores: texto de cada nodo, sin vacíos).
+      separador:      si viene, parte el texto de cada nodo por ese separador y
+                      concatena los trozos (p. ej. autores "A, B y C" → lista).
+      etiqueta:       si viene, captura solo lo que sigue a la primera aparición
+                      de `etiqueta` + ":" (p. ej. "Palabras clave: a, b" → "a, b").
+      patron:         regex; si viene, captura `group(1)` (o el match completo
+                      si no hay grupo) del texto resultante (p. ej. el año).
+      quitar_prefijo: regex que se elimina del inicio del texto (etiquetas como
+                      "Asesor(a): ").
+    """
+
+    def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
+        campo = self.config.get("campo", "")
+        if not campo:
+            return True, "extraccion sin campo"
+
+        piezas = self._piezas(extracted)
+        if not piezas:
+            return True, f"extraccion {campo}: sin valor"
+
+        modo = self.config.get("modo", "texto")
+        valor: str | list[str]
+        if modo == "lista":
+            valor = self._valores_lista(piezas)
+        elif self.config.get("unir"):
+            # Texto íntegro de una sección de varios párrafos (p. ej. Resumen).
+            valor = " ".join(self._limpiar(p) for p in piezas if self._limpiar(p))
+        else:
+            valor = self._limpiar(piezas[0])
+
+        self.ficha.append({"campo": campo, "valor": valor, "nodo": piezas[0][1]})
+        return True, f"extraccion {campo}: {self._resumen(valor)}"
+
+    def _piezas(self, extracted: ExtractedDocx) -> list[tuple[str, object]]:
+        """Devuelve `(texto, nodo)` de cada párrafo objetivo.
+
+        Con `seccion`, el flujo de tokens de esa sección; si no, los nodos del
+        XPath. El nodo es lo que `pagina_de` usa para resolver la página.
+        `filtro` (regex) acota los párrafos por su texto (p. ej. la línea de
+        "Palabras clave" dentro del Resumen).
+        """
+        sec = self.config.get("seccion")
+        piezas: list[tuple[str, object]] = []
+        if sec:
+            corte = seccion(tokenizar(extracted), sec["inicio"], sec.get("fin"))
+            piezas = [
+                (t.texto.strip(), None) for t in corte if t.tipo == PARRAFO and t.texto.strip()
+            ]
+        else:
+            nodos = self._nodos(
+                extracted,
+                self.config.get("parte", "document"),
+                self.config.get("contexto", "todos"),
+            )
+            piezas = [(text_of(n).strip(), n) for n in nodos if text_of(n).strip()]
+        filtro = self.config.get("filtro")
+        if filtro:
+            rx = re.compile(filtro, re.IGNORECASE if self.config.get("ignore_case", True) else 0)
+            piezas = [p for p in piezas if rx.search(p[0])]
+        # Con `seccion` los tokens no traen su nodo; para poder publicar la
+        # página se resuelve el `w:p` por texto exacto (mapa por texto).
+        if sec and piezas:
+            mapa = self._mapa_nodos(extracted)
+            piezas = [(txt, mapa.get(txt)) for txt, _ in piezas]
+        return piezas
+
+    @staticmethod
+    def _mapa_nodos(extracted: ExtractedDocx) -> dict[str, object]:
+        """Mapa texto-normalizado → primer `w:p` del cuerpo con ese texto."""
+        mapa: dict[str, object] = {}
+        try:
+            nodos = extracted.xpath("document", "//w:body//w:p", "todos")
+        except ValueError:
+            return mapa
+        for n in nodos:
+            clave = re.sub(r"\s+", " ", text_of(n)).strip()
+            if clave and clave not in mapa:
+                mapa[clave] = n
+        return mapa
+
+    def _limpiar(self, pieza: tuple[str, object]) -> str:
+        texto = pieza[0]
+        etiqueta = self.config.get("etiqueta")
+        if etiqueta:
+            m = re.search(re.escape(etiqueta) + r"\s*:\s*(.*)", texto, re.IGNORECASE | re.DOTALL)
+            if m:
+                texto = m.group(1).strip()
+        prefijo = self.config.get("quitar_prefijo")
+        if prefijo:
+            texto = re.sub(prefijo, "", texto, count=1, flags=re.IGNORECASE).strip()
+        patron = self.config.get("patron")
+        if patron:
+            m = re.search(patron, texto)
+            if m:
+                texto = (m.group(1) if m.groups() else m.group(0)).strip()
+        return texto
+
+    def _valores_lista(self, piezas: list[tuple[str, object]]) -> list[str]:
+        separador = self.config.get("separador")
+        valores: list[str] = []
+        for pieza in piezas:
+            texto = self._limpiar(pieza)
+            if not texto:
+                continue
+            if separador:
+                valores.extend(p.strip() for p in re.split(separador, texto) if p.strip())
+            else:
+                valores.append(texto)
+        return valores
+
+    @staticmethod
+    def _resumen(valor) -> str:
+        if isinstance(valor, list):
+            return f"{len(valor)} valor(es)"
+        return str(valor)[:40]

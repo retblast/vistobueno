@@ -402,12 +402,15 @@ class TestGuardiaContratoDeposito:
             "semaforo",
             "notificacion",
             "deposito",
+            "ficha_deposito",
             "resumen",
             "resultados",
             "como_preguntar_a_una_ia",
             "metadatos",
         }
         assert cuerpo["deposito"] == {"estado": "sin_solicitud", "detalle": None}
+        # v1.7.0: con semáforo verde la ficha siempre materializa.
+        assert cuerpo["ficha_deposito"] is not None
 
     def test_rojo_con_depositar_es_no_apto_y_no_toca_el_modulo(self, monkeypatch):
         _limpiar_entorno(monkeypatch)
