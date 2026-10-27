@@ -493,6 +493,11 @@ h1, h2, h3 { line-height: 1.25; letter-spacing: -.01em; }
 .aviso-cerrar:hover { opacity: 1; }
 .aviso .ejemplos { display: block; margin-top: .2rem; font-size: .72rem; line-height: 1.4; }
 
+/* --- Límite de error (ErrorBoundary): detalle técnico plegable --- */
+.error-detalle { margin: .6rem 0; border: 1px solid var(--gris-oscuro); border-radius: 6px; padding: .4rem .7rem; }
+.error-detalle summary { cursor: pointer; font-size: .8rem; font-weight: 600; min-height: 44px; display: flex; align-items: center; }
+.error-detalle pre { white-space: pre-wrap; font-size: .72rem; color: var(--gris-texto); background: var(--blanco); border: 1px solid var(--gris-oscuro); border-radius: 5px; padding: .5rem; margin-top: .4rem; line-height: 1.4; }
+
 /* --- Utilidad solo para lectores de pantalla --- */
 .sr-only {
   position: absolute;

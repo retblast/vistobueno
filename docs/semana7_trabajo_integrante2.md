@@ -308,6 +308,22 @@ Diagnóstico cruzado backend↔frontend (api.py/api_models.py/CONTRATO_API.md co
 
 ---
 
+### Cierre de la semana 10 — día 1: robustez y envío del formulario (2026-10-27)
+
+Primera jornada del cierre de la semana 10 (plan: día 2 «Descargar reporte» en Markdown del lado del cliente; día 3 tests de componente con `@testing-library/react` y regeneración de capturas). Tres arreglos de la lista de pendientes propia, todos locales al frontend:
+
+- **Límite de error (`ErrorBoundary.jsx`)**: hasta hoy un fallo de render (bug o payload inesperado) dejaba la pantalla en blanco. Ahora `App` envuelve la vista activa y el fallo muestra un aviso claro con botón **«Volver a la pantalla de carga»** (descarta el reporte y retoma el flujo) y el detalle técnico plegado para el reporte del fallo.
+- **Envío con Enter**: el card de carga es un `<form noValidate>` y el botón «Validar documento» es su `type="submit"`; Enter en el correo (o cualquier campo) valida, como espera el operador. `noValidate` deja la validación en nuestras reglas accesibles (la burbuja nativa duplicaría el aviso fuera del `aria-live`); los botones auxiliares (quitar archivo, cerrar aviso) pasan a `type="button"` para no disparar el envío. La dropzone conserva su Enter/Space para abrir el selector (`preventDefault` propio).
+- **Toggle de tema con SVG inline**: fin del emoji ☀️/🌙 del header (mismo criterio que los iconos de la dropzone desde v7: se renderizan igual en todos los sistemas y en las capturas de evidencia); sol/luna con `stroke=currentColor`, `aria-hidden`, conservando `aria-label`/`aria-pressed`/`title`.
+
+#### Verificación (2026-10-27)
+
+- `npm run lint` → 0 errores · `npm test` → **20/20** (los tests del depósito viven en el PR #58) · `npm run build` → 170.76 kB OK.
+- E2E del flujo completo → **11/11** (rama sin el paso 8c del depósito, que vive en el PR #58).
+- Los tres cambios se cubren con tests de componente en el día 3 del plan.
+
+---
+
 ## Evidencias
 
 - Commits: `e27e683` (mejoras IHC), `7bd0be4` (Arreglos.txt v1), `5c169ef` (v2), `6c512ec` (v3), `df05bd6` (auditoría UX C17–C29), `d306f36` + `4c9cc55` (Fase A revisión, C30–C38), `21d0ac3` (script E2E versionado, C39), `abac6b6` (lint en CI, C40, rama `ci-frontend-lint`).
