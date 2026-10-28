@@ -18,13 +18,17 @@ Guía para integrantes del proyecto. Define convenciones, arquitectura y flujo d
 > - **Int3 — motor (prioritario)**: AUD-01 (índice: falso positivo en
 >   "General"), AUD-02 (los anexos reales no se ven: la regla reporta 9 ítems
 >   faltantes aunque existan), AUD-03 (el texto `encontrado` es ilegible y
->   señala mal), AUD-04, AUD-05, AUD-06, AUD-07, AUD-15, AUD-20 (los tests
+>   señala mal; **opción 1 acordada**: módulo único `validator/detalle.py`),
+>   AUD-04, AUD-05, AUD-06, AUD-07, AUD-15, AUD-20 (los tests
 >   no replican la estructura real) y **AUD-24 a AUD-27** (las capturas de la
 >   ficha: los autores se parten, el asesor llega vacío y el año sale del
 >   título). **Más un hallazgo nuevo**: `palabras_clave_minimo` es `error` y
->   hace que **las 5 plantillas oficiales fallen**.
+>   hace que **las 5 plantillas oficiales fallen**. Los criterios de
+>   aceptación de AUD-24 a AUD-27 ya están en `tests/test_captura_ficha.py`
+>   (tests con `xfail(strict=True)`: cuando el motor los cumpla, el CI se
+>   pone rojo hasta que Int1 quite la marca).
 > - **Int1 — API**: AUD-09, AUD-10, AUD-12, AUD-13, AUD-21 y el contrato de la
->   ficha. En curso.
+>   ficha: **cerrados** (PR #65, #66 y #67; ver la tabla §11 del handover).
 > - **Int2 — frontend**: AUD-16 (la pantalla de ficha del handover S8 no
 >   existe), AUD-17, AUD-18.
 > - **Decisiones de dominio abiertas** (las necesita el equipo, no un

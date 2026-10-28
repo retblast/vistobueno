@@ -245,12 +245,18 @@ la marca.
 
 | Contrato | Dónde | Criterio |
 |----------|-------|----------|
-| Ficha utilizable | `tests/test_api_contract.py` | todo `extraidos` con `detectado=True` trae un valor **no vacío** |
+| Ficha utilizable | `tests/test_api_contract.py` (`TestContratoFichaUtilizable`) | todo `extraidos` con `detectado=True` trae un valor **no vacío** |
 | Año válido | `tests/test_api_contract.py` | `dc.date.issued` con `detectado=True` es un año (`\b(19\|20)\d{2}\b`) |
-| Autores completos | `tests/test_api_contract.py` | `dc.contributor.author` trae **un autor por párrafo**, con el formato "Apellido, Nombre" (sin partir por la coma) |
-| Asesor presente | `tests/test_api_contract.py` | `dc.contributor.advisor` con `detectado=True` trae texto |
-| Una constancia por autor | `tests/test_constancia.py` | 2 autores → 2 constancias + 2 filas; matrícula desalineada → error claro |
+| Autores completos | `tests/test_captura_ficha.py` (`xfail`) | `dc.contributor.author` trae **un autor por párrafo**, con el formato "Apellido, Nombre" (sin partir por la coma) |
+| Asesor presente | `tests/test_captura_ficha.py` (`xfail`) | `dc.contributor.advisor` con `detectado=True` trae texto |
+| Palabras clave limpias | `tests/test_captura_ficha.py` (`xfail`) | `dc.subject` sin puntuación final (AUD-27) |
+| Una constancia por autor | `tests/test_constancia.py` (`TestConstanciasConCapturaReal`, `xfail`) | 2 autores reales → 2 constancias + 2 filas, cada una con su matrícula |
 | Paridad real | `tests/test_paridad_formatos.py` | sin aserciones vacías; caso "detectado pero incompleto" comparando `passed` con legacy |
+
+El DOCX de la carátula real (con placeholders) lo construye
+`tests/_caratula_real.py`: etiqueta `AUTORES:` en párrafo propio, un autor
+por párrafo con ORCID intercalado, etiqueta `ASESORA:` en párrafo propio y
+el año en la línea de portada.
 
 ---
 
@@ -343,25 +349,25 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-05 | Int3 | decisión de dominio | — |
 | AUD-06 | Int3 | decisión de dominio | — |
 | AUD-07 | Int3 | decisión de dominio | — |
-| AUD-09 | Int1 | en curso | PR B |
-| AUD-10 | Int1 | en curso | PR B |
+| AUD-09 | Int1 | **cerrado** | PR #66 |
+| AUD-10 | Int1 | **cerrado** | PR #66 |
 | AUD-11 | Int1 | **cerrado: no aplica** (decisión 2026-10-28) | — |
-| AUD-12 | Int1 | en curso | PR B |
-| AUD-13 | Int1 | en curso | PR A |
-| AUD-14 | Int1 | en curso | PR A |
+| AUD-12 | Int1 | **cerrado** | PR #66 |
+| AUD-13 | Int1 | **cerrado** | PR #65 |
+| AUD-14 | Int1 | **cerrado** | PR #65 |
 | AUD-15 | Int3 | pendiente | — |
 | AUD-16 | Int2 | pendiente | — |
 | AUD-17 | Int2 | pendiente | — |
 | AUD-18 | Int2 | decisión de dominio | — |
-| AUD-19 | Docs | en curso | PR 0 |
+| AUD-19 | Docs | **cerrado** | PR #64 |
 | AUD-20 | Int3 | pendiente | — |
-| AUD-21 | Int1 | en curso | PR C |
-| AUD-22 | Int1 | pendiente | PR D |
+| AUD-21 | Int1 | **cerrado** | PR #67 |
+| AUD-22 | Int1 | pendiente | PR D (no iniciado) |
 | AUD-23 | Int1 | **cerrado: los archivos quedan sin trackear** (decisión 2026-10-28) | — |
-| AUD-24 | Int3 (criterio: Int1) | pendiente | PR C (test) |
-| AUD-25 | Int3 (criterio: Int1) | pendiente | PR C (test) |
-| AUD-26 | Int3 | pendiente | — |
-| AUD-27 | Int3 | pendiente | — |
+| AUD-24 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
+| AUD-25 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
+| AUD-26 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
+| AUD-27 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
 | Nuevo: `palabras_clave_minimo` | Int3 | pendiente | — |
 | Nuevo: plantillas no cuantitativas | Int3 | documentar | — |
-| DSpace REST | Int1 | en curso (deprecación) | PR A |
+| DSpace REST | Int1 | **cerrado: deprecado** | PR #65 |

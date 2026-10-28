@@ -158,7 +158,7 @@ El archivo se procesó correctamente y se evaluaron las reglas.
 | `ficha_deposito.extraidos[].campo` | `string` | Clave acordada: `dc.title`, `dc.contributor.author`, `dc.contributor.advisor`, `dc.description.abstract`, `dc.subject`, `dc.date.issued`, `escuela`, `renati.juror` |
 | `ficha_deposito.extraidos[].valor` | `string \| array \| null` | Texto completo o lista de textos (autores, palabras clave); `null` si no detectado |
 | `ficha_deposito.extraidos[].pagina` | `int?` | Página de origen en el DOCX, si el motor la conoce |
-| `ficha_deposito.extraidos[].detectado` | `bool` | `true` si el motor encontró el elemento (publicación vía `reglas_ficha.yaml`, diseño 17; `renati.juror` viaja `false`) |
+| `ficha_deposito.extraidos[].detectado` | `bool` | `true` si el motor encontró el elemento **y el valor es utilizable** (publicación vía `reglas_ficha.yaml`, diseño 17; `renati.juror` viaja `false`). Un valor vacío o con la forma equivocada viaja `false` con `valor=null` (v1.10.0) |
 | `ficha_deposito.manuales[].campo` | `string` | Clave acordada: `matricula`, `renati.author.dni`, `renati.advisor.dni`, `renati.advisor.orcid` |
 | `ficha_deposito.manuales[].valor` | `string?` | Valor tecleado por el operador en pantalla; `null` desde el servidor |
 | `resumen.total` | `int` | Total de reglas presentes en el YAML de reglas |
@@ -551,6 +551,11 @@ pre-llenar).
   documentada en el diseño 17: la sección de firmas no es confiable);
   el operador lo teclea. Un despliegue sin `reglas_ficha.yaml` responde
   la ficha completa con todos los extraídos en `detectado=false`.
+- Un extraído solo viaja con `detectado=true` si su valor es
+  **utilizable**: la API degrada a `detectado=false`, `valor=null` y
+  `pagina=null` las capturas vacías y las que no tienen la forma que
+  espera el campo (`dc.date.issued` debe contener un año). El operador
+  teclea esos datos en la pantalla de ficha (v1.10.0).
 - 16 campos del formulario oficial de DSpace no viajan en la ficha: el
   servidor de DSpace los pre-llena según la colección destino
   (`docs/DSPACE_API.md` §11 y `docs/PLAN_FICHA_DEPOSITO.md` §4.1).
@@ -682,6 +687,24 @@ dos autores generan dos constancias y dos filas con el mismo handle.
   copia las celdas del archivo descargado.
 
 ## Changelog
+
+### v1.10.0 (2026-10-28 — auditoría de comportamiento: contrato de la ficha)
+
+Endurecimiento del contrato de la ficha de depósito. La forma de las
+respuestas no cambia.
+
+- **`detectado=true` implica valor utilizable** (AUD-25, AUD-26): si el
+  motor captura un valor vacío (`""`, `"   "`, `[]`) o un valor con la
+  forma equivocada (`dc.date.issued` que no es un año), la API lo degrada
+  a `detectado=false`, `valor=null` y `pagina=null`. El operador lo
+  teclea en la pantalla de ficha en vez de pre-llenar el formulario
+  oficial de DSpace con un dato inservible.
+- El motor (Int3) sigue siendo quien captura: cuando corrija las reglas
+  de `reglas_ficha.yaml` (AUD-24 a AUD-27), el valor correcto viaja
+  con `detectado=true` sin tocar la API.
+- Criterios de aceptación de Int3 en `tests/test_captura_ficha.py`
+  (`xfail(strict=True)`) y en `tests/test_constancia.py`
+  (`TestConstanciasConCapturaReal`).
 
 ### v1.9.0 (2026-10-28 — auditoría de comportamiento: acceso local y límite)
 
