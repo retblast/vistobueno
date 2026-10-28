@@ -8,16 +8,34 @@ subirlo a la API.
 from functools import cache
 from pathlib import Path
 
+import pytest
 from docx_factory import compilar_docx, configuracion_base
 from fastapi.testclient import TestClient
 
+from validator import api as api_module
 from validator.api import app
 
 # ---------------------------------------------------------------------------
 # Cliente de prueba global
 # ---------------------------------------------------------------------------
 
-CLIENTE = TestClient(app)
+# El peer se fija en el loopback: los endpoints del buzón solo se sirven
+# desde la máquina donde corre la app (auditoría 2026-10-26, AUD-09) y el
+# `TestClient` por defecto usa el host "testclient", que no es loopback.
+CLIENTE = TestClient(app, client=("127.0.0.1", 50000))
+
+
+@pytest.fixture(autouse=True)
+def _reiniciar_limitador():
+    """El limitador de peticiones es estado del proceso: cada test arranca limpio.
+
+    Sin esto, el cupón por IP se llenaría a lo largo de la suite y las
+    pruebas de `POST /validar` empezarían a recibir 429.
+    """
+    api_module._LIMITADOR_PETICIONES.limpiar()
+    yield
+    api_module._LIMITADOR_PETICIONES.limpiar()
+
 
 # ---------------------------------------------------------------------------
 # Rutas a recursos de prueba

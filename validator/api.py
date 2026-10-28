@@ -12,14 +12,27 @@ Uso:
 
 import os
 import re
+import secrets
 import tempfile
+import threading
+import time
 import zipfile
 from functools import cache
 from pathlib import Path
 from typing import Literal
 
 from email_validator import EmailNotValidError, validate_email
-from fastapi import FastAPI, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.concurrency import run_in_threadpool
 
 from .api_models import (
@@ -109,6 +122,166 @@ CAMPOS_MANUALES_FICHA = (
     "renati.advisor.dni",
     "renati.advisor.orcid",
 )
+
+
+# ---------------------------------------------------------------------------
+# Control de acceso al buzón (auditoría 2026-10-26, AUD-09)
+# ---------------------------------------------------------------------------
+# El buzón travela datos personales del estudiante (DNI, ORCID, resumen) y
+# su ranura es de "última gana": alguien que llegue desde la red puede
+# leerlos o pisar la ficha en vuelo.
+#
+# El despliegue real es LOCAL: la app corre en la PC del encargado y
+# `uvicorn` hace bind a 127.0.0.1. Por eso el control de acceso por
+# defecto es el **loopback**: solo los peticiones que llegan desde la
+# propia máquina pueden tocar el buzón.
+#
+# Si alguien expone la API fuera de la máquina (bind a 0.0.0.0 o un
+# reverse proxy en otro host), puede exigir además un token compartido
+# por header. La comparación es en tiempo constante.
+
+CABECERA_TOKEN_BUZON = "X-VistoBueno-Token"
+HOSTS_LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def _token_buzon() -> str:
+    """Token compartido del buzón; vacío significa "no se exige token"."""
+    return (os.environ.get("VISTOBUENO_API_TOKEN") or "").strip()
+
+
+def _es_loopback(host: str | None) -> bool:
+    """True si el host del par es la propia máquina."""
+    return (host or "").strip() in HOSTS_LOOPBACK
+
+
+async def verificar_acceso_buzon(request: Request) -> None:
+    """Dependency de los endpoints del buzón: solo desde la máquina local.
+
+    Rechaza con 403 (a) las peticiones que no vienen del loopback y (b) las
+    que no traen el token compartido cuando hay uno configurado.
+    """
+    host = request.client.host if request.client else None
+    if not _es_loopback(host):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "El buzón de ficha solo se sirve desde la máquina donde corre "
+                "la app (loopback). La API está expuesta a otros equipos."
+            ),
+        )
+    token = _token_buzon()
+    if token:
+        recibido = request.headers.get(CABECERA_TOKEN_BUZON, "")
+        if not secrets.compare_digest(recibido.encode(), token.encode()):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Falta o no coincide el token del buzón. Envía el header "
+                    f"'{CABECERA_TOKEN_BUZON}' con el valor de "
+                    "VISTOBUENO_API_TOKEN."
+                ),
+            )
+
+
+# ---------------------------------------------------------------------------
+# Limitador de peticiones (auditoría 2026-10-26, AUD-12)
+# ---------------------------------------------------------------------------
+# POST /validar recompila el DSL en cada request: el recurso a proteger es
+# el CPU del proceso. El límite vive en memoria (sin base de datos, como el
+# buzón): se reinicia con el servidor y no se comparte entre workers (el
+# despliegue documentado es de UN worker).
+#
+# Es una mitigación mínima: si algún día la API se expone fuera de la
+# máquina, el límite real va en el reverse proxy (ver README).
+
+MAXIMO_PETICIONES_DEFAULT = 60
+VENTANA_PETICIONES_DEFAULT = 60.0
+
+
+class LimitadorPeticiones:
+    """Ventana fija por IP: cuenta las peticiones de un intervalo.
+
+    Attributes:
+        _peticiones: IP → (cantidad, inicio de la ventana).
+        _lock: el acceso puede ser concurrente (endpoints en threadpool).
+    """
+
+    def __init__(self) -> None:
+        self._peticiones: dict[str, tuple[int, float]] = {}
+        self._lock = threading.Lock()
+
+    def registrar(self, ip: str, maximo: int, ventana: float) -> tuple[bool, float]:
+        """Registra una petición.
+
+        Returns:
+            (permitido, segundos para reintentar). Si no está permitida,
+            los segundos son el tiempo que falta para que venza la ventana.
+        """
+        ahora = time.monotonic()
+        with self._lock:
+            cantidad, inicio = self._peticiones.get(ip, (0, ahora))
+            if ahora - inicio >= ventana:
+                cantidad, inicio = 0, ahora
+            cantidad += 1
+            self._peticiones[ip] = (cantidad, inicio)
+            if cantidad > maximo:
+                return False, max(ventana - (ahora - inicio), 0.0)
+            self._purgar(ahora, ventana)
+            return True, 0.0
+
+    def _purgar(self, ahora: float, ventana: float) -> None:
+        """Descarta las entradas vencidas (evita que el dict crezca sin fin)."""
+        if len(self._peticiones) <= 1000:
+            return
+        self._peticiones = {
+            ip: datos for ip, datos in self._peticiones.items() if ahora - datos[1] < ventana
+        }
+
+    def limpiar(self) -> None:
+        """Vacía el estado (tests y reinicio del flujo)."""
+        with self._lock:
+            self._peticiones.clear()
+
+
+_LIMITADOR_PETICIONES = LimitadorPeticiones()
+
+
+def _config_limite_peticiones() -> tuple[int, float]:
+    """Límite por IP y ventana, leídos del entorno en cada request.
+
+    Returns:
+        (máximo de peticiones, ventana en segundos). Un máximo de 0
+        desactiva el límite.
+    """
+    try:
+        maximo = int(os.environ.get("VISTOBUENO_RATE_LIMIT_MAX", MAXIMO_PETICIONES_DEFAULT))
+    except ValueError:
+        maximo = MAXIMO_PETICIONES_DEFAULT
+    try:
+        ventana = float(
+            os.environ.get("VISTOBUENO_RATE_LIMIT_VENTANA_SEG", VENTANA_PETICIONES_DEFAULT)
+        )
+    except ValueError:
+        ventana = VENTANA_PETICIONES_DEFAULT
+    return max(0, maximo), max(ventana, 0.1)
+
+
+async def limitar_validaciones(request: Request) -> None:
+    """Dependency de POST /validar: corta los abuse de CPU con 429."""
+    maximo, ventana = _config_limite_peticiones()
+    if maximo <= 0:
+        return
+    ip = request.client.host if request.client else "desconocido"
+    permitido, reintentar = _LIMITADOR_PETICIONES.registrar(ip, maximo, ventana)
+    if not permitido:
+        raise HTTPException(
+            status_code=429,
+            headers={"Retry-After": str(int(reintentar) + 1)},
+            detail=(
+                "Demasiadas peticiones de validación seguidas. "
+                "Espera unos segundos antes de reintentar."
+            ),
+        )
 
 
 @cache
@@ -312,7 +485,7 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.8.0",
+    version="1.9.0",
 )
 
 
@@ -329,8 +502,10 @@ app = FastAPI(
         413: {"description": "Archivo excede el tamaño máximo (10 MB)"},
         415: {"description": "Tipo de archivo no soportado"},
         422: {"description": "Archivo corrupto, no es DOCX válido o correo inválido"},
+        429: {"description": "Demasiadas peticiones de validación seguidas"},
         500: {"description": "Error interno del validador"},
     },
+    dependencies=[Depends(limitar_validaciones)],
 )
 async def validar(
     archivo: UploadFile = File(..., description="Archivo .docx a validar"),
@@ -649,8 +824,13 @@ _BUZON = Buzon()
         "La SPA publica la ficha (extraídos + manuales) para que el "
         "userscript de depósito la lea desde el navegador del operador. "
         "El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo "
-        "reemplaza la ficha anterior ('última gana')."
+        "reemplaza la ficha anterior ('última gana'). "
+        "Solo se sirve desde la máquina donde corre la app (loopback); "
+        "si hay token configurado, exige el header "
+        f"'{CABECERA_TOKEN_BUZON}'."
     ),
+    responses={403: {"description": "Petición desde otro equipo o sin token válido"}},
+    dependencies=[Depends(verificar_acceso_buzon)],
 )
 async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
     _BUZON.publicar_ficha(ficha.model_dump())
@@ -663,9 +843,15 @@ async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
     description=(
         "El userscript lee aquí la ficha a rellenar en el formulario "
         "oficial de DSpace. 404 cuando no hay ficha o la publicada "
-        "expiró (TTL de 1 hora)."
+        "expiró (TTL de 1 hora). Solo se sirve desde la máquina donde "
+        "corre la app (loopback); si hay token configurado, exige el "
+        f"header '{CABECERA_TOKEN_BUZON}'."
     ),
-    responses={404: {"description": "Sin ficha pendiente: vacía o expirada"}},
+    responses={
+        403: {"description": "Petición desde otro equipo o sin token válido"},
+        404: {"description": "Sin ficha pendiente: vacía o expirada"},
+    },
+    dependencies=[Depends(verificar_acceso_buzon)],
 )
 async def leer_ficha_pendiente() -> FichaDeposito:
     ficha = _BUZON.leer_ficha()
@@ -685,8 +871,12 @@ async def leer_ficha_pendiente() -> FichaDeposito:
         "El userscript reporta el depósito desde la página del ítem "
         "archivado: handle del ítem, título y el timestamp del clic en "
         "Depositar. La SPA lo recoge sondeando GET /deposito y arma la "
-        "constancia y la fila del registro."
+        "constancia y la fila del registro. Solo se sirve desde la "
+        "máquina donde corre la app (loopback); si hay token configurado, "
+        f"exige el header '{CABECERA_TOKEN_BUZON}'."
     ),
+    responses={403: {"description": "Petición desde otro equipo o sin token válido"}},
+    dependencies=[Depends(verificar_acceso_buzon)],
 )
 async def reportar_deposito(datos: DepositoRecibido) -> None:
     _BUZON.reportar_deposito(datos.model_dump())
@@ -700,9 +890,15 @@ async def reportar_deposito(datos: DepositoRecibido) -> None:
         "La SPA sondea aquí mientras espera el handle del ítem. 404 "
         "cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, "
         "la SPA debe cotejar el `titulo` reportado con la ficha en vuelo "
-        "antes de usar el handle."
+        "antes de usar el handle. Solo se sirve desde la máquina donde "
+        "corre la app (loopback); si hay token configurado, exige el "
+        f"header '{CABECERA_TOKEN_BUZON}'."
     ),
-    responses={404: {"description": "Sin depósito reportado: vacío o expirado"}},
+    responses={
+        403: {"description": "Petición desde otro equipo o sin token válido"},
+        404: {"description": "Sin depósito reportado: vacío o expirado"},
+    },
+    dependencies=[Depends(verificar_acceso_buzon)],
 )
 async def leer_deposito_reportado() -> DepositoRecibido:
     datos = _BUZON.leer_deposito()

@@ -493,10 +493,14 @@ curl -X POST "http://localhost:8000/validar?incluir_prompts_ia=false" \
 | Código | Significado |
 |--------|-------------|
 | `200` | Validación exitosa |
+| `204` | Ficha o depósito publicado en el buzón |
 | `400` | Campo `archivo` presente pero sin nombre |
+| `403` | Petición al buzón desde otro equipo o sin token válido (solo en los endpoints del buzón) |
+| `404` | Ficha o depósito reportados: vacíos o expirados (TTL de 1 hora) |
 | `413` | Archivo excede 10 MB |
 | `415` | Tipo de archivo no soportado (no es `.docx`) |
 | `422` | Solicitud mal formada (sin campo `archivo`) / Cabecera ZIP inválida / Archivo vacío / DOCX corrupto o sin estructura válida / Correo inválido |
+| `429` | Se superó el límite de peticiones de validación (header `Retry-After`) |
 | `500` | Error interno del servidor |
 
 ---
@@ -583,11 +587,44 @@ pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
   web cualquiera del navegador del operador no puede leer la ficha, que
   contiene datos personales del estudiante. El userscript lo lee por
   `GM_xmlhttpRequest`, que corre en el contexto de la extensión.
+- **Solo se sirve desde el loopback** (auditoría 2026-10-26, AUD-09): los
+  cuatro endpoints del buzón rechazan con `403` cualquier petición que no
+  venga de `127.0.0.1`/`::1`. La app se despliega en la PC del operador
+  (`uvicorn` hace bind a `127.0.0.1`), así que el loopback **es** la
+  frontera de confianza; sin este control, un `curl` desde otro equipo de
+  la red podía leer la ficha (DNI, ORCID, resumen) o pisar la ranura en
+  vuelo.
+- **Token compartido (opt-in)**: si la API se expone fuera de la máquina
+  (bind a `0.0.0.0` o un reverse proxy en otro host), se define
+  `VISTOBUENO_API_TOKEN` y todas las peticiones al buzón deben enviar el
+  header `X-VistoBueno-Token` con ese valor (comparación en tiempo
+  constante). Sin token configurado, el header no se exige.
+- El **userscript no necesita token**: siempre habla con `127.0.0.1`.
 - Peor caso de un `POST` ciego desde una página maliciosa: basura
   visible en el botón/toast del userscript, recuperable publicando de
   nuevo. No hay ruta de exfiltración.
 - El buzón es la única pieza de estado del servidor: un reinicio del
   proceso lo vacía (el operador re-valida y re-prepara).
+- **Un solo worker**: el buzón vive en la memoria del proceso. Con varios
+  workers, la ficha se publica en uno y se lee en otro → `404` silencioso
+  (AUD-10). El despliegue documentado usa **exactamente un worker**
+  (`uvicorn` sin `--workers`).
+
+### Límite de peticiones (AUD-12)
+
+`POST /validar` recompila el DSL en cada request: el recurso a proteger es
+el CPU del proceso. Hay un límite in-app de **ventana fija por IP**: al
+superarlo, la respuesta es `429` con el header `Retry-After`.
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `VISTOBUENO_RATE_LIMIT_MAX` | `60` | Peticiones de validación por IP y ventana. `0` desactiva el límite. |
+| `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` | `60` | Longitud de la ventana, en segundos. |
+
+El límite vive en memoria (sin base de datos): se reinicia con el proceso
+y no se comparte entre workers (el despliegue es de uno). Si algún día la
+API se expone fuera de la máquina, el límite real va en el reverse proxy
+(esta mitigación es la red de seguridad local).
 
 ## Constancia de depósito (Semana 8, v1.7.0)
 
@@ -641,6 +678,23 @@ dos autores generan dos constancias y dos filas con el mismo handle.
   copia las celdas del archivo descargado.
 
 ## Changelog
+
+### v1.9.0 (2026-10-28 — auditoría de comportamiento: acceso local y límite)
+
+Endurecimiento del contrato, sin romper la forma de las respuestas.
+
+- **El buzón solo se sirve desde el loopback** (AUD-09): los cuatro
+  endpoints (`POST/GET /ficha-pendiente`, `POST/GET /deposito`) responden
+  `403` a cualquier petición que no venga de `127.0.0.1`/`::1`. La ficha
+  travela datos personales del estudiante y la ranura es de "última gana".
+- **Token compartido opt-in**: con `VISTOBUENO_API_TOKEN` definido, el
+  buzón exige además el header `X-VistoBueno-Token` (comparación en
+  tiempo constante). El userscript no lo necesita: siempre habla con
+  `127.0.0.1`.
+- **Límite de peticiones** sobre `POST /validar` (AUD-12): ventana fija
+  por IP, `429` con `Retry-After`. Configurable con
+  `VISTOBUENO_RATE_LIMIT_MAX` (default 60) y
+  `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` (default 60); `0` lo desactiva.
 
 ### v1.8.0 (2026-10-28 — auditoría de comportamiento: contrato de upload)
 
