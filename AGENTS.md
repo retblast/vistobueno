@@ -4,6 +4,66 @@ Guía para integrantes del proyecto. Define convenciones, arquitectura y flujo d
 
 ---
 
+> ## AVISO — INTEGRANTES: hay trabajo abierto de la auditoría de 2026-10-26
+>
+> La auditoría corrió el motor contra **una tesis real** y contra **las 5
+> plantillas oficiales**. Salieron **27 hallazgos (4 altos)**. El núcleo está
+> sano (el semáforo se calcula bien, el correo y el buzón no rompen la
+> respuesta), pero **hay bugs abiertos** y **una afirmación del README que el
+> código contradice**.
+>
+> - **Leé esto primero**: [`docs/HANDOVER_AUDITORIA_2026-10-26.md`](docs/HANDOVER_AUDITORIA_2026-10-26.md)
+>   → evidencia, criterios de aceptación, decisiones tomadas y lo que **no**
+>   se resolvió.
+> - **Int3 — motor (prioritario)**: AUD-01 (índice: falso positivo en
+>   "General"), AUD-02 (los anexos reales no se ven: la regla reporta 9 ítems
+>   faltantes aunque existan), AUD-03 (el texto `encontrado` es ilegible y
+>   señala mal), AUD-04, AUD-05, AUD-06, AUD-07, AUD-15, AUD-20 (los tests
+>   no replican la estructura real) y **AUD-24 a AUD-27** (las capturas de la
+>   ficha: los autores se parten, el asesor llega vacío y el año sale del
+>   título). **Más un hallazgo nuevo**: `palabras_clave_minimo` es `error` y
+>   hace que **las 5 plantillas oficiales fallen**.
+> - **Int1 — API**: AUD-09, AUD-10, AUD-12, AUD-13, AUD-21 y el contrato de la
+>   ficha. En curso.
+> - **Int2 — frontend**: AUD-16 (la pantalla de ficha del handover S8 no
+>   existe), AUD-17, AUD-18.
+> - **Decisiones de dominio abiertas** (las necesita el equipo, no un
+>   integrante): exención de estilos en la regla de sangría, si "Base de
+>   datos cuantitativa" debe matchear "Base de datos", alcance de las reglas
+>   de carátula (AUD-05/06/07), si el mock de reporte se activa en producción
+>   (AUD-18) y el estado de `palabras_clave_minimo`.
+>
+> **Ojo antes de confiar en la suite**: los tests pasan, pero **no cubren la
+> estructura real de las plantillas** (AUD-20). Un `pytest` en verde **no**
+> significa que el motor acierte. Al tocar el motor, agregá el caso real al
+> factory (regla 5 de esta guía) y verificá contra la tesis real.
+>
+> **Regla del flujo de depósito**: la app **no** escribe en la API de DSpace.
+> El archivo lo adjunta el encargado en el formulario oficial; el userscript
+> solo rellena los metadatos. El camino REST (`depositar=true`) está
+> **deprecado**.
+>
+> ### Cláusula de cierre de la auditoría (obligatoria)
+>
+> Cuando termines tu parte:
+>
+> 1. Actualizá la **tabla de estado** (§11) de
+>    `docs/HANDOVER_AUDITORIA_2026-10-26.md`: poné tu ID en estado
+>    `cerrado` y anotá el PR o commit. Si tu hallazgo no estaba en la tabla,
+>    agregalo.
+> 2. Actualizá el **bloque de aviso de arriba**: sacá tu ID del listado de
+>    pendientes y dejá la línea con su estado real.
+> 3. Si tu parte cambió el contrato (API, reglas, flujo), actualizá
+>    `README.md` y `docs/CONTRATO_API.md` en el mismo commit.
+> 4. **El bloque de aviso no se borra hasta que TODOS los hallazgos de la
+>    tabla §11 estén en `cerrado` o `decidido`.** Cuando se cierre el
+>    último, eliminá el bloque, dejá una línea en
+>    `docs/cronologia_trabajo.md` y actualizá "Próximos pasos".
+> 5. Todo cambio a este `AGENTS.md` sigue requiriendo aprobación del
+>    usuario (ver "Este documento es vivo").
+
+---
+
 ## Contexto del proyecto
 
 **VistoBueno** es una web app para la Biblioteca de la Facultad de Educación y Ciencias de la Comunicación (FECyC) de la Universidad Nacional de Trujillo (UNT). Los estudiantes suben su tesis (DOCX) y reciben validación automática contra las reglas de formato institucionales.
@@ -62,6 +122,7 @@ Módulo de IA (asistente del encargado — opt-in, advisory, NUNCA toca el semá
 | **Userscript de depósito** | `tools/dspace-fill/` | Rellena el formulario oficial de DSpace desde la ficha del buzón (`GM_xmlhttpRequest` con `@connect localhost`, auto-relleno gated con toast, timestamp del clic Depositar, reporte del handle del ítem). Artefacto instalable en `dist/` (commiteado, el CI verifica drift), núcleo puro testeado en node con jsdom; ensayo general con `nix run .#mock-dspace` (checklist en `dev/mock-dspace/README.md`) y de un comando con `nix run .#test-ficha-deposito` (driver jsdom en `dev/e2e_ensayo.js`). |
 | **Ensayo general de un comando** | `scripts/e2e_ficha_deposito.sh` | Corre el flujo completo de punta a punta: valida el doc bueno del factory, publica la ficha, corre el userscript contra el mock, verifica el handle en el buzón y genera constancia + registro descargables. Salida esperada: "✅ FLUJO COMPLETO OK". En CI como paso propio (revisión PR #55, hallazgo 16b). |
 | **Handover frontend ficha** | `docs/HANDOVER_FRONTEND_FICHA_DEPOSITO.md` | Pedido a Int2: pantalla de ficha (extraídos + manuales por autor), "Preparar depósito", panel de espera con sondeo del buzón, descargas de constancias y registro. |
+| **Handover de la auditoría 2026-10-26** | `docs/HANDOVER_AUDITORIA_2026-10-26.md` | Hallazgos abiertos del motor (Int3), contrato que Int1 exige, decisiones tomadas y decisiones de dominio pendientes. **Leer antes de tocar el motor.** |
 
 ---
 
@@ -584,9 +645,19 @@ Al revisar un PR, verificar que:
 
 ## Próximos pasos propuestos
 
-1. **Int1**: auth/rate-limit en `POST /validar` (documentar/limitar) y arreglar el test de paridad vacuo.
-2. **Int3**: cachear el DSL compilado — *descartado vía medición (1.5%); si hay perfilado futuro, atacar la extracción/evaluación (~98.5%)*. **`load_rules` con manejo de errores: resuelto** (PR actual).
-3. **Int2**: `AbortController` en el upload y foco del dropzone bajo `StrictMode`.
+1. **Int1**: remediación de la auditoría de 2026-10-26 — protección local del
+   buzón, límite de peticiones, contrato de la ficha y test de paridad no
+   vacía. Detalle y criterios de aceptación:
+   [`docs/HANDOVER_AUDITORIA_2026-10-26.md`](docs/HANDOVER_AUDITORIA_2026-10-26.md).
+2. **Int3**: correctitud del motor contra la tesis real — AUD-01, AUD-02,
+   AUD-03 (mensajes legibles), AUD-04 (notas `EVALUADO`), AUD-20 (factory con
+   la estructura real) y AUD-24 a AUD-27 (capturas de la ficha). Criterios de
+   aceptación:
+   [`docs/HANDOVER_AUDITORIA_2026-10-26.md`](docs/HANDOVER_AUDITORIA_2026-10-26.md).
+3. **Int2**: pantalla de ficha de depósito (handover S8, AUD-16).
+4. **Proceso**: `AbortController` en el upload y foco del dropzone bajo
+   `StrictMode`: **resuelto** (implementado con timeout de 30 s y manejo de
+   foco).
 
 ---
 
