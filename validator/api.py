@@ -58,7 +58,6 @@ from .constancia import (
     llenar_constancia,
 )
 from .dsl_check import DSLValidationError
-from .dspace import ConfigDSpace, depositar_documento, metadatos_desde_formulario
 from .engine import build_report, load_ficha_rules, load_rules, validate_docx
 from .models import RuleResult
 from .notificacion import ConfigSMTP, enviar_notificacion
@@ -77,8 +76,14 @@ REGLAS_YAML_PATH = str(Path(__file__).resolve().parent.parent / "reglas_unt.yaml
 
 TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# Tipos de content-type admitidos. La puerta real NO es esta lista: un DOCX
+# es un paquete OPC (ZIP) y algunos clientes lo envían con tipos genéricos.
+# El control efectivo es la extensión `.docx` + la firma "PK" del archivo
+# (ver _validar_upload). AUD-13: un .docx legítimo con `application/zip`
+# recibía 415 y el frontend lo aceptaba (acepta por MIME o extensión).
 TIPOS_ACEPTADOS = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/zip",  # un DOCX es un ZIP: algunos clientes lo envían así
     "application/octet-stream",  # algunos navegadores envían esto para .docx
 }
 
@@ -306,7 +311,7 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.7.0",
+    version="1.8.0",
 )
 
 
@@ -355,40 +360,52 @@ async def validar(
     depositar: bool = Form(
         default=False,
         description=(
-            "Solicitar el depósito del documento en el repositorio "
-            "institucional DSpace (opt-in del operador, actividad 10). "
-            "Solo aplica con semáforo verde."
+            "DEPRECADO (decisión 2026-10-28): el depósito automático en DSpace "
+            "queda fuera del flujo. El flujo oficial es la ficha (SPA) → buzón → "
+            "userscript, y el archivo lo adjunta el encargado en el formulario "
+            "oficial de DSpace. El campo se conserva para no romper el "
+            "contrato, pero ya no dispara ninguna llamada."
         ),
     ),
     titulo: str | None = Form(
         default=None,
-        description="Título del trabajo: metadato dc.title del depósito (opcional)",
+        description=(
+            "DEPRECADO: metadato dc.title que usaba el depósito automático. "
+            "El título de la ficha de depósito lo captura el motor del DOCX."
+        ),
         examples=[""],
     ),
     autores: str | None = Form(
         default=None,
         description=(
-            "Autor(es), separados por ';' o saltos de línea: metadato "
-            "dc.contributor.author del depósito (opcional)"
+            "DEPRECADO: metadato dc.contributor.author que usaba el depósito "
+            "automático. Los autores los captura el motor del DOCX y el "
+            "operador los corrige en la pantalla de ficha."
         ),
         examples=[""],
     ),
     asesor: str | None = Form(
         default=None,
-        description="Asesor(a): metadato dc.contributor.advisor del depósito (opcional)",
+        description=(
+            "DEPRECADO: metadato dc.contributor.advisor que usaba el depósito "
+            "automático. El asesor lo captura el motor del DOCX."
+        ),
         examples=[""],
     ),
     resumen: str | None = Form(
         default=None,
-        description="Resumen: metadato dc.description.abstract del depósito (opcional)",
+        description=(
+            "DEPRECADO: metadato dc.description.abstract que usaba el depósito "
+            "automático. El resumen lo captura el motor del DOCX."
+        ),
         examples=[""],
     ),
     palabras_clave: str | None = Form(
         default=None,
         description=(
-            "Palabras clave, separadas por ';' o ',': metadato dc.subject del depósito (opcional)"
+            "DEPRECADO: metadato dc.subject que usaba el depósito automático. "
+            "Las palabras clave las captura el motor del DOCX."
         ),
-        examples=[""],
     ),
 ):
     # --- Validación: ¿hay archivo? ---
@@ -580,51 +597,23 @@ async def validar(
                         detalle = resultado_envio.detalle
         respuesta.notificacion = NotificacionAPI(estado=estado, detalle=detalle)
 
-        # --- Depósito en DSpace (Actividad 10, best-effort) ---
-        # Misma mecánica que la notificación: opt-in del operador
-        # (`depositar`), pero SOLO con semáforo "verde" (documento apto
-        # para el repositorio). El ítem queda en la cola de aprobación de
-        # la sede (workflow de DSpace), nunca se publica directo.
-        # depositar_documento() NUNCA lanza: un fallo de DSpace no debe
-        # romper la respuesta HTTP.
+        # --- Depósito en DSpace (Actividad 10) — DEPRECADO ---
+        # Decisión del equipo (2026-10-28, auditoría de comportamiento): la
+        # app NO escribe en la API de DSpace. El flujo oficial es la ficha
+        # (SPA) → buzón → userscript, que rellena el formulario oficial; el
+        # archivo lo adjunta el encargado en ese formulario.
+        # Por eso `depositar=true` ya NO dispara ninguna llamada: responde
+        # "deshabilitado" con la nota que explica el flujo vigente. El campo
+        # y el DTO `deposito` se conservan para no romper el contrato.
         estado_dep = EstadoDepositoAPI.SIN_SOLICITUD
         detalle_dep: str | None = None
         if depositar:
-            if respuesta.semaforo != "verde":
-                estado_dep = EstadoDepositoAPI.NO_APTO
-                detalle_dep = "solo se depositan documentos con semáforo verde"
-            else:
-                config_dspace = ConfigDSpace.desde_entorno()
-                if not config_dspace.enabled:
-                    estado_dep = EstadoDepositoAPI.DESHABILITADO
-                    # Nota de configuración para el personal del repositorio
-                    # (mismo criterio que el hallazgo B3 de la notificación):
-                    # la respuesta indica exactamente qué falta configurar.
-                    detalle_dep = (
-                        "El servidor no tiene el depósito habilitado: configure "
-                        "VISTOBUENO_DSPACE=1 y " + ", ".join(config_dspace.faltantes) + "."
-                    )
-                else:
-                    metadatos_dep = metadatos_desde_formulario(
-                        titulo=titulo,
-                        autores=autores,
-                        asesor=asesor,
-                        resumen=resumen,
-                        palabras_clave=palabras_clave,
-                    )
-                    # httpx es bloqueante (timeout por solicitud): fuera del
-                    # event loop, o un DSpace caído congela toda la API.
-                    resultado_dep = await run_in_threadpool(
-                        depositar_documento,
-                        tmp_path,
-                        metadatos_dep,
-                        config_dspace,
-                    )
-                    if resultado_dep.enviado:
-                        estado_dep = EstadoDepositoAPI.ENVIADO
-                    else:
-                        estado_dep = EstadoDepositoAPI.FALLO
-                    detalle_dep = resultado_dep.detalle
+            estado_dep = EstadoDepositoAPI.DESHABILITADO
+            detalle_dep = (
+                "El depósito automático está deshabilitado: el flujo oficial es "
+                "el formulario de DSpace + el userscript de VistoBueno; el "
+                "archivo lo adjunta el encargado en el formulario oficial."
+            )
         respuesta.deposito = DepositoAPI(estado=estado_dep, detalle=detalle_dep)
 
         return respuesta

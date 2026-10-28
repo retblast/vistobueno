@@ -23,7 +23,6 @@ from docx_factory import aplicar_mutacion, compilar_docx, configuracion_base
 
 from validator.dspace import (
     ConfigDSpace,
-    ResultadoDeposito,
     depositar_documento,
     metadatos_desde_formulario,
     operaciones_metadatos,
@@ -392,7 +391,16 @@ def _post_validar(docx: bytes, data: dict | None = None):
     )
 
 
-class TestGuardiaContratoDeposito:
+class TestDepositoDeprecado:
+    """El depósito automático en DSpace quedó **deprecado** (2026-10-28).
+
+    Decisión del equipo: la app NO escribe en la API de DSpace. El flujo
+    oficial es la ficha (SPA) → buzón → userscript, que rellena el
+    formulario oficial; el archivo lo adjunta el encargado en ese
+    formulario. El campo `depositar` se conserva (no se rompe el
+    contrato), pero ya no dispara ninguna llamada a la red.
+    """
+
     def test_deposito_sin_solicitud_por_defecto(self, monkeypatch):
         _limpiar_entorno(monkeypatch)
         respuesta = _post_validar(_docx_verde())
@@ -412,72 +420,35 @@ class TestGuardiaContratoDeposito:
         # v1.7.0: con semáforo verde la ficha siempre materializa.
         assert cuerpo["ficha_deposito"] is not None
 
-    def test_rojo_con_depositar_es_no_apto_y_no_toca_el_modulo(self, monkeypatch):
-        _limpiar_entorno(monkeypatch)
-
-        def _bomba(*_args, **_kwargs):
-            raise AssertionError("el depósito no debe intentarse con semáforo rojo")
-
-        monkeypatch.setattr("validator.api.depositar_documento", _bomba)
-        respuesta = _post_validar(_docx_rojo(), data={"depositar": "true"})
-        assert respuesta.status_code == 200
-        deposito = respuesta.json()["deposito"]
-        assert deposito["estado"] == "no_apto"
-        assert "verde" in (deposito["detalle"] or "")
-
-    def test_verde_sin_configuracion_es_deshabilitado_con_nota(self, monkeypatch):
+    def test_depositar_true_responde_deshabilitado_con_el_flujo_vigente(self, monkeypatch):
         _limpiar_entorno(monkeypatch)
         respuesta = _post_validar(_docx_verde(), data={"depositar": "true"})
         assert respuesta.status_code == 200
         deposito = respuesta.json()["deposito"]
         assert deposito["estado"] == "deshabilitado"
         detalle = deposito["detalle"] or ""
-        assert "VISTOBUENO_DSPACE" in detalle
-        assert "VISTOBUENO_DSPACE_URL" in detalle
+        # La nota explica el flujo real: formulario oficial + userscript.
+        assert "userscript" in detalle
+        assert "formulario oficial" in detalle
 
-    def test_verde_habilitado_deposita_y_expone_enviado(self, monkeypatch):
-        _limpiar_entorno(monkeypatch)
-        _configurar_entorno_stub(monkeypatch)
-        recibido: dict = {}
-
-        def _fake(ruta, metadatos, config=None):
-            recibido["ruta"] = ruta
-            recibido["metadatos"] = metadatos
-            return ResultadoDeposito(True, "el ítem quedó en la cola de aprobación de la sede")
-
-        monkeypatch.setattr("validator.api.depositar_documento", _fake)
-        respuesta = _post_validar(
-            _docx_verde(),
-            data={
-                "depositar": "true",
-                "titulo": "Taller de títeres",
-                "autores": "Autor A; Autor B",
-                "asesor": "Asesora C",
-                "resumen": "El resumen.",
-                "palabras_clave": "títeres, preescolar",
-            },
-        )
-        assert respuesta.status_code == 200
-        deposito = respuesta.json()["deposito"]
-        assert deposito["estado"] == "enviado"
-        assert "cola de aprobación" in (deposito["detalle"] or "")
-        # El módulo recibió la ruta del temporal y los metadatos del form
-        assert str(recibido["ruta"]).endswith(".docx")
-        assert recibido["metadatos"]["dc.title"] == ["Taller de títeres"]
-        assert recibido["metadatos"]["dc.contributor.author"] == ["Autor A", "Autor B"]
-        assert recibido["metadatos"]["dc.contributor.advisor"] == ["Asesora C"]
-        assert recibido["metadatos"]["dc.subject"] == ["títeres", "preescolar"]
-
-    def test_fallo_del_modulo_propaga_el_detalle(self, monkeypatch):
+    def test_depositar_true_no_toca_el_modulo_de_dspace(self, monkeypatch):
+        """Ni con semáforo verde ni con DSpace configurado: cero llamadas."""
         _limpiar_entorno(monkeypatch)
         _configurar_entorno_stub(monkeypatch)
 
-        def _fake(_ruta, _metadatos, config=None):
-            return ResultadoDeposito(False, "ErrorDeposito: login: HTTP 401 — rechazado")
+        def _bomba(*_args, **_kwargs):
+            raise AssertionError("el depósito deprecado no debe llamar a DSpace")
 
-        monkeypatch.setattr("validator.api.depositar_documento", _fake)
+        monkeypatch.setattr("validator.dspace.depositar_documento", _bomba)
         respuesta = _post_validar(_docx_verde(), data={"depositar": "true"})
         assert respuesta.status_code == 200
+        assert respuesta.json()["deposito"]["estado"] == "deshabilitado"
+
+    def test_el_semaforo_no_cambia_el_estado_del_deposito(self, monkeypatch):
+        """Con semáforo rojo tampoco se intenta (antes: 'no_apto')."""
+        _limpiar_entorno(monkeypatch)
+        respuesta = _post_validar(_docx_rojo(), data={"depositar": "true"})
+        assert respuesta.status_code == 200
         deposito = respuesta.json()["deposito"]
-        assert deposito["estado"] == "fallo"
-        assert "HTTP 401" in (deposito["detalle"] or "")
+        assert deposito["estado"] == "deshabilitado"
+        assert "formulario oficial" in (deposito["detalle"] or "")
