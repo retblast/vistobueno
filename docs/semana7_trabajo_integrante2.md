@@ -308,6 +308,45 @@ Diagnóstico cruzado backend↔frontend (api.py/api_models.py/CONTRATO_API.md co
 
 ---
 
+### Cierre de la semana 10 — día 2: pantalla de ficha de depósito y auditoría 2026-10-26 (2026-10-28)
+
+El PR #63 de Int1 (auditoría de comportamiento del 2026-10-26, 27 hallazgos) asignó a Int2 tres hallazgos: **AUD-16** (alta), **AUD-17** y **AUD-18**. Los tres quedan cerrados en este día.
+
+#### AUD-16 — Pantalla de ficha de depósito (la que faltaba en la SPA)
+
+El backend, el buzón, el userscript y el ensayo general ya existían (PR #55), pero **los operadores no podían ejecutar el flujo desde la app**: el handover `docs/HANDOVER_FRONTEND_FICHA_DEPOSITO.md` seguía pendiente. Nueva pantalla `frontend/src/components/FichaDeposito.jsx`, con la lógica de flujo en `frontend/src/ficha.js` (funciones puras, sin React):
+
+- **Ficha editable**: los 8 campos extraídos (título, autores, asesor, resumen, palabras clave, año, escuela, jurado) con marca de «no detectado»; los 4 manuales (matrícula, DNI del autor, DNI y ORCID del asesor). La matrícula y el DNI del autor se alinean **por posición con los autores** (una entrada por estudiante).
+- **Resguardo en `localStorage`**: recargar la página no pierde el trabajo del operador; el resguardo se borra al volver al reporte (no dejar datos personales de más en el navegador).
+- **«Preparar depósito»** → `POST /ficha-pendiente` (204). El aviso recuerda que **el archivo lo adjunta el encargado en el formulario oficial**: la app no escribe en DSpace (el camino REST `depositar=true` está deprecado por decisión del equipo).
+- **Panel de espera** con sondeo de `GET /deposito` cada 3 s: el **404 es silencio** (aún no hay depósito), nunca un error en pantalla.
+- **Cotejo de título**: el título que reporta el userscript se compara con el de la ficha (minúsculas, sin acentos, por inclusión). Si no coincide, el operador **acepta o rechaza**; el handle no se usa nunca a ciegas. Un reporte ya rechazado no se vuelve a proponer en el siguiente sondeo (el buzón es «última gana»).
+- **Papeleo**: una constancia `.docx` por autor, el paquete `.zip` por autor (constancia + su `registro.csv`) y la fila del registro en `.tsv`/`.csv`/`.xlsx` o como texto para copiar. El XLSX oficial de la biblioteca no se escribe desde la app.
+
+La pantalla **solo existe con semáforo verde** (`ficha_deposito` es `null` en rojo, invariante v1.7); el reporte ofrece el acceso con el botón «Continuar con el depósito».
+
+#### AUD-17 — `mocks.js` regenerado desde una respuesta real
+
+El mock arrastraba valores obsoletos (708/709 twips de sangría presentados como margen derecho) y un detalle que ya no existía. Ahora se generó desde una respuesta **real** de `POST /validar` (documento «bueno» del factory + 4 mutaciones reales del proyecto), copiando resultados, prompts, resumen y metadatos tal cual llegaron. La procedencia queda escrita en el propio archivo para que sea repetible.
+
+#### AUD-18 — Fallback a `MOCK_REPORT` en producción (decisión del equipo)
+
+La auditoría dejó la decisión abierta; se resolvió **desactivar el fallback en el build de producción**: en desarrollo el reporte de ejemplo sigue disponible (modo demo, con banner), pero en producción, si el backend no responde, la app muestra el error real con la opción de reintentar. Motivo: en una herramienta interna, un reporte de ejemplo puede confundirse con un resultado real.
+
+#### Verificación (2026-10-28)
+
+- `npm run lint` → 0 errores · `npm test` → **47/47** (20 previos + 27 nuevos de `ficha.test.js`: ficha solo en verde, manuales por autor y su desalineación, sondeo con 404 silencioso, cotejo de título, plan de N descargas, formato de fecha/hora) · `npm run build` → 186.18 kB.
+- E2E del flujo completo → **11/11** · pytest del backend → **623 passed** (los 2 fallos iniciales eran `openpyxl` ausente en el `.venv` local; la dependencia sí está declarada en `flake.nix`, el CI la tiene).
+- **Prueba en vivo con Playwright contra la API real (12/12)**: documento verde → reporte → CTA → ficha → aviso de faltantes → completado de matrícula y DNI → «Preparar depósito» → panel de espera → depósito con título **distinto** (aviso de discrepancia) → rechazo → preparación de nuevo → handle recibido → aceptación → **descarga real de la constancia** (36.8 kB, nombre saneado por el servidor) → fila del registro en pantalla → volver al reporte → reentrar a la ficha.
+- Capturas: `28_ficha_espera.png`, `29_ficha_handle.png`, `30_ficha_papeleo.png`.
+
+#### Coordinación pendiente
+
+- El cierre administrativo de los hallazgos (tabla §11 de `docs/HANDOVER_AUDITORIA_2026-10-26.md` y bloque de aviso de `AGENTS.md`) vive en el PR #63, todavía abierto: se aplica encima cuando #63 se fusione. Todo cambio a `AGENTS.md` requiere aprobación del usuario.
+- El motor sigue entregando `dc.title` con el prefijo «Título del trabajo de investigación:» (pendiente de Int3, handover §6): en esta pantalla el operador lo recorta, como estaba previsto.
+
+---
+
 ## Evidencias
 
 - Commits: `e27e683` (mejoras IHC), `7bd0be4` (Arreglos.txt v1), `5c169ef` (v2), `6c512ec` (v3), `df05bd6` (auditoría UX C17–C29), `d306f36` + `4c9cc55` (Fase A revisión, C30–C38), `21d0ac3` (script E2E versionado, C39), `abac6b6` (lint en CI, C40, rama `ci-frontend-lint`).

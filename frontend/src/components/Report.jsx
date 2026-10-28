@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { debeMostrarFicha } from '../ficha'
 
 // Mapeo de IDs de regla a categoría visible en el reporte.
 // El backend no agrupa por categoría en su respuesta JSON (solo devuelve
@@ -171,7 +172,7 @@ function textoTipoDocumento(meta) {
   return null
 }
 
-function Report({ data, onBack }) {
+function Report({ data, onBack, onIrAFicha }) {
   const [filtro, setFiltro] = useState('todos') // 'todos' | 'error' | 'warning'
   const [vista, setVista] = useState('detallada') // 'detallada' | 'simple'
   const [busqueda, setBusqueda] = useState('')
@@ -410,6 +411,22 @@ function Report({ data, onBack }) {
             {nNoAplicables} regla{nNoAplicables === 1 ? '' : 's'} no aplica{nNoAplicables === 1 ? '' : 'n'} a este
             tipo de documento y no se evalu{nNoAplicables === 1 ? 'ó' : 'aron'}.
           </p>
+        )}
+
+        {/* Ficha de depósito (semana 8): solo existe con semáforo verde. */}
+        {debeMostrarFicha(data) && (
+          <div className="ficha-cta">
+            <div>
+              <strong>El documento está listo para el depósito.</strong>
+              <p className="campo-ayuda">
+                Revise la ficha de depósito (datos extraídos y matrícula/DNI) y prepárela para que
+                el userscript rellene el formulario oficial de DSpace.
+              </p>
+            </div>
+            <button type="button" className="btn-validar" onClick={onIrAFicha}>
+              Continuar con el depósito
+            </button>
+          </div>
         )}
 
         {/* Barra de progreso de cumplimiento (3 segmentos: ok / warn / error).
