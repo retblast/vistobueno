@@ -155,32 +155,46 @@ def _es_loopback(host: str | None) -> bool:
 
 
 async def verificar_acceso_buzon(request: Request) -> None:
-    """Dependency de los endpoints del buzón: solo desde la máquina local.
+    """Dependency de los endpoints del buzón: loopback o token compartido.
 
-    Rechaza con 403 (a) las peticiones que no vienen del loopback y (b) las
-    que no traen el token compartido cuando hay uno configurado.
+    Reglas (AUD-09):
+
+    - **Peer del loopback**: siempre permitido. Es la máquina donde corre
+      la app, que es la frontera de confianza del despliegue local. La SPA
+      y el userscript siempre hablan con `127.0.0.1`, así que no tienen
+      que enviar ningún token.
+    - **Peer de otra máquina**: permitido solo si hay un token
+      configurado (`VISTOBUENO_API_TOKEN`) y el header coincide.
+
+    El token se comprueba **antes** de rechazar al peer remoto: sin ese
+    orden, el token no serviría para el único caso que documenta
+    (API expuesta fuera de la máquina) y el remote sería siempre `403`.
     """
     host = request.client.host if request.client else None
-    if not _es_loopback(host):
+    if _es_loopback(host):
+        return
+    token = _token_buzon()
+    recibido = request.headers.get(CABECERA_TOKEN_BUZON, "")
+    if token and secrets.compare_digest(recibido.encode(), token.encode()):
+        return
+    if not token:
         raise HTTPException(
             status_code=403,
             detail=(
                 "El buzón de ficha solo se sirve desde la máquina donde corre "
-                "la app (loopback). La API está expuesta a otros equipos."
+                "la app (loopback). Si la API se expone a otros equipos, "
+                "define VISTOBUENO_API_TOKEN y envía el header "
+                f"'{CABECERA_TOKEN_BUZON}'."
             ),
         )
-    token = _token_buzon()
-    if token:
-        recibido = request.headers.get(CABECERA_TOKEN_BUZON, "")
-        if not secrets.compare_digest(recibido.encode(), token.encode()):
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    "Falta o no coincide el token del buzón. Envía el header "
-                    f"'{CABECERA_TOKEN_BUZON}' con el valor de "
-                    "VISTOBUENO_API_TOKEN."
-                ),
-            )
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "Falta o no coincide el token del buzón. Envía el header "
+            f"'{CABECERA_TOKEN_BUZON}' con el valor de "
+            "VISTOBUENO_API_TOKEN."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

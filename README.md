@@ -339,7 +339,29 @@ flujo normal no cambia.
 
 Si algún día la API se expone fuera de la máquina (bind a `0.0.0.0` o un
 reverse proxy en otro host), define `VISTOBUENO_API_TOKEN` y haz que el
-cliente envíe el header `X-VistoBueno-Token`.
+cliente envíe el header `X-VistoBueno-Token`. Con token configurado, un
+peer remoto entra **solo** si el header coincide (comparación en tiempo
+constante). El loopback no necesita el header: la SPA y el userscript
+hablan con `127.0.0.1` y el flujo local no se rompe por definir el token.
+
+### Límite de peticiones de validación
+
+`POST /validar` tiene un límite por IP: `60` peticiones por `60` segundos
+por defecto (`429` con `Retry-After` cuando se excede). Se ajusta con
+`VISTOBUENO_RATE_LIMIT_MAX` y `VISTOBUENO_RATE_LIMIT_VENTANA_SEG`, y
+`0` lo desactiva.
+
+En el despliegue local **el límite es por máquina, no por persona**: todos
+los clientes locales comparten `127.0.0.1` y, por lo tanto, el mismo
+cubo. Para una sesión de validación por lotes (una clase entera en una
+tanda), sube el límite, por ejemplo:
+
+```bash
+VISTOBUENO_RATE_LIMIT_MAX=300 nix run .#serve -- validator.api:app --reload
+```
+
+El límite real de la red sigue siendo del reverse proxy: este control
+protege el CPU del motor, no la red.
 
 ### Ensayo general (sin tocar la instancia real)
 

@@ -220,17 +220,28 @@ class TestAccesoBuzon:
         assert CLIENTE.post("/ficha-pendiente", json=FICHA).status_code == 204
         assert CLIENTE.get("/ficha-pendiente").status_code == 200
 
-    def test_token_ausente_da_403(self, monkeypatch):
-        """Con token configurado, la petición sin header va a 403."""
+    def test_loopback_no_necesita_token(self, monkeypatch):
+        """Con token configurado, el loopback sigue sin necesitarlo.
+
+        La SPA y el userscript hablan con `127.0.0.1` y no envían el
+        header: si el loopback exigiera el token, el flujo local se
+        rompería en cuanto alguien defina `VISTOBUENO_API_TOKEN`.
+        """
         monkeypatch.setenv("VISTOBUENO_API_TOKEN", "secreto-de-prueba")
-        respuesta = CLIENTE.get("/ficha-pendiente")
+        assert CLIENTE.post("/ficha-pendiente", json=FICHA).status_code == 204
+        assert CLIENTE.get("/ficha-pendiente").status_code == 200
+
+    def test_token_ausente_da_403(self, monkeypatch):
+        """Con token configurado, la petición remota sin header va a 403."""
+        monkeypatch.setenv("VISTOBUENO_API_TOKEN", "secreto-de-prueba")
+        respuesta = CLIENTE_FUERA.get("/ficha-pendiente")
         assert respuesta.status_code == 403
         assert "token" in respuesta.json()["detail"].lower()
 
     def test_token_incorrecto_da_403(self, monkeypatch):
         """Con token configurado, un token equivocado va a 403."""
         monkeypatch.setenv("VISTOBUENO_API_TOKEN", "secreto-de-prueba")
-        respuesta = CLIENTE.get(
+        respuesta = CLIENTE_FUERA.get(
             "/ficha-pendiente",
             headers={"X-VistoBueno-Token": "otro-token"},
         )
@@ -244,6 +255,28 @@ class TestAccesoBuzon:
         leida = CLIENTE.get("/ficha-pendiente", headers=cabeceras)
         assert leida.status_code == 200
         assert leida.json() == FICHA
+
+    def test_token_correcto_habilita_a_otro_equipo(self, monkeypatch):
+        """El caso documentado: API expuesta + token → el remoto entra.
+
+        Este es el motivo del token compartido. Con el orden anterior
+        (loopback primero) ningún peer remoto podía pasar nunca, y la
+        variable `VISTOBUENO_API_TOKEN` no habilitaba nada.
+        """
+        monkeypatch.setenv("VISTOBUENO_API_TOKEN", "secreto-de-prueba")
+        cabeceras = {"X-VistoBueno-Token": "secreto-de-prueba"}
+        assert (
+            CLIENTE_FUERA.post("/ficha-pendiente", json=FICHA, headers=cabeceras).status_code == 204
+        )
+        leida = CLIENTE_FUERA.get("/ficha-pendiente", headers=cabeceras)
+        assert leida.status_code == 200
+        assert leida.json() == FICHA
+
+    def test_sin_token_configurado_el_remoto_sigue_cerrado(self):
+        """Sin token configurado, el loopback es la única puerta."""
+        respuesta = CLIENTE_FUERA.get("/ficha-pendiente")
+        assert respuesta.status_code == 403
+        assert "loopback" in respuesta.json()["detail"]
 
 
 class TestBuzonInvarianteSinCors:

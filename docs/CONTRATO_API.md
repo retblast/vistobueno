@@ -596,10 +596,14 @@ pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
   vuelo.
 - **Token compartido (opt-in)**: si la API se expone fuera de la máquina
   (bind a `0.0.0.0` o un reverse proxy en otro host), se define
-  `VISTOBUENO_API_TOKEN` y todas las peticiones al buzón deben enviar el
-  header `X-VistoBueno-Token` con ese valor (comparación en tiempo
-  constante). Sin token configurado, el header no se exige.
-- El **userscript no necesita token**: siempre habla con `127.0.0.1`.
+  `VISTOBUENO_API_TOKEN` y el cliente remoto debe enviar el header
+  `X-VistoBueno-Token` con ese valor (comparación en tiempo constante).
+  Sin token configurado, el header no se exige y el remoto recibe `403`.
+  Con token configurado, un peer remoto con el header correcto entra:
+  el token se comprueba **antes** de rechazar al peer no-loopback.
+- **El loopback no necesita el token**: la SPA y el userscript hablan con
+  `127.0.0.1` y nunca envían el header, así que el flujo local no se
+  rompe cuando se define `VISTOBUENO_API_TOKEN`.
 - Peor caso de un `POST` ciego desde una página maliciosa: basura
   visible en el botón/toast del userscript, recuperable publicando de
   nuevo. No hay ruta de exfiltración.
@@ -687,14 +691,18 @@ Endurecimiento del contrato, sin romper la forma de las respuestas.
   endpoints (`POST/GET /ficha-pendiente`, `POST/GET /deposito`) responden
   `403` a cualquier petición que no venga de `127.0.0.1`/`::1`. La ficha
   travela datos personales del estudiante y la ranura es de "última gana".
-- **Token compartido opt-in**: con `VISTOBUENO_API_TOKEN` definido, el
-  buzón exige además el header `X-VistoBueno-Token` (comparación en
-  tiempo constante). El userscript no lo necesita: siempre habla con
-  `127.0.0.1`.
+- **Token compartido opt-in**: con `VISTOBUENO_API_TOKEN` definido, un
+  peer remoto entra al buzón solo si envía el header `X-VistoBueno-Token`
+  (comparación en tiempo constante). El loopback no lo necesita: siempre
+  habla con `127.0.0.1`, así que la SPA y el userscript funcionan sin
+  cambios.
 - **Límite de peticiones** sobre `POST /validar` (AUD-12): ventana fija
   por IP, `429` con `Retry-After`. Configurable con
   `VISTOBUENO_RATE_LIMIT_MAX` (default 60) y
-  `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` (default 60); `0` lo desactiva.
+  `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` (default 60); `0` lo desactiva. En
+  el despliegue local el límite es **por máquina**, no por persona:
+  todos los clientes comparten `127.0.0.1`. Para una tanda de
+  validaciones, sube `VISTOBUENO_RATE_LIMIT_MAX`.
 
 ### v1.8.0 (2026-10-28 — auditoría de comportamiento: contrato de upload)
 
