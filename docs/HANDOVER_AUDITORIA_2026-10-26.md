@@ -340,6 +340,12 @@ versionan: son de un solo uso.
 Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 `AGENTS.md`).
 
+> **Pendiente de una última pasada**: AUD-16, AUD-17 y AUD-18 los cierra
+> el PR de frontend (se apoya en `master`, así que **no puede** tocar
+> esta tabla). Cuando ese PR entre, hay que marcar esos tres aquí
+> (con su número de PR) y recién después se borra el bloque de aviso de
+> `AGENTS.md`, según la cláusula de cierre.
+
 | ID | Responsable | Estado | PR / commit |
 |----|-------------|--------|-------------|
 | AUD-01 | Int3 | pendiente | — |

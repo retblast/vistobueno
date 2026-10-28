@@ -140,7 +140,7 @@ def test_permite_env_example_pero_escanea_su_contenido(tmp_path):
     assert r.returncode == 0, r.stdout
 
     malo = tmp_path / "otro.env.example"
-    malo.write_text("VISTOBUENO_SMTP_PASSWORD=Clave-Real-De-Prueba\n", encoding="utf-8")
+    malo.write_text("VISTOBUENO_SMTP_PASSWORD=Clave-De-Prueba-XYZ\n", encoding="utf-8")
     r = correr([str(malo)])
     assert r.returncode == 1
     assert "otro.env.example" in r.stdout
@@ -150,7 +150,7 @@ def test_all_escanea_arbol_completo(tmp_path, monkeypatch):
     """Modo --all (CI) detecta violaciones anidadas en el árbol."""
     (tmp_path / "deploy").mkdir()
     secreto = tmp_path / "deploy" / "provision.sh"
-    secreto.write_text("VISTOBUENO_SMTP_PASSWORD=Clave-Real-De-Prueba\n", encoding="utf-8")
+    secreto.write_text("VISTOBUENO_SMTP_PASSWORD=Clave-De-Prueba-XYZ\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     r = correr(["--all"])
     assert r.returncode == 1
@@ -165,7 +165,7 @@ def test_all_escanea_arbol_completo(tmp_path, monkeypatch):
 def test_detecta_nombre_generico_de_secreto(tmp_path):
     """Un nombre en mayúsculas que termina en PASSWORD también se bloquea."""
     archivo = tmp_path / "config.txt"
-    archivo.write_text("DB_PASSWORD=Clave-Real-De-Prueba\n", encoding="utf-8")
+    archivo.write_text("DB_PASSWORD=Clave-De-Prueba-XYZ\n", encoding="utf-8")
     r = correr([str(archivo)])
     assert r.returncode == 1
     assert "DB_PASSWORD" in r.stdout
@@ -184,7 +184,7 @@ def test_detecta_token_generico(tmp_path):
 def test_detecta_clave_con_guion_bajo_interno(tmp_path):
     """AWS_SECRET_ACCESS_KEY termina en ACCESS_KEY: también es un secreto."""
     archivo = tmp_path / "aws.env.example"
-    archivo.write_text("AWS_SECRET_ACCESS_KEY=AKIA-REAL-DE-PRUEBA\n", encoding="utf-8")
+    archivo.write_text("AWS_SECRET_ACCESS_KEY=AKIA-REAL-987654\n", encoding="utf-8")
     r = correr([str(archivo)])
     assert r.returncode == 1
 
@@ -246,7 +246,7 @@ def test_detecta_bloque_yaml_multilinea(tmp_path):
     """El valor de un bloque YAML (`|`) está en las líneas de abajo."""
     archivo = tmp_path / "secreto.yaml"
     archivo.write_text(
-        "VISTOBUENO_SMTP_PASSWORD: |\n  Clave-Real-De-Prueba\n",
+        "VISTOBUENO_SMTP_PASSWORD: |\n  Clave-De-Prueba-XYZ\n",
         encoding="utf-8",
     )
     r = correr([str(archivo)])
@@ -259,5 +259,43 @@ def test_permite_bloque_yaml_con_placeholder(tmp_path):
     """Un bloque YAML con placeholder no es una filtración."""
     archivo = tmp_path / "plantilla.yaml"
     archivo.write_text("VISTOBUENO_SMTP_PASSWORD: |\n  <valor>\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_detecta_secreto_en_la_segunda_linea_del_bloque(tmp_path):
+    """El bloque YAML se lee entero: un placeholder arriba no tapa el secreto."""
+    archivo = tmp_path / "secreto.yaml"
+    archivo.write_text(
+        "VISTOBUENO_SMTP_PASSWORD: |\n  <valor>\n  valorRealEnSegundaLineaDelBloque\n",
+        encoding="utf-8",
+    )
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "VISTOBUENO_SMTP_PASSWORD" in r.stdout
+    assert "valorReal" not in r.stdout
+
+
+def test_detecta_secret_key(tmp_path):
+    """Un nombre que termina en SECRET_KEY es un nombre de secreto."""
+    archivo = tmp_path / "cliente.yaml"
+    archivo.write_text("CLIENT_SECRET_KEY: abcd1234efgh5678\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "CLIENT_SECRET_KEY" in r.stdout
+
+
+def test_detecta_encryption_key(tmp_path):
+    """Un nombre que termina en ENCRYPTION_KEY también."""
+    archivo = tmp_path / "cifrado.yaml"
+    archivo.write_text("ENCRYPTION_KEY: 0123456789abcdef\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+
+
+def test_permite_valor_de_prueba_sin_excluir_el_archivo(tmp_path):
+    """La forma `*-de-prueba` es un placeholder: no obliga a excluir el archivo."""
+    archivo = tmp_path / "tests_de_otro_modulo.py"
+    archivo.write_text('API_TOKEN = "secreto-de-prueba"\n', encoding="utf-8")
     r = correr([str(archivo)])
     assert r.returncode == 0, r.stdout

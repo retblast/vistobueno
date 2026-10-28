@@ -12,7 +12,8 @@ proyecto (SMTP, DSpace y el token del buzón) y cualquier archivo .env /
 
 Valores permitidos (placeholders documentales/dummy): ``dummy``, ``prueba``,
 ``test``, ``changeme``, ``<valor>``, los valores entre ángulos
-(``<mi-token>``) y las referencias al entorno (``$VAR``, ``${VAR}``,
+(``<mi-token>``), los que terminan en ``-de-prueba`` (convención de los
+tests del repo) y las referencias al entorno (``$VAR``, ``${VAR}``,
 ``os.environ.get(...)``).
 
 El propio verificador y sus tests están excluidos: contienen el patrón
@@ -33,7 +34,9 @@ El verificador marca **cuatro** clases de filtración:
    ``DB_PASSWORD=...``, ``GITHUB_TOKEN=...``, ``AWS_SECRET_ACCESS_KEY=...``.
 3. **URL con credenciales embebidas**: ``https://usuario:clave@host``.
 4. **Bloque YAML multilínea**: ``clave: |`` o ``clave: >`` seguido de un
-   valor real (se lee el bloque indentado, no solo la primera línea).
+   valor real (se lee **todas** las líneas del bloque indentado, no solo
+   la primera: un placeholder arriba y el secreto abajo también se
+   detectan).
 
 Límites conocidos (declarados a propósito):
 
@@ -77,6 +80,8 @@ NOMBRES_SECRETOS = (
 SUFIJOS_SECRETOS = (
     "PASSWD",
     "PASSWORD",
+    "SECRET_KEY",
+    "ENCRYPTION_KEY",
     "SECRET",
     "TOKEN",
     "API_KEY",
@@ -155,6 +160,10 @@ def _valor_permitido(valor: str) -> bool:
     if limpio.startswith(PREFIXOS_REFERENCIA):
         # Lectura del entorno, no un valor: os.environ.get("X", "")
         return True
+    if limpio.lower().endswith("-de-prueba"):
+        # Convención de los tests del repo: "secreto-de-prueba" no es un
+        # secreto real y no obliga a excluir el archivo del escaneo.
+        return True
     return limpio.lower() in PLACEHOLDERS
 
 
@@ -170,21 +179,22 @@ def _es_archivo_env(ruta: Path) -> bool:
     return ruta.name == ".env" or ruta.name.startswith(".env.")
 
 
-def _valor_bloque_yaml(lineas: list[str], indice: int, sangria: int) -> str | None:
-    """Valor del bloque YAML que sigue a una clave con `|` o `>`.
+def _lineas_bloque_yaml(lineas: list[str], indice: int, sangria: int) -> list[str]:
+    """Líneas con contenido del bloque YAML que sigue a una clave con `|` o `>`.
 
-    Devuelve la primera línea con contenido del bloque indentado, o None
-    si el bloque está vacío.
+    Devuelve **todas** las líneas del bloque (no solo la primera): un
+    bloque puede poner el placeholder arriba y el valor real abajo.
     """
+    bloque: list[str] = []
     for linea in lineas[indice + 1 :]:
         if not linea.strip():
             continue
         sangria_linea = len(linea) - len(linea.lstrip())
         if sangria_linea <= sangria:
             # Salió del bloque: la clave no tiene valor multilínea.
-            return None
-        return linea.strip()
-    return None
+            break
+        bloque.append(linea.strip())
+    return bloque
 
 
 def verificar_archivo(ruta: Path) -> list[str]:
@@ -211,11 +221,13 @@ def verificar_archivo(ruta: Path) -> list[str]:
             valor = m.group(2)
             if valor.strip("\"'") in ("|", ">"):
                 # Bloque YAML multilínea: el valor está en las líneas
-                # indentadas que siguen.
+                # indentadas que siguen. Se revisan todas: si una sola
+                # no es un placeholder, el bloque es un secreto real.
                 sangria = len(linea) - len(linea.lstrip())
-                bloque = _valor_bloque_yaml(lineas, n - 1, sangria)
-                valor = bloque if bloque is not None else valor
-            if not _valor_permitido(valor):
+                bloque = _lineas_bloque_yaml(lineas, n - 1, sangria)
+                if any(not _valor_permitido(v) for v in bloque):
+                    violaciones.append(MSG_VIOLACION.format(ruta=ruta, linea=n, var=m.group(1)))
+            elif not _valor_permitido(valor):
                 # No se imprime el valor: nunca repetir un posible secreto en logs.
                 violaciones.append(MSG_VIOLACION.format(ruta=ruta, linea=n, var=m.group(1)))
         if PATRON_URL_CREDENCIALES.search(linea):
