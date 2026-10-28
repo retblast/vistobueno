@@ -157,7 +157,19 @@ _HEADINGS_CUANT = [
 ]
 
 
-def _document_xml(conforme: bool, estructura: bool) -> str:
+def _document_xml(conforme: bool, estructura: bool, detectable: bool = False) -> str:
+    """Arma el document.xml del DOCX sintético.
+
+    Args:
+        conforme:True = el documento cumple el formato; False = incumple.
+        estructura: True = con la estructura completa de la tesis
+            cuantitativa; False = con una estructura tan incompleta que
+            **no se puede determinar el tipo de documento**.
+        detectable: True = con las firmas que permiten inferir el tipo
+            (VARIABLE + POBLACIÓN Y MUESTRA) pero con la estructura
+            incompleta: es el caso en el que la regla de estructura
+            **sí es aplicable** y la paridad se puede comparar de verdad.
+    """
     paras = []
 
     # ── Portada ─────────────────────────────────────────────
@@ -218,8 +230,23 @@ def _document_xml(conforme: bool, estructura: bool) -> str:
         paras.append(_cover_para("Trujillo - Perú, 2026", '<w:sz w:val="30"/>'))
 
     # ── Preliminares (headings de estructura) ───────────────
-    for h in _HEADINGS_CUANT:
-        if not estructura and h not in ("INTRODUCCIÓN", "RESULTADOS", "ANEXOS"):
+    # El subconjunto "detectable" lleva las dos firmas que permiten
+    # inferir `tinv_cuantitativo` (VARIABLE + POBLACIÓN Y MUESTRA) sin
+    # la estructura completa: la regla de estructura del DSL es entonces
+    # APLICABLE y su veredicto se puede comparar con el legacy.
+    if detectable:
+        subset = (
+            "INTRODUCCIÓN",
+            "1.5 VARIABLE(S) Y OPERACIONALIZACIÓN",
+            "POBLACIÓN Y MUESTRA",
+            "METODOLOGÍA",
+            "RESULTADOS",
+        )
+    else:
+        subset = _HEADINGS_CUANT
+
+    for h in subset:
+        if not estructura and not detectable and h not in ("INTRODUCCIÓN", "RESULTADOS", "ANEXOS"):
             continue
         # Título 2/3 si es sub-sección del cuerpo (indentado en el esquema).
         nivel = 3 if h.startswith(("    ", "1.5 ")) else 2 if h.startswith("  ") else 1
@@ -283,13 +310,13 @@ def _footer_xml(conforme: bool) -> str:
     )
 
 
-def _make_docx(conforme: bool, estructura: bool) -> str:
+def _make_docx(conforme: bool, estructura: bool, detectable: bool = False) -> str:
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
         path = f.name
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", CONTENT_TYPES)
         z.writestr("_rels/.rels", RELS)
-        z.writestr("word/document.xml", _document_xml(conforme, estructura))
+        z.writestr("word/document.xml", _document_xml(conforme, estructura, detectable))
         z.writestr("word/footer1.xml", _footer_xml(conforme))
     return path
 
@@ -355,10 +382,23 @@ def _verificar_paridad(docx_path: str) -> dict:
     for rid in sorted(legacy):
         legacy_res, dsl_res = legacy[rid], dsl[rid]
         if rid in divergen_por_aplicabilidad:
-            if dsl_res.aplicable and legacy_res.passed != dsl_res.passed:
+            if dsl_res.aplicable:
+                # La estructura ES aplicable: los dos motores tienen que
+                # coincidir en el veredicto. Esta rama solo se ejercita con
+                # un documento cuyo tipo se pudo determinar (ver el fixture
+                # "detectable" de los tests).
+                if legacy_res.passed != dsl_res.passed:
+                    diffs.append(
+                        f"{rid}: la regla es aplicable en DSL, así que debe coincidir "
+                        f"(legacy={legacy_res.passed}, dsl={dsl_res.passed})"
+                    )
+            elif legacy_res.passed:
+                # El DSL la marca NO aplicable (el tipo de documento no se
+                # pudo determinar) mientras el legacy la evaluó y pasó:
+                # divergencia no explicada por la aplicabilidad.
                 diffs.append(
-                    f"{rid}: la regla es aplicable en DSL, así que debe coincidir "
-                    f"(legacy={legacy_res.passed}, dsl={dsl_res.passed})"
+                    f"{rid}: el DSL la marca no aplicable pero el legacy la evaluó "
+                    f"y pasó (legacy={legacy_res.passed})"
                 )
         elif rid in solo_passed:
             if legacy_res.passed != dsl_res.passed:
@@ -371,7 +411,13 @@ def _verificar_paridad(docx_path: str) -> dict:
                 f"!= dsl(passed={dsl_res.passed}, found={dsl_res.found!r})"
             )
     assert not diffs, "Diferencias de paridad:\n" + "\n".join(diffs)
-    return {"total": len(legacy), "fallos": sum(1 for r in legacy.values() if not r.passed)}
+    return {
+        "total": len(legacy),
+        "fallos": sum(1 for r in legacy.values() if not r.passed),
+        "legacy": legacy,
+        "dsl": dsl,
+        "deteccion": dsl.get("deteccion_tipo_documento"),
+    }
 
 
 def _finalizar(path: str):
@@ -410,17 +456,60 @@ def test_paridad_doc_rebelde():
 
 
 def test_paridad_estructura_incompleta():
-    """Estructura incompleta: los tres esquemas fallan y los `faltantes`
-    reportados por el DFA coinciden con los del motor legacy."""
+    """Estructura tan incompleta que el tipo NO se puede determinar.
+
+    Divergencia **intencional**: el DSL marca las tres estructuras como
+    "no aplica" (el tipo de documento no se pudo inferir, así que ninguna
+    estructura es exigible) mientras el legacy las evalúa siempre y las
+    reporta como falladas. Lo que se verifica aquí es que la divergencia
+    sea exactamente esa y no otra cosa.
+    """
     path = _make_docx(conforme=True, estructura=False)
     try:
         resumen = _verificar_paridad(path)
         assert resumen["total"] == 32
+
+        deteccion = resumen["deteccion"]
+        assert deteccion is not None
+        assert deteccion.found.startswith("sin_determinado"), deteccion.found
+
         for _rid in (
             "estructura_tinv_cuantitativo",
             "estructura_tinv_cualitativo",
             "estructura_tinv_revision_literatura",
         ):
-            assert True  # la paridad exacta ya se verificó en _verificar_paridad
+            dsl_res = resumen["dsl"][_rid]
+            legacy_res = resumen["legacy"][_rid]
+            # El DSL no las evalúa (no aplican) y el legacy sí (fallan).
+            assert dsl_res.aplicable is False, _rid
+            assert dsl_res.passed is True, _rid
+            assert legacy_res.passed is False, _rid
+    finally:
+        _finalizar(path)
+
+
+def test_paridad_tipo_detectado_con_estructura_incompleta():
+    """Tipo inferible pero estructura incompleta: aquí SÍ se compara.
+
+    Es el caso que faltaba en la suite (auditoría 2026-10-26, AUD-21):
+    con las firmas de `tinv_cuantitativo` (VARIABLE + POBLACIÓN Y MUESTRA)
+    pero sin la estructura completa, la regla del DSL es **aplicable** y
+    su veredicto tiene que coincidir con el del motor legacy. Antes de
+    este test, esa rama de la comparación nunca se ejercitaba.
+    """
+    path = _make_docx(conforme=True, estructura=True, detectable=True)
+    try:
+        resumen = _verificar_paridad(path)
+
+        deteccion = resumen["deteccion"]
+        assert deteccion is not None
+        assert "tinv_cuantitativo" in deteccion.found, deteccion.found
+
+        dsl_res = resumen["dsl"]["estructura_tinv_cuantitativo"]
+        legacy_res = resumen["legacy"]["estructura_tinv_cuantitativo"]
+        # La estructura está incompleta: los dos motores la reproban.
+        assert dsl_res.aplicable is True
+        assert dsl_res.passed is False
+        assert legacy_res.passed is False
     finally:
         _finalizar(path)

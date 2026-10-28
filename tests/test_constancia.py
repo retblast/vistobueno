@@ -737,3 +737,81 @@ class TestNeutralizacionFormulas:
         assert respuesta.status_code == 200
         texto = respuesta.content.decode("utf-8")
         assert "'Tesis" not in texto  # sin comilla ante un título normal
+
+
+# ---------------------------------------------------------------------------
+# Constancias con la captura REAL de la carátula (auditoría 2026-10-26)
+# ---------------------------------------------------------------------------
+
+
+class TestConstanciasConCapturaReal:
+    """Impacto de AUD-24 en el papeleo: una constancia por autor real.
+
+    La captura de autores parte "Apellido, Nombre" por la coma y se
+    queda con un solo párrafo. Sobre la carátula real eso produce
+    constancias con nombres truncados y ninguna para el segundo autor.
+    """
+
+    @staticmethod
+    def _solicitud_desde_captura(captura: dict, indice: int) -> dict:
+        """Arma la solicitud de /constancia con la captura del motor.
+
+        El operador teclea las matrículas (son manuales): una por autor
+        real, en el orden de la carátula.
+        """
+        from validator.api import CAMPOS_EXTRAIDOS_FICHA, CAMPOS_MANUALES_FICHA
+
+        extraidos = []
+        for campo in CAMPOS_EXTRAIDOS_FICHA:
+            dato = captura.get(campo) or {}
+            extraidos.append(
+                {
+                    "campo": campo,
+                    "valor": dato.get("valor"),
+                    "pagina": dato.get("pagina"),
+                    "detectado": bool(dato.get("detectado")),
+                }
+            )
+        manuales = [
+            {"campo": campo, "valor": None}
+            for campo in CAMPOS_MANUALES_FICHA
+            if campo != "matricula"
+        ]
+        manuales.append({"campo": "matricula", "valor": ["15185003-20", "10130005-20"]})
+        return {
+            "ficha": {"extraidos": extraidos, "manuales": manuales},
+            "handle": HANDLE,
+            "timestamp": TIMESTAMP,
+            "indice_autor": indice,
+        }
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "AUD-24: la captura de autores parte 'Apellido, Nombre' por la "
+            "coma, así que las constancias salen con nombres truncados y no "
+            "hay constancia del segundo autor. Ver "
+            "docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-24)."
+        ),
+    )
+    def test_una_constancia_por_autor_real(self):
+        from _caratula_real import capturar_ficha, crear_docx_caratula
+
+        ruta = crear_docx_caratula()
+        try:
+            captura = capturar_ficha(ruta)
+        finally:
+            Path(ruta).unlink(missing_ok=True)
+
+        primera = CLIENTE.post("/constancia", json=self._solicitud_desde_captura(captura, 0))
+        segunda = CLIENTE.post("/constancia", json=self._solicitud_desde_captura(captura, 1))
+        assert primera.status_code == 200
+        assert segunda.status_code == 200
+
+        # El nombre completo del autor viaja en la constancia.
+        assert "Br. Apellido, Nombre" in primera.headers["content-disposition"]
+        assert "Br. Apellido2, Nombre2" in segunda.headers["content-disposition"]
+
+        # Y cada constancia lleva la matrícula del autor de ese orden.
+        assert "15185003-20" in _document_xml(primera.content)
+        assert "10130005-20" in _document_xml(segunda.content)

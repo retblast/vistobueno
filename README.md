@@ -285,7 +285,11 @@ oficial construye todas las peticiones; el userscript solo teclea.
 El flujo completo es:
 
 1. El operador sube la tesis en la SPA y la API devuelve el reporte con la
-   **ficha de depósito** (valores capturados del DOCX).
+   **ficha de depósito** (valores capturados del DOCX). Un campo solo
+   viaja como `detectado=true` si su valor es utilizable: la API degrada a
+   `detectado=false, valor=null` las capturas vacías o con la forma
+   equivocada (por ejemplo, el asesor vacío o la línea de ciudad en vez
+   del año) para que el operador las teclee.
 2. En la pantalla de ficha el operador corrige los valores y completa los
    campos manuales (matrícula, DNI, ORCID).
 3. "Preparar depósito" publica la ficha en el **buzón** (una ranura, TTL

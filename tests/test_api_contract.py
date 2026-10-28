@@ -683,3 +683,109 @@ class TestFichaDeposito:
         """ROJO → ficha_deposito es null: no hay nada que pre-llenar."""
         datos = self._subir_doc_rojo().json()
         assert datos["ficha_deposito"] is None
+
+
+class TestContratoFichaUtilizable:
+    """Un campo con `detectado=true` debe traer un valor UTILIZABLE.
+
+    Auditoría 2026-10-26 (AUD-25, AUD-26): el motor puede publicar
+    capturas vacías o con la forma equivocada (el asesor vacío, la línea
+    de ciudad en vez del año). Ese dato viaja al formulario oficial de
+    DSpace, a la constancia y al registro: si no sirve, no debe viajar
+    como detectado. La API lo degrada a `detectado=false, valor=null` y
+    el operador lo teclea en la pantalla de ficha.
+    """
+
+    @staticmethod
+    def _ficha(datos_motor: dict):
+        from validator.api import _ficha_desde_reporte
+
+        return {c.campo: c for c in _ficha_desde_reporte({"ficha": datos_motor}).extraidos}
+
+    def test_asesor_vacio_no_viaja_como_detectado(self):
+        """El caso real de AUD-25: asesor '' con detectado=true."""
+        ficha = self._ficha(
+            {"dc.contributor.advisor": {"valor": "", "pagina": 1, "detectado": True}}
+        )
+        asesor = ficha["dc.contributor.advisor"]
+        assert asesor.detectado is False
+        assert asesor.valor is None
+
+    def test_autor_lista_vacia_no_viaja_como_detectado(self):
+        """Una lista sin elementos no es un autor."""
+        ficha = self._ficha(
+            {"dc.contributor.author": {"valor": [], "pagina": 1, "detectado": True}}
+        )
+        assert ficha["dc.contributor.author"].detectado is False
+
+    def test_autor_con_texto_sigue_detectado(self):
+        """Un autor con texto se publica tal cual."""
+        ficha = self._ficha(
+            {
+                "dc.contributor.author": {
+                    "valor": ["Br. Apellido, Nombre"],
+                    "pagina": 1,
+                    "detectado": True,
+                }
+            }
+        )
+        autor = ficha["dc.contributor.author"]
+        assert autor.detectado is True
+        assert autor.valor == ["Br. Apellido, Nombre"]
+
+    def test_anio_con_forma_invalida_no_viaja_como_detectado(self):
+        """AUD-26: 'Trujillo - Perú' no es un año → no se publica."""
+        ficha = self._ficha(
+            {"dc.date.issued": {"valor": "Trujillo - Perú", "pagina": 1, "detectado": True}}
+        )
+        fecha = ficha["dc.date.issued"]
+        assert fecha.detectado is False
+        assert fecha.valor is None
+
+    def test_anio_rojo_dentro_del_titulo_no_viaja_como_detectado(self):
+        """AUD-26 real: el párrafo del título termina en ', Trujillo 2024'.
+
+        Un chequeo de "contiene un año" dejaría pasar este texto y el
+        ítem se publicaría con la fecha del título. Solo sobrevive un
+        año desnudo.
+        """
+        ficha = self._ficha(
+            {
+                "dc.date.issued": {
+                    "valor": "Estrategias lúdicas en primaria, Trujillo 2024",
+                    "pagina": 1,
+                    "detectado": True,
+                }
+            }
+        )
+        fecha = ficha["dc.date.issued"]
+        assert fecha.detectado is False
+        assert fecha.valor is None
+        assert fecha.pagina is None
+
+    def test_anio_valido_sigue_detectado(self):
+        """Un año con forma correcta se publica (el acierto es del motor)."""
+        ficha = self._ficha({"dc.date.issued": {"valor": "2026", "pagina": 1, "detectado": True}})
+        assert ficha["dc.date.issued"].detectado is True
+        assert ficha["dc.date.issued"].valor == "2026"
+
+    def test_valor_con_espacios_solo_no_viaja_como_detectado(self):
+        """Un texto de solo espacios no es un dato."""
+        ficha = self._ficha(
+            {"dc.contributor.advisor": {"valor": "   ", "pagina": 1, "detectado": True}}
+        )
+        assert ficha["dc.contributor.advisor"].detectado is False
+
+    def test_invariante_en_la_respuesta_real(self):
+        """En la respuesta de la API no hay detectado=true sin valor."""
+        respuesta = CLIENTE.post(
+            "/validar",
+            files={"archivo": ("tesis.docx", open(ruta_docx_prueba(), "rb").read(), MIME_DOCX)},
+        )
+        assert respuesta.status_code == 200
+        ficha = respuesta.json()["ficha_deposito"]
+        if ficha is None:
+            return  # semáforo rojo: no hay ficha
+        for extraido in ficha["extraidos"]:
+            if extraido["detectado"]:
+                assert extraido["valor"] not in (None, "", []), extraido["campo"]

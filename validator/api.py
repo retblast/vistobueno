@@ -385,6 +385,45 @@ def _extraer_metadata_tipo_documento(
     }
 
 
+def _valor_utilizable(valor: object) -> bool:
+    """True si el valor capturado sirve para el formulario de DSpace.
+
+    Contrato de la ficha (auditoría 2026-10-26, AUD-25 y AUD-26): un
+    campo con `detectado=true` debe traer un valor **utilizable**. El
+    motor puede publicar capturas vacías o con la forma equivocada (por
+    ejemplo, el asesor vacío o la línea de ciudad en vez del año), y
+    ese dato viaja al formulario oficial, a la constancia y al
+    registro. La API no lo publica como detectado: lo deja para que el
+    operador lo teclee.
+    """
+    if valor is None:
+        return False
+    if isinstance(valor, str):
+        return bool(valor.strip())
+    if isinstance(valor, list):
+        # Una lista sirve si tiene al menos un elemento con texto.
+        return any(isinstance(item, str) and item.strip() for item in valor)
+    return True
+
+
+def _forma_valida(campo: str, valor: object) -> bool:
+    """True si el valor además tiene la forma que espera el campo.
+
+    Solo `dc.date.issued` tiene forma estricta: el formulario pide un
+    año. El chequeo es de **valor completo**, no de "contiene": la
+    captura real de AUD-26 es el párrafo del título, que termina en
+    ", Trujillo 2024". Un `contains` dejaría pasar ese texto y el
+    ítem se publicaría con la fecha equivocada.
+    """
+    if campo != "dc.date.issued":
+        return True
+    if isinstance(valor, list):
+        valor = valor[0] if valor else ""
+    if not isinstance(valor, str):
+        return False
+    return bool(re.fullmatch(r"(?:19|20)\d{2}", valor.strip()))
+
+
 def _ficha_desde_reporte(reporte: dict) -> FichaDeposito:
     """Construye la ficha de depósito a partir del reporte del motor.
 
@@ -395,6 +434,11 @@ def _ficha_desde_reporte(reporte: dict) -> FichaDeposito:
     17), viaja con `detectado=false` y `valor=null`: el contrato es
     estable y el frontend puede construirse ya.
 
+    Un campo solo viaja con `detectado=true` si su valor es **utilizable**
+    y tiene la **forma** que espera el campo (ver `_valor_utilizable` y
+    `_forma_valida`). Si no, viaja con `detectado=false` y `valor=null`:
+    el operador lo teclea en la pantalla de ficha.
+
     Los manuales siempre viajan vacíos desde el servidor: los llena el
     operador en la pantalla.
     """
@@ -402,12 +446,16 @@ def _ficha_desde_reporte(reporte: dict) -> FichaDeposito:
     extraidos = []
     for campo in CAMPOS_EXTRAIDOS_FICHA:
         dato = datos_motor.get(campo) or {}
+        valor = dato.get("valor")
+        detectado = (
+            bool(dato.get("detectado")) and _valor_utilizable(valor) and _forma_valida(campo, valor)
+        )
         extraidos.append(
             CampoExtraidoFicha(
                 campo=campo,
-                valor=dato.get("valor"),
-                pagina=dato.get("pagina"),
-                detectado=bool(dato.get("detectado")),
+                valor=valor if detectado else None,
+                pagina=dato.get("pagina") if detectado else None,
+                detectado=detectado,
             )
         )
     manuales = [CampoManualFicha(campo=c, valor=None) for c in CAMPOS_MANUALES_FICHA]
@@ -499,7 +547,7 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.9.0",
+    version="1.10.0",
 )
 
 
