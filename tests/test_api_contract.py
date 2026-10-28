@@ -8,6 +8,7 @@ Uso:
 """
 
 import io
+import time
 import zipfile
 from pathlib import Path
 
@@ -24,9 +25,10 @@ from conftest import (
     subir_plantilla,
 )
 from docx_factory import compilar_docx, configuracion_base
+from fastapi.testclient import TestClient
 
 import validator.api
-from validator.api import CAMPOS_EXTRAIDOS_FICHA, CAMPOS_MANUALES_FICHA, REGLAS_YAML_PATH
+from validator.api import CAMPOS_EXTRAIDOS_FICHA, CAMPOS_MANUALES_FICHA, REGLAS_YAML_PATH, app
 from validator.api_models import ResultadoReglaAPI
 from validator.engine import build_report, load_rules, validate_docx
 
@@ -446,6 +448,65 @@ class TestCorreo:
         )
         assert respuesta.status_code == 422
         assert "Correo electrónico inválido" in respuesta.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Tests: límite de peticiones (AUD-12)
+# ---------------------------------------------------------------------------
+
+
+class TestLimitePeticiones:
+    """Límite in-app sobre POST /validar (protege el CPU del motor).
+
+    `POST /validar` recompila el DSL en cada request: el recurso a
+    proteger es el proceso, no los datos. El límite es una ventana fija
+    por IP y vive en memoria (sin base de datos).
+    """
+
+    def test_rafaga_devuelve_429(self, monkeypatch):
+        """Más peticiones que el máximo en la ventana → 429 con Retry-After."""
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_MAX", "2")
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_VENTANA_SEG", "60")
+        assert subir_plantilla().status_code == 200
+        assert subir_plantilla().status_code == 200
+        rebotada = subir_plantilla()
+        assert rebotada.status_code == 429
+        assert rebotada.headers.get("Retry-After")
+        assert "peticiones" in rebotada.json()["detail"].lower()
+
+    def test_otra_ip_no_Comparte_cupon(self, monkeypatch):
+        """El cupón es por IP: otra dirección sigue entrando."""
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_MAX", "1")
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_VENTANA_SEG", "60")
+        otro = TestClient(app, client=("127.0.0.2", 50001))
+        with open(ruta_docx_prueba(), "rb") as f:
+            archivos = {"archivo": ("tesis.docx", f.read(), MIME_DOCX)}
+        assert CLIENTE.post("/validar", files=archivos).status_code == 200
+        assert CLIENTE.post("/validar", files=archivos).status_code == 429
+        assert otro.post("/validar", files=archivos).status_code == 200
+
+    def test_ventana_vencida_libera_el_cupon(self, monkeypatch):
+        """Pasada la ventana, la misma IP vuelve a poder entrar."""
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_MAX", "1")
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_VENTANA_SEG", "1")
+        assert subir_plantilla().status_code == 200
+        assert subir_plantilla().status_code == 429
+        time.sleep(1.1)
+        assert subir_plantilla().status_code == 200
+
+    def test_limite_desactivado_no_afecta(self, monkeypatch):
+        """Con máximo 0 el límite queda apagado."""
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_MAX", "0")
+        for _ in range(5):
+            assert subir_plantilla().status_code == 200
+
+    def test_configuracion_invalida_cae_al_default(self, monkeypatch):
+        """Una variable basura no rompe la API: usa el valor por defecto."""
+        monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_MAX", "no-es-un-numero")
+        maximo, ventana = validator.api._config_limite_peticiones()
+        assert maximo == validator.api.MAXIMO_PETICIONES_DEFAULT
+        assert ventana == validator.api.VENTANA_PETICIONES_DEFAULT
+        assert subir_plantilla().status_code == 200
 
 
 # ---------------------------------------------------------------------------

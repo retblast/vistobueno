@@ -307,14 +307,61 @@ El flujo completo es:
 - Plantillas oficiales en `recursos/` (no versionadas): la del Modelo B
   de la constancia (`TESIS DIGITAL MODELO B-2026.docx`) y las de tesis
   para las pruebas.
+- **Un solo worker**: el buzón de ficha vive en la memoria del proceso.
+  Con varios workers, la ficha se publica en uno y se lee en otro → `404`
+  silencioso. `uvicorn` sin `--workers` ya cumple (el default es 1).
 - Variables de entorno:
   - `VISTOBUENO_FIRMA` — nombre del responsable (columna FIRMA del
     registro y la constancia). Obligatoria para el papeleo.
   - `VISTOBUENO_PLANTILLA_CONSTANCIA` — opcional, si la plantilla vive
     fuera de `recursos/`.
+  - `VISTOBUENO_RATE_LIMIT_MAX` / `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` —
+    límite de peticiones de `POST /validar` (default 60 por 60 s, por IP;
+    `0` lo desactiva). `POST /validar` recompila el DSL en cada request:
+    el límite protege el CPU de la máquina.
+  - `VISTOBUENO_API_TOKEN` — opcional. Si se define, los endpoints del
+    buzón exigen además el header `X-VistoBueno-Token` con ese valor.
+    Solo hace falta si la API se expone fuera de la máquina del operador.
 - Userscript en Tampermonkey: crear un script nuevo y pegar el contenido
   de `tools/dspace-fill/dist/vistobueno-dspace-fill.user.js`. El script
-  solo se conecta a `localhost` (`@connect localhost`).
+  solo se conecta a `localhost` (`@connect localhost`) y **no necesita
+  token**: siempre habla con `127.0.0.1`.
+
+### Control de acceso (buzón de ficha)
+
+El buzón travela datos personales del estudiante (DNI, ORCID, resumen) y su
+ranura es de "última gana". Por eso los cuatro endpoints del buzón
+**rechazan con `403` toda petición que no venga de `127.0.0.1`/`::1`**
+(auditoría 2026-10-26, AUD-09): sin ese control, un `curl` desde otro
+equipo de la red podía leer la ficha o pisarla mientras el operador
+trabajaba. La SPA y el userscript corren en la misma máquina, así que el
+flujo normal no cambia.
+
+Si algún día la API se expone fuera de la máquina (bind a `0.0.0.0` o un
+reverse proxy en otro host), define `VISTOBUENO_API_TOKEN` y haz que el
+cliente envíe el header `X-VistoBueno-Token`. Con token configurado, un
+peer remoto entra **solo** si el header coincide (comparación en tiempo
+constante). El loopback no necesita el header: la SPA y el userscript
+hablan con `127.0.0.1` y el flujo local no se rompe por definir el token.
+
+### Límite de peticiones de validación
+
+`POST /validar` tiene un límite por IP: `60` peticiones por `60` segundos
+por defecto (`429` con `Retry-After` cuando se excede). Se ajusta con
+`VISTOBUENO_RATE_LIMIT_MAX` y `VISTOBUENO_RATE_LIMIT_VENTANA_SEG`, y
+`0` lo desactiva.
+
+En el despliegue local **el límite es por máquina, no por persona**: todos
+los clientes locales comparten `127.0.0.1` y, por lo tanto, el mismo
+cubo. Para una sesión de validación por lotes (una clase entera en una
+tanda), sube el límite, por ejemplo:
+
+```bash
+VISTOBUENO_RATE_LIMIT_MAX=300 nix run .#serve -- validator.api:app --reload
+```
+
+El límite real de la red sigue siendo del reverse proxy: este control
+protege el CPU del motor, no la red.
 
 ### Ensayo general (sin tocar la instancia real)
 

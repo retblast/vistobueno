@@ -3,7 +3,7 @@
   "info": {
     "title": "VistoBueno API",
     "description": "API de validación automática de formato de tesis — UNT FECyC",
-    "version": "1.8.0"
+    "version": "1.9.0"
   },
   "paths": {
     "/validar": {
@@ -58,6 +58,9 @@
           "422": {
             "description": "Archivo corrupto, no es DOCX válido o correo inválido"
           },
+          "429": {
+            "description": "Demasiadas peticiones de validación seguidas"
+          },
           "500": {
             "description": "Error interno del validador"
           }
@@ -67,7 +70,7 @@
     "/ficha-pendiente": {
       "get": {
         "summary": "Leer la ficha pendiente del buzón",
-        "description": "El userscript lee aquí la ficha a rellenar en el formulario oficial de DSpace. 404 cuando no hay ficha o la publicada expiró (TTL de 1 hora).",
+        "description": "El userscript lee aquí la ficha a rellenar en el formulario oficial de DSpace. 404 cuando no hay ficha o la publicada expiró (TTL de 1 hora). Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "leer_ficha_pendiente_ficha_pendiente_get",
         "responses": {
           "200": {
@@ -80,6 +83,9 @@
               }
             }
           },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
+          },
           "404": {
             "description": "Sin ficha pendiente: vacía o expirada"
           }
@@ -87,7 +93,7 @@
       },
       "post": {
         "summary": "Publicar la ficha completada en el buzón",
-        "description": "La SPA publica la ficha (extraídos + manuales) para que el userscript de depósito la lea desde el navegador del operador. El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo reemplaza la ficha anterior ('última gana').",
+        "description": "La SPA publica la ficha (extraídos + manuales) para que el userscript de depósito la lea desde el navegador del operador. El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo reemplaza la ficha anterior ('última gana'). Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "publicar_ficha_pendiente_ficha_pendiente_post",
         "requestBody": {
           "content": {
@@ -102,6 +108,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
           },
           "422": {
             "description": "Validation Error",
@@ -119,7 +128,7 @@
     "/deposito": {
       "get": {
         "summary": "Leer el depósito reportado",
-        "description": "La SPA sondea aquí mientras espera el handle del ítem. 404 cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, la SPA debe cotejar el `titulo` reportado con la ficha en vuelo antes de usar el handle.",
+        "description": "La SPA sondea aquí mientras espera el handle del ítem. 404 cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, la SPA debe cotejar el `titulo` reportado con la ficha en vuelo antes de usar el handle. Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "leer_deposito_reportado_deposito_get",
         "responses": {
           "200": {
@@ -132,6 +141,9 @@
               }
             }
           },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
+          },
           "404": {
             "description": "Sin depósito reportado: vacío o expirado"
           }
@@ -139,7 +151,7 @@
       },
       "post": {
         "summary": "Reportar un depósito realizado",
-        "description": "El userscript reporta el depósito desde la página del ítem archivado: handle del ítem, título y el timestamp del clic en Depositar. La SPA lo recoge sondeando GET /deposito y arma la constancia y la fila del registro.",
+        "description": "El userscript reporta el depósito desde la página del ítem archivado: handle del ítem, título y el timestamp del clic en Depositar. La SPA lo recoge sondeando GET /deposito y arma la constancia y la fila del registro. Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "reportar_deposito_deposito_post",
         "requestBody": {
           "content": {
@@ -154,6 +166,9 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
           },
           "422": {
             "description": "Validation Error",
