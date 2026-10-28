@@ -27,8 +27,9 @@ Guía para integrantes del proyecto. Define convenciones, arquitectura y flujo d
 >   aceptación de AUD-24 a AUD-27 ya están en `tests/test_captura_ficha.py`
 >   (tests con `xfail(strict=True)`: cuando el motor los cumpla, el CI se
 >   pone rojo hasta que Int1 quite la marca).
-> - **Int1 — API**: AUD-09, AUD-10, AUD-12, AUD-13, AUD-21 y el contrato de la
->   ficha: **cerrados** (PR #65, #66 y #67; ver la tabla §11 del handover).
+> - **Int1 — API**: AUD-09, AUD-10, AUD-12, AUD-13, AUD-21, AUD-22 y el
+>   contrato de la ficha: **cerrados** (PR #65, #66, #67 y #69; ver la tabla
+>   §11 del handover).
 > - **Int2 — frontend**: AUD-16 (la pantalla de ficha del handover S8 no
 >   existe), AUD-17, AUD-18.
 > - **Decisiones de dominio abiertas** (las necesita el equipo, no un
@@ -116,7 +117,7 @@ Módulo de IA (asistente del encargado — opt-in, advisory, NUNCA toca el semá
 | **Tests exportador** | `tests/test_exportador.py` | Tests de exportación Markdown/PDF |
 | **Tests notificación** | `tests/test_notificacion.py` | Tests unitarios + E2E con sink SMTP (aiosmtpd) |
 | **Tests IA** | `tests/test_llm.py`, `tests/test_asistente.py` | Cliente LLM y asistente, con `StubLLM` (sin red ni GPU) |
-| **Escáner de secretos** | `scripts/verificar_secretos.py` | Bloquea credenciales SMTP y DSpace en commits (pre-commit + CI) |
+| **Escáner de secretos** | `scripts/verificar_secretos.py` | Bloquea credenciales SMTP, DSpace y del buzón en commits (pre-commit + CI); además detecta nombres genéricos en mayúsculas (`*_PASSWORD`, `*_TOKEN`, `*_API_KEY`), URLs con credenciales embebidas y bloques YAML multilínea |
 | **Reglas** | `unt_format_rules_schema.yaml` | 44 reglas, 32 ejecutables (fuente de verdad legacy) |
 | **Reglas DSL (producción)** | `reglas_unt.yaml` | 49 reglas verificables (F1–F6 + F2 ítems 1-3 y 11-12) |
 | **Reglas DSL pendientes** | `reglas_unt_pendientes.yaml` | 5 estructuras implementadas y sin probar; no lo carga la API |

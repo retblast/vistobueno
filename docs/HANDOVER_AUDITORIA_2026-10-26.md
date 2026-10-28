@@ -340,6 +340,12 @@ versionan: son de un solo uso.
 Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 `AGENTS.md`).
 
+> **Pendiente de una última pasada**: AUD-16, AUD-17 y AUD-18 los cierra
+> el PR de frontend (se apoya en `master`, así que **no puede** tocar
+> esta tabla). Cuando ese PR entre, hay que marcar esos tres aquí
+> (con su número de PR) y recién después se borra el bloque de aviso de
+> `AGENTS.md`, según la cláusula de cierre.
+
 | ID | Responsable | Estado | PR / commit |
 |----|-------------|--------|-------------|
 | AUD-01 | Int3 | pendiente | — |
@@ -362,7 +368,7 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-19 | Docs | **cerrado** | PR #64 |
 | AUD-20 | Int3 | pendiente | — |
 | AUD-21 | Int1 | **cerrado** | PR #67 |
-| AUD-22 | Int1 | pendiente | PR D (no iniciado) |
+| AUD-22 | Int1 | **cerrado** | PR #69 |
 | AUD-23 | Int1 | **cerrado: los archivos quedan sin trackear** (decisión 2026-10-28) | — |
 | AUD-24 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
 | AUD-25 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
