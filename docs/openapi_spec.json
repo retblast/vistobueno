@@ -382,7 +382,10 @@
               }
             ],
             "title": "Palabras Clave",
-            "description": "DEPRECADO: metadato dc.subject que usaba el depósito automático. Las palabras clave las captura el motor del DOCX."
+            "description": "DEPRECADO: metadato dc.subject que usaba el depósito automático. Las palabras clave las captura el motor del DOCX.",
+            "examples": [
+              ""
+            ]
           }
         },
         "type": "object",

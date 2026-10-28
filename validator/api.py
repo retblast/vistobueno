@@ -78,8 +78,9 @@ TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024  # 10 MB
 
 # Tipos de content-type admitidos. La puerta real NO es esta lista: un DOCX
 # es un paquete OPC (ZIP) y algunos clientes lo envían con tipos genéricos.
-# El control efectivo es la extensión `.docx` + la firma "PK" del archivo
-# (ver _validar_upload). AUD-13: un .docx legítimo con `application/zip`
+# El control efectivo es la extensión `.docx` + la firma "PK" del archivo;
+# los tres chequeos están en `validar()` (extensión, content-type y firma).
+# AUD-13: un .docx legítimo con `application/zip`
 # recibía 415 y el frontend lo aceptaba (acepta por MIME o extensión).
 TIPOS_ACEPTADOS = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -406,6 +407,7 @@ async def validar(
             "DEPRECADO: metadato dc.subject que usaba el depósito automático. "
             "Las palabras clave las captura el motor del DOCX."
         ),
+        examples=[""],
     ),
 ):
     # --- Validación: ¿hay archivo? ---
