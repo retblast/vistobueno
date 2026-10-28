@@ -28,7 +28,7 @@ Guía para integrantes del proyecto. Define convenciones, arquitectura y flujo d
 >   (tests con `xfail(strict=True)`: cuando el motor los cumpla, el CI se
 >   pone rojo hasta que Int1 quite la marca).
 > - **Int1 — API**: AUD-09, AUD-10, AUD-12, AUD-13, AUD-21, AUD-22 y el
->   contrato de la ficha: **cerrados** (PR #65, #66, #67 y #68; ver la tabla
+>   contrato de la ficha: **cerrados** (PR #65, #66, #67 y #69; ver la tabla
 >   §11 del handover).
 > - **Int2 — frontend**: AUD-16 (la pantalla de ficha del handover S8 no
 >   existe), AUD-17, AUD-18.

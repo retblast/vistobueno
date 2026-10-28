@@ -362,7 +362,7 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-19 | Docs | **cerrado** | PR #64 |
 | AUD-20 | Int3 | pendiente | — |
 | AUD-21 | Int1 | **cerrado** | PR #67 |
-| AUD-22 | Int1 | **cerrado** | PR #68 |
+| AUD-22 | Int1 | **cerrado** | PR #69 |
 | AUD-23 | Int1 | **cerrado: los archivos quedan sin trackear** (decisión 2026-10-28) | — |
 | AUD-24 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
 | AUD-25 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
