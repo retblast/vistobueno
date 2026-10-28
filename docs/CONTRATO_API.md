@@ -695,8 +695,9 @@ respuestas no cambia.
 
 - **`detectado=true` implica valor utilizable** (AUD-25, AUD-26): si el
   motor captura un valor vacío (`""`, `"   "`, `[]`) o un valor con la
-  forma equivocada (`dc.date.issued` que no es un año), la API lo degrada
-  a `detectado=false`, `valor=null` y `pagina=null`. El operador lo
+  forma equivocada (`dc.date.issued` que no sea un año **desnudo**: un
+  texto como "..., Trujillo 2024" no cuenta), la API lo degrada a
+  `detectado=false`, `valor=null` y `pagina=null`. El operador lo
   teclea en la pantalla de ficha en vez de pre-llenar el formulario
   oficial de DSpace con un dato inservible.
 - El motor (Int3) sigue siendo quien captura: cuando corrija las reglas

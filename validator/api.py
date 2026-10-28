@@ -410,8 +410,10 @@ def _forma_valida(campo: str, valor: object) -> bool:
     """True si el valor además tiene la forma que espera el campo.
 
     Solo `dc.date.issued` tiene forma estricta: el formulario pide un
-    año, y capturar "Trujillo - Perú" (la línea de ciudad) como fecha
-    deja el ítem con una fecha inválida.
+    año. El chequeo es de **valor completo**, no de "contiene": la
+    captura real de AUD-26 es el párrafo del título, que termina en
+    ", Trujillo 2024". Un `contains` dejaría pasar ese texto y el
+    ítem se publicaría con la fecha equivocada.
     """
     if campo != "dc.date.issued":
         return True
@@ -419,7 +421,7 @@ def _forma_valida(campo: str, valor: object) -> bool:
         valor = valor[0] if valor else ""
     if not isinstance(valor, str):
         return False
-    return bool(re.search(r"\b(?:19|20)\d{2}\b", valor))
+    return bool(re.fullmatch(r"(?:19|20)\d{2}", valor.strip()))
 
 
 def _ficha_desde_reporte(reporte: dict) -> FichaDeposito:

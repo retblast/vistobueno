@@ -117,16 +117,26 @@ def test_palabras_clave_sin_puntuacion_final(ficha):
 # ---------------------------------------------------------------------------
 
 
-def test_el_motor_marca_el_asesor_vacio_como_detectado(ficha):
-    """Evidencia del defecto: el motor publica detectado=True con valor ''.
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "AUD-25: el motor publica detectado=True con valor '' para el "
+        "asesor. Cuando Int3 corrija la captura, este test pasa y el "
+        "XPASS estricto pone el CI en rojo hasta que Int1 quite la "
+        "marca. Ver docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-25)."
+    ),
+)
+def test_el_motor_no_marca_el_asesor_vacio_como_detectado(ficha):
+    """Un valor vacío no puede viajar como detectado.
 
-    Este test **pasa hoy**: documenta el comportamiento del motor que
-    rompe el contrato. Cuando Int3 lo corrija, este test falla y hay que
-    borrarlo (junto con la marca `xfail` de los tests de arriba).
+    Hoy el motor publica `detectado=True` con `valor=''`: ese dato
+    llega al formulario de DSpace, a la constancia y al registro. La
+    API lo degrada (ver `TestContratoFichaUtilizable`), pero el
+    arreglo de fondo es del motor.
     """
     asesor = ficha.get("dc.contributor.advisor") or {}
-    assert asesor.get("detectado") is True
-    assert asesor.get("valor") == ""
+    assert asesor.get("detectado") is False
+    assert asesor.get("valor") in (None, "")
 
 
 def test_la_api_degrada_el_valor_inservible_a_no_detectado():

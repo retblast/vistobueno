@@ -742,6 +742,27 @@ class TestContratoFichaUtilizable:
         assert fecha.detectado is False
         assert fecha.valor is None
 
+    def test_anio_rojo_dentro_del_titulo_no_viaja_como_detectado(self):
+        """AUD-26 real: el párrafo del título termina en ', Trujillo 2024'.
+
+        Un chequeo de "contiene un año" dejaría pasar este texto y el
+        ítem se publicaría con la fecha del título. Solo sobrevive un
+        año desnudo.
+        """
+        ficha = self._ficha(
+            {
+                "dc.date.issued": {
+                    "valor": "Estrategias lúdicas en primaria, Trujillo 2024",
+                    "pagina": 1,
+                    "detectado": True,
+                }
+            }
+        )
+        fecha = ficha["dc.date.issued"]
+        assert fecha.detectado is False
+        assert fecha.valor is None
+        assert fecha.pagina is None
+
     def test_anio_valido_sigue_detectado(self):
         """Un año con forma correcta se publica (el acierto es del motor)."""
         ficha = self._ficha({"dc.date.issued": {"valor": "2026", "pagina": 1, "detectado": True}})
