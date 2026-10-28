@@ -105,7 +105,7 @@ Módulo de IA (asistente del encargado — opt-in, advisory, NUNCA toca el semá
 | **Asistente IA** | `validator/asistente.py` | Funcionalidad 2 del módulo: explicar y priorizar los fallos (advisory; no toca el semáforo) |
 | **Exportador Markdown/PDF** | `validator/exportador.py` | Exporta reportes a Markdown y PDF |
 | **Notificación por correo** | `validator/notificacion.py` | Envía las observaciones al estudiante por SMTP (opt-in, best-effort; Actividad 6) |
-| **Depósito en DSpace** | `validator/dspace.py` | Deposita el .docx validado en el repositorio institucional (opt-in, solo semáforo verde, best-effort; Actividad 10) |
+| **Depósito en DSpace** | `validator/dspace.py` | **DEPRECADO (decisión 2026-10-28)**: no se usa en producción. La app no escribe en la API de DSpace; el flujo vigente es ficha → buzón → userscript, y el archivo lo adjunta el encargado. El módulo se conserva como evidencia de la Actividad 10. |
 | **API** | `validator/api.py` | Endpoint FastAPI `POST /validar` |
 | **DTOs API** | `validator/api_models.py` | Modelos Pydantic de respuesta (campos en español) |
 | **CLI referencia** | `validator/cli.py` | Validador desde línea de comandos |

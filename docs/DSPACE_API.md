@@ -6,6 +6,15 @@
 de la API de DSpace con endpoints, autenticación y flujo de depósito)  
 **Actividad siguiente**: Actividad 10 (implementación del módulo de depósito)
 
+> **El módulo de depósito REST está DEPRECADO (decisión del equipo,
+> 2026-10-28).** La app no escribe en la API de DSpace: el flujo vigente es
+> la ficha (SPA) → buzón → userscript, que rellena el formulario oficial,
+> y el **encargado adjunta el `.docx`** a mano en ese formulario.
+> `validator/dspace.py` se conserva (es la evidencia de la Actividad 10 y
+> de este análisis) pero `POST /validar` ya no lo invoca: el campo
+> `depositar` responde `deshabilitado` sin abrir ninguna conexión.
+> Ver `docs/HANDOVER_AUDITORIA_2026-10-26.md` §7.
+
 > Todos los datos de la instancia fueron verificados empíricamente el
 > 2026-09-30 contra el repositorio en producción (ver §9 "Cómo reproducir
 > este análisis"). Los puntos que requieren gestión ante la sede están

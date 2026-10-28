@@ -293,6 +293,24 @@ class TestErrores:
         assert respuesta.status_code == 200
         assert respuesta.json()["semaforo"] in ("verde", "rojo")
 
+    def test_content_type_zip(self):
+        """Un .docx es un ZIP: el MIME application/zip es legítimo → 200.
+
+        AUD-13: el backend rechazaba con 415 un .docx real enviado como
+        `application/zip`, mientras el frontend lo aceptaba (acepta por
+        MIME o por extensión). La puerta real es la extensión .docx más la
+        firma PK del archivo.
+        """
+        respuesta = subir_plantilla(mime="application/zip")
+        assert respuesta.status_code == 200
+        assert respuesta.json()["semaforo"] in ("verde", "rojo")
+
+    def test_content_type_invalido_sigue_dando_415(self):
+        """Un MIME que no es de un paquete Office/zip → 415."""
+        respuesta = subir_plantilla(mime="text/plain")
+        assert respuesta.status_code == 415
+        assert "Content-Type" in respuesta.json()["detail"]
+
     def test_zip_magic_bytes_invalidos(self):
         """Archivo .docx con cabecera que no es ZIP (PK) → 422."""
         contenido = b"MZ" + b"\x00" * 200  # cabecera MZ (EXE) + relleno

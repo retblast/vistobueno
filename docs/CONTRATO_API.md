@@ -21,12 +21,12 @@ Recibe un archivo DOCX de tesis y devuelve un reporte de validación estructurad
 | `archivo` | `file` | Sí | Archivo `.docx` a validar |
 | `correo` | `string` (form) | No | Correo electrónico del estudiante. Si se envía, debe tener formato válido (`usuario@dominio`); es el destinatario del correo de observaciones cuando el operador lo solicita (campo `notificar`). Cadena vacía se trata como ausente. |
 | `notificar` | `bool` (form) | No (default: `false`) | Opt-in del operador para enviar el correo de observaciones al estudiante. El envío solo se intenta si además hay `correo` válido y semáforo `rojo`. |
-| `depositar` | `bool` (form) | No (default: `false`) | Opt-in del operador para depositar el documento en el repositorio institucional DSpace (actividad 10). Solo se intenta con semáforo `verde`; el ítem queda en la cola de aprobación de la sede. |
-| `titulo` | `string` (form) | No | Título del trabajo: metadato `dc.title` del depósito. |
-| `autores` | `string` (form) | No | Autor(es), separados por `;` o saltos de línea: metadato `dc.contributor.author`. |
-| `asesor` | `string` (form) | No | Asesor(a): metadato `dc.contributor.advisor`. |
-| `resumen` | `string` (form) | No | Resumen: metadato `dc.description.abstract`. |
-| `palabras_clave` | `string` (form) | No | Palabras clave, separadas por `;` o `,`: metadato `dc.subject`. |
+| `depositar` | `bool` (form) | No (default: `false`) | **DEPRECADO** (decisión 2026-10-28). El depósito automático en DSpace quedó fuera del flujo: la app no escribe en la API de DSpace. Si se envía `true`, la respuesta lo refleja en `deposito.estado = "deshabilitado"` y **no** se abre ninguna conexión. |
+| `titulo` | `string` (form) | No | **DEPRECADO**: metadato `dc.title` que usaba el depósito automático. El título lo captura el motor del DOCX. |
+| `autores` | `string` (form) | No | **DEPRECADO**: metadato `dc.contributor.author` que usaba el depósito automático. Los autores los captura el motor y el operador los corrige en la pantalla de ficha. |
+| `asesor` | `string` (form) | No | **DEPRECADO**: metadato `dc.contributor.advisor` que usaba el depósito automático. |
+| `resumen` | `string` (form) | No | **DEPRECADO**: metadato `dc.description.abstract` que usaba el depósito automático. |
+| `palabras_clave` | `string` (form) | No | **DEPRECADO**: metadato `dc.subject` que usaba el depósito automático. |
 | `incluir_prompts_ia` | `bool` (query) | No (default: `true`) | Incluir la sección "Cómo preguntar a una IA" en la respuesta |
 
 ### Content-Type
@@ -41,6 +41,11 @@ multipart/form-data
 |-----------|-----------|
 | `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
 | `.docx` | `application/octet-stream` (algunos navegadores envían este MIME type) |
+| `.docx` | `application/zip` (un DOCX es un paquete ZIP; algunos clientes lo envían así) |
+
+El MIME es **advisory**: la puerta real es la extensión `.docx` más la firma
+ZIP del contenido (ver la sección siguiente). Un MIME distinto de los de la
+tabla da `415`; un MIME de la tabla con contenido que no es ZIP da `422`.
 
 ### Validación de cabecera (magic bytes)
 
@@ -361,11 +366,24 @@ los servidores reales.
 
 ---
 
-## Depósito en DSpace (Actividad 10)
+## Depósito en DSpace (Actividad 10) — DEPRECADO
+
+> **Decisión del equipo (2026-10-28, auditoría de comportamiento):** la app
+> **no escribe en la API de DSpace**. El flujo vigente es la ficha (SPA) →
+> buzón → userscript, que rellena el formulario oficial de DSpace; el
+> archivo lo adjunta el **encargado** en ese formulario (el userscript no
+> toca el `input[type=file]`). El camino REST queda **deprecado**: el campo
+> `depositar` se conserva para no romper el contrato, pero **no dispara
+> ninguna llamada** y responde `deposito.estado = "deshabilitado"` con una
+> nota que explica el flujo vigente.
+
+El módulo `validator/dspace.py` **se conserva** (es la evidencia de la
+Actividad 10 y del análisis del contrato HAL en `docs/DSPACE_API.md`), pero
+no se usa desde `POST /validar`.
 
 El semáforo verde no publica nada por sí solo: el depósito en el
-repositorio institucional DSpace es un **opt-in del operador** (campo
-`depositar`) que solo procede cuando el documento está apto
+repositorio institucional DSpace era un **opt-in del operador** (campo
+`depositar`) que solo procedía cuando el documento estaba apto
 (`semaforo: "verde"`). El resultado se expone en `deposito` con la misma
 forma que `notificacion`.
 
@@ -373,43 +391,37 @@ El ítem NO se publica directo: entra al workflow de aprobación de DSpace
 de la colección destino (las colecciones de tesis FECyC tienen flujo de
 revisión), de modo que una persona de la sede queda en el circuito.
 
-### Comportamiento
+### Comportamiento actual
 
-- El depósito es **opt-in por solicitud**: requiere `depositar=true` y
-  semáforo `verde`. Sin `depositar`, el estado es `sin_solicitud` y jamás
-  se abre una conexión al repositorio.
-- Con semáforo `rojo` el estado es `no_apto`: solo se depositan documentos
-  aptos para el repositorio.
-- Es **best-effort**: un fallo de DSpace (conexión, credenciales,
-  validación del formulario) nunca cambia el código HTTP; el fallo queda
-  expuesto en `deposito.detalle` para que el operador reintente o suba el
-  documento manualmente.
-- Deshabilitado por defecto en el servidor: el depósito exige configuración
-  completa (ver abajo); si falta algo, el estado es `deshabilitado` y el
-  `detalle` lista exactamente qué variables faltan.
-- Los metadatos del depósito (`titulo`, `autores`, `asesor`, `resumen`,
-  `palabras_clave`) son opcionales y los completa el operador; los
-  `422` del formulario de DSpace indican qué campo obligatorio falta y
-  se exponen tal cual en `detalle`.
+- Sin `depositar`: el estado es `sin_solicitud` y jamás se abre una
+  conexión al repositorio.
+- Con `depositar=true`: el estado es `deshabilitado` y el `detalle` indica
+  que el flujo oficial es el formulario de DSpace + el userscript, y que el
+  archivo lo adjunta el encargado. **No hay conexión a DSpace**, con
+  semáforo verde o rojo.
 
-> **Alcance**: el flujo sigue el contrato REST de DSpace 7/8 (login JWT +
-> par CSRF, workspaceitem, JSON Patch de metadatos, licencia, workflow) y
-> está verificado contra un stub local del contrato. La validación contra
-> la instancia institucional real (incluidos el nombre de la sección del
-> formulario y los metadatos obligatorios) queda pendiente de la gestión
-> ante la sede (ver `docs/DSPACE_API.md` §7).
+> **Histórico**: el módulo implementaba el flujo REST completo de DSpace 7/8
+> (login JWT + par CSRF, workspaceitem, JSON Patch de metadatos, licencia,
+> workflow) verificado contra un stub local del contrato. La validación
+> contra la instancia institucional real quedó pendiente (ver
+> `docs/DSPACE_API.md` §7) y no se retomó: el flujo oficial es el formulario
+> oficial más el userscript.
 
 ### Estados de `deposito.estado`
 
 | Estado | Significado | Sugerencia de UI (personal del repositorio) |
 |--------|-------------|---------------------------------------------|
-| `enviado` | DSpace aceptó el ítem; quedó en cola de aprobación de la sede | "El documento quedó en la cola de aprobación del repositorio." |
-| `fallo` | Se intentó depositar y falló | Mostrar `detalle` (motivo técnico, p. ej. `422` del formulario) para corregir y reintentar |
-| `sin_solicitud` | No se pidió el depósito | Ofrecer el checkbox de depósito cuando el semáforo es verde |
-| `no_apto` | Se pidió, pero el semáforo no es verde | Nada que depositar: el documento aún tiene observaciones |
-| `deshabilitado` | Se pidió, pero el servidor no tiene el depósito configurado | Mostrar `detalle` como nota de configuración para administradores |
+| `deshabilitado` | El depósito automático está deprecado (o el servidor no lo tiene configurado) | Mostrar `detalle`: el archivo lo adjunta el encargado en el formulario oficial de DSpace |
+| `sin_solicitud` | No se pidió el depósito | Nada que mostrar |
+| `enviado` | *(histórico)* DSpace aceptó el ítem; quedó en cola de aprobación de la sede | — |
+| `fallo` | *(histórico)* Se intentó depositar y falló | — |
+| `no_apto` | *(histórico)* Se pidió, pero el semáforo no era verde | — |
 
 ### Configuración del servidor (variables de entorno)
+
+> **Obsoleto**: desde la decisión del 2026-10-28 el depósito automático no
+> se usa y estas variables no tienen efecto. Se conservan porque
+> `validator/dspace.py` sigue siendo invocable a mano.
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
@@ -446,7 +458,13 @@ Sin `notificar=true` el correo **no** se envía: la respuesta devolvería
 
 ---
 
-## Ejemplo con depósito en DSpace
+## Ejemplo con depósito en DSpace (deprecado)
+
+> El depósito automático está **deprecado** (decisión 2026-10-28). El
+> ejemplo se conserva como referencia histórica: el comando ya **no**
+> deposita nada y responde `deposito.estado = "deshabilitado"` con la nota
+> del flujo vigente. Para depositar, el encargado usa el formulario
+> oficial de DSpace con el userscript y adjunta el archivo a mano.
 
 ```bash
 curl -X POST "http://localhost:8000/validar?incluir_prompts_ia=true" \
@@ -458,10 +476,6 @@ curl -X POST "http://localhost:8000/validar?incluir_prompts_ia=true" \
   -F "resumen=El resumen del trabajo..." \
   -F "palabras_clave=títeres; preescolar"
 ```
-
-Requiere semáforo `verde` y configuración completa en el servidor; si no,
-la respuesta trae `deposito.estado = "no_apto"` o `"deshabilitado"` con
-el motivo en `detalle`.
 
 ---
 
@@ -627,6 +641,24 @@ dos autores generan dos constancias y dos filas con el mismo handle.
   copia las celdas del archivo descargado.
 
 ## Changelog
+
+### v1.8.0 (2026-10-28 — auditoría de comportamiento: contrato de upload)
+
+Cambio de comportamiento, sin romper el contrato: ningún campo de la
+respuesta desaparece ni cambia de tipo.
+
+- **El depósito automático en DSpace queda deprecado** (decisión del
+  equipo). `POST /validar` ya **no** abre ninguna conexión con DSpace: el
+  campo `depositar=true` responde `deposito.estado = "deshabilitado"` con
+  la nota del flujo vigente (ficha → buzón → userscript; el archivo lo
+  adjunta el encargado). Los campos de metadatos `titulo`, `autores`,
+  `asesor`, `resumen` y `palabras_clave` se conservan, ya no se usan y
+  quedan marcados como deprecados. El módulo `validator/dspace.py` se
+  conserva como evidencia de la Actividad 10, pero no se invoca desde la
+  API.
+- **Nuevo MIME aceptado**: `application/zip` para archivos `.docx` (un
+  DOCX es un paquete ZIP y algunos clientes lo envían así; AUD-13). La
+  puerta real sigue siendo la extensión `.docx` más la firma `PK`.
 
 ### v1.7.0 (2026-10-19 — Semana 8: ficha de depósito y buzón)
 

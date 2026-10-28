@@ -3,7 +3,7 @@
   "info": {
     "title": "VistoBueno API",
     "description": "API de validación automática de formato de tesis — UNT FECyC",
-    "version": "1.7.0"
+    "version": "1.8.0"
   },
   "paths": {
     "/validar": {
@@ -309,7 +309,7 @@
           "depositar": {
             "type": "boolean",
             "title": "Depositar",
-            "description": "Solicitar el depósito del documento en el repositorio institucional DSpace (opt-in del operador, actividad 10). Solo aplica con semáforo verde.",
+            "description": "DEPRECADO (decisión 2026-10-28): el depósito automático en DSpace queda fuera del flujo. El flujo oficial es la ficha (SPA) → buzón → userscript, y el archivo lo adjunta el encargado en el formulario oficial de DSpace. El campo se conserva para no romper el contrato, pero ya no dispara ninguna llamada.",
             "default": false
           },
           "titulo": {
@@ -322,7 +322,7 @@
               }
             ],
             "title": "Titulo",
-            "description": "Título del trabajo: metadato dc.title del depósito (opcional)",
+            "description": "DEPRECADO: metadato dc.title que usaba el depósito automático. El título de la ficha de depósito lo captura el motor del DOCX.",
             "examples": [
               ""
             ]
@@ -337,7 +337,7 @@
               }
             ],
             "title": "Autores",
-            "description": "Autor(es), separados por ';' o saltos de línea: metadato dc.contributor.author del depósito (opcional)",
+            "description": "DEPRECADO: metadato dc.contributor.author que usaba el depósito automático. Los autores los captura el motor del DOCX y el operador los corrige en la pantalla de ficha.",
             "examples": [
               ""
             ]
@@ -352,7 +352,7 @@
               }
             ],
             "title": "Asesor",
-            "description": "Asesor(a): metadato dc.contributor.advisor del depósito (opcional)",
+            "description": "DEPRECADO: metadato dc.contributor.advisor que usaba el depósito automático. El asesor lo captura el motor del DOCX.",
             "examples": [
               ""
             ]
@@ -367,7 +367,7 @@
               }
             ],
             "title": "Resumen",
-            "description": "Resumen: metadato dc.description.abstract del depósito (opcional)",
+            "description": "DEPRECADO: metadato dc.description.abstract que usaba el depósito automático. El resumen lo captura el motor del DOCX.",
             "examples": [
               ""
             ]
@@ -382,7 +382,7 @@
               }
             ],
             "title": "Palabras Clave",
-            "description": "Palabras clave, separadas por ';' o ',': metadato dc.subject del depósito (opcional)",
+            "description": "DEPRECADO: metadato dc.subject que usaba el depósito automático. Las palabras clave las captura el motor del DOCX.",
             "examples": [
               ""
             ]
