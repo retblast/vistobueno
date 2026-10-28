@@ -155,3 +155,109 @@ def test_all_escanea_arbol_completo(tmp_path, monkeypatch):
     r = correr(["--all"])
     assert r.returncode == 1
     assert "provision.sh" in r.stdout
+
+
+# ---------------------------------------------------------------------------
+# Cobertura ampliada (auditoría 2026-10-26, AUD-22)
+# ---------------------------------------------------------------------------
+
+
+def test_detecta_nombre_generico_de_secreto(tmp_path):
+    """Un nombre en mayúsculas que termina en PASSWORD también se bloquea."""
+    archivo = tmp_path / "config.txt"
+    archivo.write_text("DB_PASSWORD=Clave-Real-De-Prueba\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "DB_PASSWORD" in r.stdout
+    assert "Clave-Real" not in r.stdout
+
+
+def test_detecta_token_generico(tmp_path):
+    """TOKEN en mayúsculas es un nombre de secreto, aunque no sea del proyecto."""
+    archivo = tmp_path / "deploy.yml"
+    archivo.write_text("GITHUB_TOKEN: ghp_abc123def456\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "GITHUB_TOKEN" in r.stdout
+
+
+def test_detecta_clave_con_guion_bajo_interno(tmp_path):
+    """AWS_SECRET_ACCESS_KEY termina en ACCESS_KEY: también es un secreto."""
+    archivo = tmp_path / "aws.env.example"
+    archivo.write_text("AWS_SECRET_ACCESS_KEY=AKIA-REAL-DE-PRUEBA\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+
+
+def test_permite_nombre_que_no_termina_en_sufijo(tmp_path):
+    """El sufijo tiene que ser la última palabra: `..._TOKEN_BUZON` no es secreto."""
+    archivo = tmp_path / "api.py"
+    archivo.write_text('CABECERA_TOKEN_BUZON = "X-VistoBueno-Token"\n', encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_permite_nombre_sin_separador(tmp_path):
+    """`NMTOKEN` no es una variable de entorno: no se marca (límite declarado)."""
+    archivo = tmp_path / "tipos.d.ts"
+    archivo.write_text("NMTOKEN = 'nombre'\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_permite_lectura_del_entorno(tmp_path):
+    """`os.environ.get(...)` no es un valor: es una lectura."""
+    archivo = tmp_path / "config.py"
+    archivo.write_text(
+        "PASSWORD=os.environ.get('VISTOBUENO_SMTP_PASSWORD', '')\n",
+        encoding="utf-8",
+    )
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_permite_placeholder_entre_angulos(tmp_path):
+    """`<mi-token>` es la convención documental de este repo."""
+    archivo = tmp_path / "leeme.md"
+    archivo.write_text("API_TOKEN=<mi-token>\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_detecta_url_con_credenciales(tmp_path):
+    """Una URL con usuario y clave embebidos es una filtración."""
+    archivo = tmp_path / "nota.md"
+    archivo.write_text("Endpoint: https://usuario:clave-real@ejemplo.org/api\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "credenciales" in r.stdout
+    assert "clave-real" not in r.stdout
+
+
+def test_permite_url_con_puerto_sin_credenciales(tmp_path):
+    """Una URL con puerto no lleva credenciales: no se marca."""
+    archivo = tmp_path / "leeme.md"
+    archivo.write_text("La API vive en http://127.0.0.1:8000/docs\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_detecta_bloque_yaml_multilinea(tmp_path):
+    """El valor de un bloque YAML (`|`) está en las líneas de abajo."""
+    archivo = tmp_path / "secreto.yaml"
+    archivo.write_text(
+        "VISTOBUENO_SMTP_PASSWORD: |\n  Clave-Real-De-Prueba\n",
+        encoding="utf-8",
+    )
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "VISTOBUENO_SMTP_PASSWORD" in r.stdout
+    assert "Clave-Real" not in r.stdout
+
+
+def test_permite_bloque_yaml_con_placeholder(tmp_path):
+    """Un bloque YAML con placeholder no es una filtración."""
+    archivo = tmp_path / "plantilla.yaml"
+    archivo.write_text("VISTOBUENO_SMTP_PASSWORD: |\n  <valor>\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
