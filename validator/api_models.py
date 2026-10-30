@@ -40,10 +40,11 @@ class EstadoNotificacionAPI(StrEnum):
 class EstadoDepositoAPI(StrEnum):
     """Estado del depósito del documento en DSpace (Actividad 10).
 
-    El depósito es opt-in por solicitud (campo `depositar`) y solo procede
-    con semáforo verde: el operador decide que el documento está apto para
-    entrar al repositorio institucional. El ítem queda en la cola de
-    aprobación de la sede (workflow de DSpace), no se publica directo.
+    DEPRECADO (decisión 2026-10-28): la app no escribe en la API de DSpace.
+    Los valores `enviado` y `fallo` se conservan para no romper el
+    contrato, pero el flujo vigente solo emite `sin_solicitud` o
+    `deshabilitado`: el depósito real lo hace el encargado con el
+    formulario oficial y el userscript.
     """
 
     ENVIADO = "enviado"
@@ -177,11 +178,10 @@ class NotificacionAPI(BaseModel):
 class DepositoAPI(BaseModel):
     """Estado del depósito del documento en DSpace (Actividad 10).
 
-    Misma forma que NotificacionAPI: `estado` describe qué pasó con el
-    depósito para que el operador pueda informar al estudiante o reintentar.
-    Con "enviado", el `detalle` recuerda que el ítem queda en la cola de
-    aprobación de la sede; con "fallo" o "deshabilitado", el `detalle`
-    trae el motivo técnico o la nota de configuración.
+    DEPRECADO (decisión 2026-10-28). Misma forma que NotificacionAPI: el
+    campo se conserva por compatibilidad del contrato, pero el flujo
+    vigente solo devuelve `sin_solicitud` (no se pidió) o `deshabilitado`
+    con la nota que explica el flujo oficial (formulario + userscript).
     """
 
     estado: EstadoDepositoAPI = Field(..., description="Veredicto del depósito")

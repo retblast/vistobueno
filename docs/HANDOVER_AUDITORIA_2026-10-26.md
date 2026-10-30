@@ -395,6 +395,16 @@ el userscript formatea el instante en `America/Lima` con `Intl`
 interpreta como Lima, con offset se convierte a Lima. El documento ya no
 depende de la zona del navegador ni del servidor.
 
+### AUD-34 — el escáner de secretos dejaba pasar claves entre comillas (baja, Int1)
+
+`PATRON_ASIGNACION` exigía que el nombre del secreto empezara la cadena o
+un separador. Una clave JSON/YAML entre comillas
+(`"VISTOBUENO_SMTP_PASSWORD": "..."`) no casaba, así que una credencial
+real pasaba el pre-commit y el escaneo de la CI. **Cierre**: el patrón
+acepta comillas opcionales alrededor del nombre. Tres tests cubren clave
+JSON, clave con comillas simples y el falso positivo
+`"CABECERA_TOKEN_BUZON"`.
+
 ---
 
 ## 11. Estado de los hallazgos
@@ -444,4 +454,5 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-30 | Int1 | **cerrado** (acceso al papeleo) | `8efffd7` (PR pendiente) |
 | AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | `8efffd7` (PR pendiente) |
 | AUD-32 | Int1 | **cerrado** (hora de Perú) | `f0ba1f0` (PR pendiente) |
-| AUD-33 | Int1 | **cerrado** (botón "+" del userscript) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-33 | Int1 | **cerrado** (botón "+" del userscript) | `22e6a19` (PR pendiente) |
+| AUD-34 | Int1 | **cerrado** (claves entre comillas en el escáner) | rama `fix/api-hardening-b0-b1` (PR pendiente) |

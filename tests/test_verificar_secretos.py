@@ -299,3 +299,31 @@ def test_permite_valor_de_prueba_sin_excluir_el_archivo(tmp_path):
     archivo.write_text('API_TOKEN = "secreto-de-prueba"\n', encoding="utf-8")
     r = correr([str(archivo)])
     assert r.returncode == 0, r.stdout
+
+
+def test_detecta_clave_entre_comillas_json(tmp_path):
+    """Una clave JSON/YAML entre comillas también es una asignación.
+
+    Revisión 2026-10-30: `"DB_PASSWORD": "..."` pasaba sin bloquear porque
+    el patrón exigía que el nombre empezara la cadena o un separador.
+    """
+    archivo = tmp_path / "config.json"
+    archivo.write_text('{"DB_PASSWORD": "real-secret-123"}\n', encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "DB_PASSWORD" in r.stdout
+
+
+def test_detecta_clave_explicita_entre_comillas_simples(tmp_path):
+    archivo = tmp_path / "config.py"
+    archivo.write_text("'VISTOBUENO_SMTP_PASSWORD': 'real-secret-123'\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+
+
+def test_permite_mention_entre_comillas_de_un_header(tmp_path):
+    """La comilla no debe abrir un falso positivo con `TOKEN` en el medio."""
+    archivo = tmp_path / "api.py"
+    archivo.write_text('"CABECERA_TOKEN_BUZON": "X-VistoBueno-Token"\n', encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout

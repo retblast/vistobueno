@@ -430,7 +430,7 @@ revisión), de modo que una persona de la sede queda en el circuito.
 | `VISTOBUENO_DSPACE_USER` | (vacío) | Cuenta de servicio con permiso de envío. **Nunca se commitea** (bloqueada por pre-commit y CI) |
 | `VISTOBUENO_DSPACE_PASSWORD` | (vacío) | Contraseña de la cuenta de servicio. **Nunca se commitea** (bloqueada por pre-commit y CI) |
 | `VISTOBUENO_DSPACE_COLECCION` | (vacío) | UUID de la colección destino (confirmar con la sede) |
-| `VISTOBUENO_DSPACE_SECCION` | `traditionalpageone` | Sección del formulario donde viven los metadatos (configuración por instancia) |
+| `VISTOBUENO_DSPACE_SECCION` | `traditionalPeruOne` | Sección del formulario donde viven los metadatos (confirmada en la instancia de la UNT; `traditionalpageone` no aplica) |
 | `VISTOBUENO_DSPACE_TIMEOUT` | `30` | Timeout por solicitud HTTP, en segundos |
 
 ---

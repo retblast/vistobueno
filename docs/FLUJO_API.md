@@ -1,7 +1,7 @@
 # Flujo del endpoint POST /validar
 
-**Versión**: 1.3  
-**Fecha**: 2026-10-14
+**Versión**: 1.4  
+**Fecha**: 2026-10-30
 
 ---
 
@@ -42,20 +42,15 @@ flowchart TD
     N2 -->|Sí y habilitado| N5[enviar_notificacion<br/>best-effort]
     N5 -->|Aceptado| N6[estado: enviado]
     N5 -->|Fallo SMTP| N7[estado: fallo<br/>detalle: motivo técnico]
-    T --> D2{Depósito:<br/>¿depositar +<br/>semáforo verde?}
-    D2 -->|No aplica| D3[estado: sin_solicitud /<br/>no_apto]
-    D2 -->|Sí, sin configuración| D4[estado: deshabilitado<br/>detalle: nota de configuración]
-    D2 -->|Sí y habilitado| D5[depositar_documento<br/>best-effort, threadpool]
-    D5 -->|Aceptado por DSpace| D6[estado: enviado<br/>detalle: en cola de la sede]
-    D5 -->|Fallo DSpace| D7[estado: fallo<br/>detalle: motivo técnico]
+    T --> D2{Depósito:<br/>¿depositar?}
+    D2 -->|No| D3[estado: sin_solicitud]
+    D2 -->|Sí| D4[estado: deshabilitado<br/>nota: flujo oficial<br/>formulario + userscript]
     N3 --> U[200 OK<br/>ValidarResponse JSON]
     N4 --> U
     N6 --> U
     N7 --> U
     D3 --> U
     D4 --> U
-    D6 --> U
-    D7 --> U
     L --> V[finally: unlink temp file]
     O --> V
     P --> V
@@ -65,9 +60,12 @@ flowchart TD
 > **Nota**: la notificación nunca cambia el código HTTP — todos los estados
 > de envío (incluido `fallo`) responden `200 OK`. Ver
 > `docs/CONTRATO_API.md` § "Notificación de observaciones por correo".
-> El depósito en DSpace sigue el mismo criterio: best-effort, todos sus
-> estados responden `200 OK`, y el ítem queda en la cola de aprobación
-> de la sede (workflow de DSpace), nunca se publica directo.
+>
+> **Depósito deprecado (2026-10-28)**: `depositar=true` ya no llama a la API
+> de DSpace. Responde `deshabilitado` con una nota: el flujo oficial es la
+> ficha → buzón → userscript, y el archivo lo adjunta el encargado en el
+> formulario oficial. Los estados `enviado` y `fallo` del DTO se conservan
+> solo por compatibilidad del contrato.
 
 ---
 

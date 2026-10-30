@@ -100,8 +100,10 @@ _NOMBRE_EXPLICITO = "|".join(NOMBRES_SECRETOS)
 _NOMBRE_GENERICO = (
     r"(?<![A-Z0-9_])(?:[A-Z][A-Z0-9]*_)*(?:" + "|".join(SUFIJOS_SECRETOS) + r")(?![A-Z0-9_])"
 )
+# Las comillas opcionales cubren claves JSON/YAML ("DB_PASSWORD": "x"),
+# un formato que antes pasaba sin bloquear (revisión 2026-10-30).
 PATRON_ASIGNACION = re.compile(
-    rf"({_NOMBRE_EXPLICITO}|{_NOMBRE_GENERICO})\s*[=:]\s*(\S+)",
+    rf"[\"']?({_NOMBRE_EXPLICITO}|{_NOMBRE_GENERICO})[\"']?\s*[=:]\s*(\S+)",
 )
 
 # URL con credenciales embebidas: https://usuario:clave@host
