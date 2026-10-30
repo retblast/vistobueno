@@ -430,7 +430,7 @@ revisión), de modo que una persona de la sede queda en el circuito.
 | `VISTOBUENO_DSPACE_USER` | (vacío) | Cuenta de servicio con permiso de envío. **Nunca se commitea** (bloqueada por pre-commit y CI) |
 | `VISTOBUENO_DSPACE_PASSWORD` | (vacío) | Contraseña de la cuenta de servicio. **Nunca se commitea** (bloqueada por pre-commit y CI) |
 | `VISTOBUENO_DSPACE_COLECCION` | (vacío) | UUID de la colección destino (confirmar con la sede) |
-| `VISTOBUENO_DSPACE_SECCION` | `traditionalpageone` | Sección del formulario donde viven los metadatos (configuración por instancia) |
+| `VISTOBUENO_DSPACE_SECCION` | `traditionalPeruOne` | Sección del formulario donde viven los metadatos (confirmada en la instancia de la UNT; `traditionalpageone` no aplica) |
 | `VISTOBUENO_DSPACE_TIMEOUT` | `30` | Timeout por solicitud HTTP, en segundos |
 
 ---
@@ -583,8 +583,10 @@ pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
 - `DepositoRecibido.titulo`: la SPA lo **coteja con la ficha en vuelo**
   antes de usar el handle (defensa contra un handle ajeno).
 - `DepositoRecibido.timestamp`: momento del clic en "Depositar"
-  capturado por el userscript (ISO 8601); alimenta la columna HORA del
-  registro y la constancia.
+  capturado por el userscript (ISO 8601, hora de pared del Perú);
+  alimenta la columna HORA del registro y la constancia. Un timestamp
+  sin offset se interpreta como `America/Lima`; uno con offset se
+  convierte a esa zona (AUD-32).
 
 ### Seguridad
 
@@ -592,13 +594,19 @@ pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
   web cualquiera del navegador del operador no puede leer la ficha, que
   contiene datos personales del estudiante. El userscript lo lee por
   `GM_xmlhttpRequest`, que corre en el contexto de la extensión.
-- **Solo se sirve desde el loopback** (auditoría 2026-10-26, AUD-09): los
-  cuatro endpoints del buzón rechazan con `403` cualquier petición que no
-  venga de `127.0.0.1`/`::1`. La app se despliega en la PC del operador
-  (`uvicorn` hace bind a `127.0.0.1`), así que el loopback **es** la
-  frontera de confianza; sin este control, un `curl` desde otro equipo de
-  la red podía leer la ficha (DNI, ORCID, resumen) o pisar la ranura en
-  vuelo.
+- **Control de acceso a toda la API** (auditoría 2026-10-26, AUD-09;
+  ampliado en v1.11.0): **todos** los endpoints —validación, buzón y
+  papeleo— rechazan con `403` cualquier petición que no venga de la
+  máquina local (`127.0.0.0/8` o `::1`). La app se despliega en la PC
+  del operador (`uvicorn` hace bind a `127.0.0.1`), así que el loopback
+  **es** la frontera de confianza; sin este control, un `curl` desde
+  otro equipo de la red podía validar, leer la ficha (DNI, ORCID,
+  resumen), pisar la ranura en vuelo o generar constancias oficiales.
+- **Header `Host` validado** (AUD-28): se rechaza con `400` cualquier
+  petición cuyo `Host` no sea `127.0.0.1`, `localhost` o `::1` (se
+  ignora el puerto y se acepta un IPv6 literal). `VISTOBUENO_HOSTS`
+  suma dominios propios (lista separada por comas) para un reverse
+  proxy local; `*` desactiva el chequeo (no recomendado).
 - **Token compartido (opt-in)**: si la API se expone fuera de la máquina
   (bind a `0.0.0.0` o un reverse proxy en otro host), se define
   `VISTOBUENO_API_TOKEN` y el cliente remoto debe enviar el header
@@ -619,18 +627,46 @@ pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
   (AUD-10). El despliegue documentado usa **exactamente un worker**
   (`uvicorn` sin `--workers`).
 
+#### Limitaciones conocidas: DNS rebinding
+
+La ausencia de cabeceras CORS no cubre el *DNS rebinding*: una página
+servida desde `http://dominio-malicioso` puede hacer que su DNS resuelva
+a `127.0.0.1` y quedar en el mismo origen que la API. El chequeo del
+header `Host` (arriba) cierra ese vector en todos los navegadores porque
+el navegador conserva el dominio en el `Host`. Chrome suma Private
+Network Access (la API no responde
+`Access-Control-Allow-Private-Network`), pero Firefox y WebKit no lo
+implementan: sin el chequeo de `Host` quedarían expuestos. La prueba
+manual está en `docs/HANDOVER_DESPLIEGUE_MAQUINA_OPERADOR.md`.
+
 ### Límite de peticiones (AUD-12)
 
 `POST /validar` recompila el DSL en cada request: el recurso a proteger es
-el CPU del proceso. Hay un límite in-app de **ventana fija por IP**: al
-superarlo, la respuesta es `429` con el header `Retry-After`.
+el CPU del proceso. Por defecto rige un **cupo adaptativo por CPU**: la
+API acumula los segundos reales de trabajo de cada validación y los
+"fuga" a `2.0` s por ventana de `60` s. Una petición entra si la deuda
+está por debajo del presupuesto; si no, responde `429` con
+`Retry-After`.
+
+El presupuesto es el mismo en cualquier equipo; lo que cambia es cuántas
+peticiones caben: ~33 seguidas en un equipo de 60 ms por validación,
+~8 en uno de 250 ms. La tasa sostenida también se ajusta sola (2 s de
+CPU por minuto). No hay que calibrar nada por hardware.
+
+Si se define `VISTOBUENO_RATE_LIMIT_MAX`, vuelve el límite de **ventana
+fija por IP** (comportamiento previo) y el modo adaptativo queda
+desactivado.
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `VISTOBUENO_RATE_LIMIT_MAX` | `60` | Peticiones de validación por IP y ventana. `0` desactiva el límite. |
-| `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` | `60` | Longitud de la ventana, en segundos. |
+| `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` | `60` | Ventana en segundos (ambos modos). |
+| `VISTOBUENO_RATE_LIMIT_MAX` | — | Si se define, activa la ventana fija por IP. `0` la desactiva. |
 
-El límite vive en memoria (sin base de datos): se reinicia con el proceso
+`POST /constancia` y `POST /fila-registro` tienen su propio cupo
+adaptativo (`1.0` s por ventana): generar DOCX/XLSX es más caro que
+validar.
+
+El cupo vive en memoria (sin base de datos): se reinicia con el proceso
 y no se comparte entre workers (el despliegue es de uno). Si algún día la
 API se expone fuera de la máquina, el límite real va en el reverse proxy
 (esta mitigación es la red de seguridad local).
@@ -641,7 +677,10 @@ Los dos endpoints que producen el papeleo del registro a partir de la
 ficha completada y del reporte del buzón. Entrada común
 (`FilaRegistroRequest`): la `ficha` (extraídos corregidos + manuales
 llenos), el `handle` del ítem y el `timestamp` del clic en Depositar
-(ISO 8601; alimenta DD/MM/AA, HORA, AÑO y la fecha del documento).
+(ISO 8601; alimenta DD/MM/AA, HORA, AÑO y la fecha del documento). El
+timestamp se normaliza a `America/Lima`: sin offset se interpreta como
+hora peruana, con offset se convierte. Así el papeleo no cambia según la
+zona horaria del navegador o del servidor (AUD-32).
 
 **Convención por autor** (evidencia del registro oficial): una fila y
 una constancia POR ESTUDIANTE. `matricula` y `renati.author.dni`
@@ -687,6 +726,43 @@ dos autores generan dos constancias y dos filas con el mismo handle.
   copia las celdas del archivo descargado.
 
 ## Changelog
+
+### v1.12.0 (2026-10-30 — hora de Perú en el papeleo)
+
+- **El timestamp se normaliza a `America/Lima`** (AUD-32): el userscript
+  reporta hora de pared del Perú. Antes enviaba UTC, 5 horas adelantado y
+  con cambio de día después de las 19:00. En la API, un timestamp sin
+  offset se interpreta como Lima y uno con offset se convierte. HORA,
+  DD/MM/AA, AÑO y la fecha del documento ya no dependen de la zona del
+  navegador ni del servidor.
+- Sin cambios de forma: solicitudes y respuestas conservan sus campos;
+  solo cambia el valor que llega a las columnas de fecha y hora.
+
+### v1.11.0 (2026-10-30 — endurecimiento del acceso y del cupo)
+
+- **El control de acceso cubre toda la API** (antes solo el buzón): un
+  peer fuera del loopback recibe `403` en `POST /validar`,
+  `POST /constancia` y `POST /fila-registro` si no hay
+  `VISTOBUENO_API_TOKEN` configurado o el header `X-VistoBueno-Token` no
+  coincide. El despliegue local (SPA + userscript contra `127.0.0.1`)
+  no cambia.
+- **Chequeo del header `Host`** (AUD-28): `400` para cualquier `Host` que
+  no sea de la máquina local. Cierra el DNS rebinding en todos los
+  navegadores. `VISTOBUENO_HOSTS` permite sumar dominios.
+- **Bind local por defecto**: `python -m validator.api` escucha en
+  `127.0.0.1` (`VISTOBUENO_HOST` para exponerlo) y arranca con
+  `proxy_headers=False`. La app `nix run .#serve` agrega
+  `--no-proxy-headers`: un `X-Forwarded-For` ya no puede falsificar el
+  peer.
+- **Cupo adaptativo por CPU** (AUD-12): reemplaza la ventana fija de 60
+  peticiones por un presupuesto de segundos de trabajo medidos. Se
+  ajusta solo a la velocidad del equipo. `VISTOBUENO_RATE_LIMIT_MAX`
+  reactiva el modo anterior.
+- **La fila del registro se neutraliza en la fuente**
+  (`DatosConstancia.fila_registro`): el formato `json` por defecto ya no
+  devuelve un título con prefijo de fórmula crudo.
+- Versión del endpoint: `1.10.0` → `1.11.0`. Un cliente remoto sin
+  token ahora recibe `403` (cambio intencional de seguridad).
 
 ### v1.10.0 (2026-10-28 — auditoría de comportamiento: contrato de la ficha)
 

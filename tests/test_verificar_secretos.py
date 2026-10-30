@@ -299,3 +299,71 @@ def test_permite_valor_de_prueba_sin_excluir_el_archivo(tmp_path):
     archivo.write_text('API_TOKEN = "secreto-de-prueba"\n', encoding="utf-8")
     r = correr([str(archivo)])
     assert r.returncode == 0, r.stdout
+
+
+def test_detecta_clave_entre_comillas_json(tmp_path):
+    """Una clave JSON/YAML entre comillas también es una asignación.
+
+    Revisión 2026-10-30: `"DB_PASSWORD": "..."` pasaba sin bloquear porque
+    el patrón exigía que el nombre empezara la cadena o un separador.
+    """
+    archivo = tmp_path / "config.json"
+    archivo.write_text('{"DB_PASSWORD": "real-secret-123"}\n', encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "DB_PASSWORD" in r.stdout
+
+
+def test_detecta_clave_explicita_entre_comillas_simples(tmp_path):
+    archivo = tmp_path / "config.py"
+    archivo.write_text("'VISTOBUENO_SMTP_PASSWORD': 'real-secret-123'\n", encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+
+
+def test_permite_mention_entre_comillas_de_un_header(tmp_path):
+    """La comilla no debe abrir un falso positivo con `TOKEN` en el medio."""
+    archivo = tmp_path / "api.py"
+    archivo.write_text('"CABECERA_TOKEN_BUZON": "X-VistoBueno-Token"\n', encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_permite_referencia_a_atributo(tmp_path):
+    """`"X_PASSWORD": self.password` es una referencia, no un literal.
+
+    El código puede mapear el nombre de una variable de entorno a su valor
+    en memoria (un dict de configuración). Eso no es una credencial escrita
+    en el archivo.
+    """
+    archivo = tmp_path / "config.py"
+    archivo.write_text(
+        'valores = {\n    "DB_PASSWORD": self.password,\n}\n',
+        encoding="utf-8",
+    )
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_permite_placeholder_citado_en_una_frase(tmp_path):
+    """Un placeholder entre comillas pegado a un backtick es un placeholder.
+
+    El valor capturado por el patrón arrastra la puntuación que lo rodea
+    (backtick, paréntesis). Un `<valor>` documentado no debe marcarse.
+    """
+    archivo = tmp_path / "leeme.md"
+    archivo.write_text(
+        'El patrón no casaba con `"DB_PASSWORD": "<valor>"`) y dejaba pasar.\n',
+        encoding="utf-8",
+    )
+    r = correr([str(archivo)])
+    assert r.returncode == 0, r.stdout
+
+
+def test_sigue_detectando_literal_pegado_a_puntuacion(tmp_path):
+    """La limpieza de puntuación no debe dejar pasar un secreto real."""
+    archivo = tmp_path / "config.json"
+    archivo.write_text('{"DB_PASSWORD": "secreto-real"}\n', encoding="utf-8")
+    r = correr([str(archivo)])
+    assert r.returncode == 1
+    assert "DB_PASSWORD" in r.stdout

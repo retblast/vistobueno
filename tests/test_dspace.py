@@ -296,7 +296,7 @@ class TestDepositarDocumento:
             "/server/api/workflow/workflowitems",
         ]
         assert stub.metadatos == {
-            "/sections/traditionalpageone/dc.title": [{"value": "Tesis de prueba"}]
+            "/sections/traditionalPeruOne/dc.title": [{"value": "Tesis de prueba"}]
         }
 
     def test_flujo_sin_metadatos_salta_el_patch(self, monkeypatch):

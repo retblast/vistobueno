@@ -335,6 +335,78 @@ versionan: son de un solo uso.
 
 ---
 
+### AUD-28 a AUD-31 — revisión de seguridad de la API (alta/media, Int1)
+
+Hallazgos de la revisión de 2026-10-30 sobre el área de Int1 (backend).
+Los cuatro quedaron cerrados en la rama `fix/api-hardening-b0-b1`.
+
+- **AUD-28 (alta) — DNS rebinding**: el control de acceso miraba solo
+  `request.client.host`; una página servida desde un dominio del atacante
+  cuyo DNS resuelve a `127.0.0.1` queda en el mismo origen y podía leer
+  el buzón. En Chrome lo frena Private Network Access; Firefox y WebKit
+  no lo implementan. Además, uvicorn reescribe el peer con
+  `X-Forwarded-For` (proxy headers habilitados por defecto). **Cierre**:
+  chequeo del header `Host` (400) + `--no-proxy-headers` en el arranque
+  documentado y en la app `serve`.
+- **AUD-29 (alta) — inyección de fórmulas en el JSON**: `POST
+  /fila-registro` neutralizaba las fórmulas en tsv/csv/xlsx, pero el
+  formato `json` por defecto devolvía la fila cruda. Un título
+  `=WEBSERVICE(...)` capturado del DOCX llegaba a Excel. **Cierre**: la
+  neutralización se movió a `DatosConstancia.fila_registro`, la fuente de
+  todos los formatos.
+- **AUD-30 (media) — papeleo abierto**: `POST /constancia` y `POST
+  /fila-registro` no tenían control de acceso ni límite; un peer remoto
+  podía generar constancias oficiales con datos arbitrarios y consumir
+  CPU. **Cierre**: dependency de acceso en toda la API + cupo adaptativo
+  propio para el papeleo.
+- **AUD-31 (media) — límite no adaptativo**: la ventana fija de 60
+  peticiones/minuto asumía un coste por petición; medido en este equipo,
+  una validación tarda ~58 ms (~33/min con 2 s de CPU por minuto), y en
+  un equipo 4× más lento el mismo número permite 4× más presión de CPU.
+  **Cierre**: cupo adaptativo que acumula los segundos de trabajo reales
+  y se fuga a 2 s por minuto.
+
+### AUD-33 — el botón "+" del formulario no se encontraba (media, Int1)
+
+La lista `BOTONES_AGREGAR` del userscript (`ds-add-button button`,
+`button.add-button`, …) no coincide con ninguna clase del formulario
+real: en el DOM guardado de "Editar envío" el botón es
+`button.ds-form-add-more` (24 veces) y cada fila repetible vive en un
+contenedor `[id$="_array"]` (11, 13, 15, 43…). Como los selectores no
+existían, las filas extra se llenaban solo si el operador las agregaba a
+mano, y el resumen lo reportaba como pendiente. **Cierre**: el ejecutor
+busca `button.ds-form-add-more` dentro del contenedor `[id$="_array"]`
+del propio campo (nunca a nivel global, que agregaría la fila de otro
+campo). Además: la página del ítem se reconoce por
+`meta[name="citation_title"]` (antes cualquier enlace
+`hdl.handle.net` de una búsqueda podía reportar un handle ajeno), el
+estado de auto-relleno se recalcula por ruta (una segunda tesis ya no
+queda bloqueada) y el reporte exige que el título del ítem coincida con
+la ficha preparada.
+
+### AUD-32 — hora UTC en el registro y la constancia (media, Int1)
+
+El userscript fechaba el clic en Depositar con
+`new Date().toISOString().slice(0, 19)`, que devuelve **UTC**. En Lima
+(UTC-5) la HORA del registro y de la constancia salía 5 horas adelantada
+y, después de las 19:00, el DD/MM/AA saltaba al día siguiente. **Cierre**:
+el userscript formatea el instante en `America/Lima` con `Intl`
+(`src/reloj.js`) y la API normaliza el `timestamp`: sin offset se
+interpreta como Lima, con offset se convierte a Lima. El documento ya no
+depende de la zona del navegador ni del servidor.
+
+### AUD-34 — el escáner de secretos dejaba pasar claves entre comillas (baja, Int1)
+
+`PATRON_ASIGNACION` exigía que el nombre del secreto empezara la cadena o
+un separador. Una clave JSON/YAML entre comillas
+(`"VISTOBUENO_SMTP_PASSWORD": "<valor>"`) no casaba, así que una credencial
+real pasaba el pre-commit y el escaneo de la CI. **Cierre**: el patrón
+acepta comillas opcionales alrededor del nombre. Tres tests cubren clave
+JSON, clave con comillas simples y el falso positivo
+`"CABECERA_TOKEN_BUZON"`.
+
+---
+
 ## 11. Estado de los hallazgos
 
 Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
@@ -377,3 +449,242 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | Nuevo: `palabras_clave_minimo` | Int3 | pendiente | — |
 | Nuevo: plantillas no cuantitativas | Int3 | documentar | — |
 | DSpace REST | Int1 | **cerrado: deprecado** | PR #65 |
+| AUD-28 | Int1 | **cerrado** (Host / DNS rebinding) | `8efffd7` (PR pendiente) |
+| AUD-29 | Int1 | **cerrado** (fórmulas en JSON) | `8efffd7` (PR pendiente) |
+| AUD-30 | Int1 | **cerrado** (acceso al papeleo) | `8efffd7` (PR pendiente) |
+| AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | `8efffd7` (PR pendiente) |
+| AUD-32 | Int1 | **cerrado** (hora de Perú) | `f0ba1f0` (PR pendiente) |
+| AUD-33 | Int1 | **cerrado** (botón "+" del userscript) | `22e6a19` (PR pendiente) |
+| AUD-34 | Int1 | **cerrado** (claves entre comillas en el escáner) | `efca435` (PR pendiente) |
+| Nuevo: cache compilado por hilo | Int3 | pendiente (propuesta de Int1, §12.3) | — |
+
+---
+
+## 12. Propuestas de Int1 para el área de Int3 (NO aplicadas)
+
+Estas propuestas se escribieron desde Int1 (API) y se **revirtieron antes
+de commitear**: `engine.py`, `compilador.py`, `analizadores.py`,
+`exportador.py` y los YAML de reglas son área de Int3 (motor), según la
+tabla de responsabilidades de `AGENTS.md`. Quedan documentadas acá, con el
+diff exacto, para que Int3 las implemente, las descarte o las aplique.
+
+> **Estado**: nada de esto está en el repo. Los archivos del motor están
+> sin tocar. Los parches se transcriben tal cual se escribieron.
+
+### 12.1 AUD-04 — notas `EVALUADO` para las dos reglas de carátula
+
+**Criterio de aceptación**: nota `EVALUADO` con fecha y decisión en
+`reglas_unt.yaml`, como la tiene `sangria_parrafo`.
+
+Diff propuesto (`reglas_unt.yaml`):
+
+```diff
+@@ -225,6 +225,10 @@ reglas:
+   descripcion: Tamaño de letra del título del trabajo en carátula
+   valor_esperado: 14pt
+   severidad: warning
++  # EVALUADO: el manual pide 14pt (sz val 28, párr. 177) pero la plantilla
++  # oficial usa 13pt (sz val 26). Se mantiene la regla del manual y se
++  # deja como warning: el desvío es de la plantilla, no del estudiante.
++  # Decisión 2026-10-30 (auditoría AUD-04).
+   ubicacion: Carátula, especificaciones (párr. 177)
+   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+@@ -242,6 +246,10 @@ reglas:
+     en..."
+   valor_esperado: 13pt
+   severidad: warning
++  # EVALUADO: el manual pide 13pt (sz val 26, párr. 178) pero la plantilla
++  # oficial usa 12pt (sz val 24). Se mantiene la regla del manual y se
++  # deja como warning: el desvío es de la plantilla, no del estudiante.
++  # Decisión 2026-10-30 (auditoría AUD-04).
+   ubicacion: Carátula, especificaciones (párr. 178)
+   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+```
+
+Nota: el texto de las notas es una propuesta de redacción. Si Int3 prefiere
+otra formulación, lo decide quien conoce el manual.
+
+### 12.2 AUD-15 — escape del texto antes de armar el Markdown
+
+**Criterio de aceptación**: escapar `|`, `<`, `>` y `&` antes de armar el
+Markdown, con test.
+
+Diff propuesto (`validator/exportador.py`):
+
+```diff
+@@ -29,6 +29,24 @@ import markdown
+ _EMOJIS = {"rojo": "🔴", "verde": "🟢"}
+
+
++def _escapar_md(texto: object) -> str:
++    """Escapa el texto que viene del documento antes de interpolarlo.
++
++    Sin este escape, un `|` en la descripción de una regla rompe la tabla
++    Markdown (la fila se parte en dos) y un `<` abre HTML crudo en el PDF
++    (python-markdown no escapa el HTML que recibe). El orden importa: `&`
++    va primero para no escapar dos veces las entidades que se crean
++    después.
++    """
++    return (
++        str(texto)
++        .replace("&", "&amp;")
++        .replace("<", "&lt;")
++        .replace(">", "&gt;")
++        .replace("|", "\\|")
++    )
++
++
+ def reporte_a_markdown(reporte: dict) -> str:
+@@ -52,7 +70,9 @@ def reporte_a_markdown(reporte: dict) -> str:
+     for r in reporte["resultados"]:
+         estado = "✅ cumple" if r["passed"] else "❌ **falla**"
+-        linea = f"| `{r['rule_id']}` | {estado} | `{r['severity']}` | {r['message']} |"
++        linea = (
++            f"| `{r['rule_id']}` | {estado} | `{r['severity']}` | {_escapar_md(r['message'])} |"
++        )
+         lineas.append(linea)
+@@ -60,17 +80,17 @@ def reporte_a_markdown(reporte: dict) -> str:
+         if r["passed"]:
+             continue
+         lineas += [
+-            f"#### `{r['rule_id']}` — {r['message']}",
++            f"#### `{r['rule_id']}` — {_escapar_md(r['message'])}",
+             "",
+-            f"- **Esperado:** {r['expected']}",
+-            f"- **Encontrado:** {r['found']}",
++            f"- **Esperado:** {_escapar_md(r['expected'])}",
++            f"- **Encontrado:** {_escapar_md(r['found'])}",
+         ]
+         if r.get("location"):
+-            lineas.append(f"- **Ubicación:** {r['location']}")
++            lineas.append(f"- **Ubicación:** {_escapar_md(r['location'])}")
+         if r.get("fuente"):
+-            lineas.append(f"- **Fuente:** {r['fuente']}")
++            lineas.append(f"- **Fuente:** {_escapar_md(r['fuente'])}")
+         if r.get("cita"):
+-            lineas.append(f"- **Cita:** {r['cita']}")
++            lineas.append(f"- **Cita:** {_escapar_md(r['cita'])}")
+         lineas.append("")
+```
+
+Tests sugeridos (`tests/test_exportador.py`):
+
+1. Un `|` en `message` no rompe la tabla: la fila del resultado conserva
+   sus cuatro columnas (contar `|` sin escapar).
+2. Un `<script>` en `message` sale escapado en el Markdown (`<script>`)
+   y no como HTML crudo en el HTML que produce `markdown.markdown`.
+
+Nota: el escape no cubre el prompt de "Cómo preguntar a una IA" (va dentro
+de un bloque de código, donde el contenido es literal).
+
+### 12.3 Propuesta: cache compilado por hilo (rendimiento y thread-safety)
+
+**Motivo**: `validate_docx` recompila el DSL en cada petición. Medido en
+este equipo, la validación síncrona tarda ~58 ms (compilación ~2,7 ms).
+
+**Ojo con el estado mutable**: los analizadores guardan estado entre
+llamadas (`analizadores.py:58,63`: `ultimo_nodo`, `valor`) y la lista
+`ficha` **se acumula** si no se limpia (`AnalizadorExtraccion` hace
+`append`). Por eso un cache necesita (a) ser por hilo
+(`threading.local()`) y (b) reiniciar ese estado antes de cada ejecución.
+
+Diff propuesto (`validator/compilador.py`) — reinicio del estado:
+
+```diff
+@@ -585,6 +585,16 @@ class ReglaCompilada:
+         return ""
+
+     def ejecutar(self, extracted: ExtractedDocx) -> RuleResult:
++        # Reinicializamos el estado mutable de los analizadores para evitar
++        # contaminación entre ejecuciones consecutivas (ficha, ultimo_nodo,
++        # valor). Esto es necesario cuando el mismo CompilerDSL se reutiliza
++        # en varias llamadas dentro del mismo hilo (cache compilado).
++        for an in self.analizadores:
++            an.ficha = []
++            if an.valor is not None:
++                an.valor = None
++            an.ultimo_nodo = None
++
+         fallos: list[str] = []
+```
+
+Diff propuesto (`validator/engine.py`) — cache por hilo y ejecución en dos
+fases (el cuerpo de `CompilerDSL.ejecutar` sin la recompilación):
+
+```diff
++import threading
+ from collections.abc import Iterable
+ from pathlib import Path
+@@
+-from .compilador import CompilerDSL
+-from .extractor import extract
++from .compilador import CompilerDSL, _con_sentinel
++from .extractor import ExtractedDocx, extract
+ from .models import RuleResult, Severity
++
++# Cache compilado por hilo (thread-safety): el mismo CompilerDSL se
++# reutiliza entre peticiones consecutivas dentro de un hilo, evitando
++# re-parsear el YAML en cada validación. El estado mutable de los
++# analizadores se reinicia en ReglaCompilada.ejecutar() antes de cada
++# ejecución, así que un analizador compartido no contamina la salida.
++_thread_local = threading.local()
++
++
++def _reglas_compiladas(rules_data: dict) -> list:
++    """Devuelve la lista de `ReglaCompilada` cacheada por hilo.
++
++    Compila una vez por hilo y por objeto ``rules_data`` (clave ``id``).
++    """
++    cache = getattr(_thread_local, "compilados", None)
++    if cache is None:
++        cache = {}
++        _thread_local.compilados = cache
++    clave = id(rules_data)
++    if clave in cache:
++        return cache[clave]
++    reglas = CompilerDSL().compilar(rules_data)
++    cache[clave] = reglas
++    return reglas
++
++
++def _ejecutar_compilado(reglas: list, extracted: ExtractedDocx) -> list[RuleResult]:
++    """Ejecuta reglas ya compiladas en dos fases (ver CompilerDSL.ejecutar)."""
++    contexto: dict[str, str] = {}
++    resultados: list[RuleResult | None] = [None] * len(reglas)
++
++    for i, r in enumerate(reglas):
++        if r.aplicar_si is None:
++            res = r.ejecutar(extracted)
++            resultados[i] = res
++            if r.expone:
++                contexto[r.expone] = r.valor_para_contexto()
++
++    for i, r in enumerate(reglas):
++        if r.aplicar_si is None:
++            continue
++        resultados[i] = r.ejecutar(extracted) if r.aplica_en(contexto) else r.no_aplicable()
++
++    return _con_sentinel(resultados, contexto)
+```
+
+Y en `validate_docx`:
+
+```diff
+     if "reglas" in rules_data:
+-        resultados = CompilerDSL().ejecutar(rules_data, extracted)
++        resultados = _ejecutar_compilado(_reglas_compiladas(rules_data), extracted)
+@@
+     if ficha_data is not None:
+-        resultados = resultados + CompilerDSL().ejecutar(ficha_data, extracted)
++        resultados = resultados + _ejecutar_compilado(_reglas_compiladas(ficha_data), extracted)
+```
+
+**Nota de Int1**: si Int3 prefiere el enfoque "analizadores sin estado"
+(limpiar `ficha`, `valor` y `ultimo_nodo` dentro de cada `analizar`), el
+reinicio explícito queda innecesario y el cache puede ser global, sin
+`threading.local()`. Ese camino es más limpio a largo plazo y es decisión
+del área del motor.
+
+**Verificación realizada con el parche** (en la rama de Int1, ya revertida):
+la suite completa pasó (693 passed, 6 xfailed) y `nix flake check` dio
+"all checks passed".

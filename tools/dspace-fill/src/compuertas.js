@@ -32,6 +32,15 @@ const VBCompuertas = (() => {
 		return requeridos.every((sel) => doc.querySelector(sel) !== null);
 	}
 
+	function esPaginaItem(doc) {
+		// El componente del ítem de DSpace 8.1 publica `citation_title`
+		// (meta tag para citas) al mostrar el ítem. Una búsqueda o una
+		// colección no la tienen: sin esta compuerta, el userscript podía
+		// reportar el primer handle de una lista de resultados.
+		if (!doc) return false;
+		return doc.querySelector('meta[name="citation_title"]') !== null;
+	}
+
 	function extraerHandle(doc) {
 		// En la página del ítem archivado el handle vive en un enlace
 		// https://hdl.handle.net/20.500.14414/NNNN.
@@ -61,7 +70,14 @@ const VBCompuertas = (() => {
 		return a === b || a.includes(b) || b.includes(a);
 	}
 
-	return { SELECTORES, esFormularioTesis, extraerHandle, normalizar, titulosCoinciden };
+	return {
+		SELECTORES,
+		esFormularioTesis,
+		esPaginaItem,
+		extraerHandle,
+		normalizar,
+		titulosCoinciden,
+	};
 })();
 
 if (typeof module !== "undefined" && module.exports) {

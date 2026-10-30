@@ -1,5 +1,11 @@
 """Depósito de documentos validados en DSpace (Actividad 10).
 
+DEPRECADO (decisión del equipo, 2026-10-28): la app NO escribe en la API
+de DSpace. El flujo vigente es ficha (SPA) → buzón → userscript; el
+archivo lo adjunta el encargado en el formulario oficial. Este módulo se
+conserva como evidencia de la Actividad 10 y NO se usa en producción
+(validator/api.py no lo importa: `depositar=true` responde "deshabilitado").
+
 Módulo de la capa API que deposita el documento de un estudiante en el
 repositorio institucional DSpace de la UNT cuando la validación termina
 en semáforo verde. Deshabilitado por defecto: solo deposita cuando
@@ -38,10 +44,11 @@ import httpx
 # Configuración (solo variables de entorno)
 # ---------------------------------------------------------------------------
 
-# Nombre típico de la sección de metadatos del formulario de depósito en
-# DSpace 7/8. Es configuración por instancia: se confirma con el primer
-# login real (PENDIENTE en docs/DSPACE_API.md §4).
-SECCION_FORMULARIO_POR_DEFECTO = "traditionalpageone"
+# Nombre de la sección de metadatos del formulario de depósito en DSpace
+# 7/8. Es configuración por instancia: en el repositorio de la UNT la
+# sección confirmada es `traditionalPeruOne` (el típico
+# `traditionalpageone` NO aplica; ver docs/DSPACE_API.md §4).
+SECCION_FORMULARIO_POR_DEFECTO = "traditionalPeruOne"
 
 TIMEOUT_SEGUNDOS_POR_DEFECTO = 30
 

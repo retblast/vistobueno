@@ -25,8 +25,9 @@ from validator.api import app
 from validator.buzon import Buzon
 
 # Cliente con un peer que NO es loopback: simula una petición que llega
-# desde otro equipo de la red (auditoría 2026-10-26, AUD-09).
-CLIENTE_FUERA = TestClient(app, client=("10.0.0.5", 40000))
+# desde otro equipo de la red (auditoría 2026-10-26, AUD-09). El Host es
+# el loopback para aislar el control del peer (AUD-28).
+CLIENTE_FUERA = TestClient(app, client=("10.0.0.5", 40000), base_url="http://127.0.0.1")
 
 FICHA = {
     "extraidos": [

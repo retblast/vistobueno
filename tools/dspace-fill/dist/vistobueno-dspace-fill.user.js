@@ -46,6 +46,15 @@ const VBCompuertas = (() => {
 		return requeridos.every((sel) => doc.querySelector(sel) !== null);
 	}
 
+	function esPaginaItem(doc) {
+		// El componente del ítem de DSpace 8.1 publica `citation_title`
+		// (meta tag para citas) al mostrar el ítem. Una búsqueda o una
+		// colección no la tienen: sin esta compuerta, el userscript podía
+		// reportar el primer handle de una lista de resultados.
+		if (!doc) return false;
+		return doc.querySelector('meta[name="citation_title"]') !== null;
+	}
+
 	function extraerHandle(doc) {
 		// En la página del ítem archivado el handle vive en un enlace
 		// https://hdl.handle.net/20.500.14414/NNNN.
@@ -75,7 +84,14 @@ const VBCompuertas = (() => {
 		return a === b || a.includes(b) || b.includes(a);
 	}
 
-	return { SELECTORES, esFormularioTesis, extraerHandle, normalizar, titulosCoinciden };
+	return {
+		SELECTORES,
+		esFormularioTesis,
+		esPaginaItem,
+		extraerHandle,
+		normalizar,
+		titulosCoinciden,
+	};
 })();
 
 if (typeof module !== "undefined" && module.exports) {
@@ -224,15 +240,14 @@ if (typeof module !== "undefined" && module.exports) {
 // despachan input/change (el patrón estándar de los autocompletadores).
 
 const VBEjecutor = (() => {
-	// El botón "+" de filas repetibles no está en la captura estática
-	// (lo renderiza Angular en vivo): candidatos por orden; si ninguno
-	// funciona, se llenan las filas existentes y el resumen avisa.
-	const BOTONES_AGREGAR = [
-		"ds-add-button button",
-		"ds-add-group-buttons button",
-		"button.add-button",
-		"button[data-test='add']",
-	];
+	// Cada fila repetible del formulario oficial (DSpace 8.1) vive en un
+	// contenedor `#N_array` (evidencia: DOM real de "Editar envío"), y el
+	// botón "+" de ESA fila es `button.ds-form-add-more`, dentro del mismo
+	// contenedor. Los selectores adivinados de la versión anterior no
+	// existían en la página: se llenaban las filas visibles y las demás
+	// quedaban a mano sin avisar.
+	const SELECTOR_ARRAY = '[id$="_array"]';
+	const SELECTOR_AGREGAR = "button.ds-form-add-more";
 
 	function _evento(doc, el, tipo) {
 		const vista = el.ownerDocument.defaultView;
@@ -253,8 +268,12 @@ const VBEjecutor = (() => {
 	}
 
 	function _elegirOpcion(doc, select, sufijo) {
-		const opcion = Array.from(select.options || []).find(
-			(o) => (o.value || "").endsWith(sufijo) || (o.value || "").includes(sufijo)
+		// Los QUALDROP del formulario real usan valores "N: campo" (p. ej.
+		// "0: renati.author.dni"): basta con el sufijo exacto. El
+		// `includes()` anterior podía elegir una opción de otro campo cuyo
+		// nombre contuviera el sufijo.
+		const opcion = Array.from(select.options || []).find((o) =>
+			(o.value || "").endsWith(sufijo)
 		);
 		if (!opcion) return false;
 		select.value = opcion.value;
@@ -297,18 +316,19 @@ const VBEjecutor = (() => {
 	}
 
 	function _agregarFila(doc, selectorCercano) {
-		// Busca el botón "+" más cercano al campo (mismo contenedor de
-		// formulario) y lo pulsa; si no aparece, no insiste: el resumen
-		// reporta filas pendientes y el operador agrega a mano.
-		for (const sel of BOTONES_AGREGAR) {
-			const boton = doc.querySelector(sel);
-			if (boton) {
-				boton.click();
-				const despues = doc.querySelectorAll(selectorCercano).length;
-				if (despues > 0) return true;
-			}
-		}
-		return false;
+		// El botón se busca SOLO dentro del contenedor del campo: pulsar
+		// un "+" global agregaría la fila de otro campo y desalinearía los
+		// índices. Si el campo no existe o no hay botón, no se insiste: el
+		// resumen reporta el faltante y el operador agrega a mano.
+		const campo = doc.querySelector(selectorCercano);
+		const contenedor = campo ? campo.closest(SELECTOR_ARRAY) : null;
+		const boton = contenedor ? contenedor.querySelector(SELECTOR_AGREGAR) : null;
+		if (!boton) return false;
+		const antes = doc.querySelectorAll(selectorCercano).length;
+		boton.click();
+		// Angular agrega la fila en el mismo tick del clic; si no lo hizo,
+		// no se insiste (la siguiente iteración no vería el cambio).
+		return doc.querySelectorAll(selectorCercano).length > antes;
 	}
 
 	function _aplicarQualdrop(doc, op) {
@@ -382,11 +402,64 @@ const VBEjecutor = (() => {
 		return { exitosos, fallidos, omitidos: plan.omitidos };
 	}
 
-	return { aplicarPlan, BOTONES_AGREGAR };
+	return { aplicarPlan, SELECTOR_ARRAY, SELECTOR_AGREGAR };
 })();
 
 if (typeof module !== "undefined" && module.exports) {
 	module.exports = VBEjecutor;
+}
+
+
+// Reloj del userscript: fecha y hora de pared en la zona del Perú.
+//
+// El registro oficial y la constancia muestran la hora peruana. `Date`
+// no la da directamente: `toISOString()` devuelve UTC, que en Lima va
+// 5 horas adelantado y después de las 19:00 cambia el día. Este módulo
+// formatea el instante en America/Lima con `Intl`, sin depender de la
+// zona horaria configurada en el navegador.
+
+const VBReloj = (() => {
+	const ZONA = "America/Lima";
+
+	// Un solo formateador: `formatToParts` entrega los campos por nombre
+	// y evita depender del orden o de los separadores del locale.
+	const FORMATO = new Intl.DateTimeFormat("en-CA", {
+		timeZone: ZONA,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit",
+		hourCycle: "h23",
+	});
+
+	function ahoraLima(ahora) {
+		// `ahora` es inyectable para los tests; en producción es `new Date()`.
+		const partes = FORMATO.formatToParts(ahora || new Date());
+		const dato = (tipo) => partes.find((parte) => parte.type === tipo).value;
+		// ISO 8601 sin offset: el userscript reporta hora de pared del
+		// Perú y la API interpreta un timestamp sin offset como Lima.
+		return (
+			dato("year") +
+			"-" +
+			dato("month") +
+			"-" +
+			dato("day") +
+			"T" +
+			dato("hour") +
+			":" +
+			dato("minute") +
+			":" +
+			dato("second")
+		);
+	}
+
+	return { ZONA, ahoraLima };
+})();
+
+if (typeof module !== "undefined" && module.exports) {
+	module.exports = VBReloj;
 }
 
 
@@ -441,8 +514,17 @@ if (typeof module !== "undefined" && module.exports) {
 	function reportarDeposito(handle) {
 		const envio = GM_getValue(CLAVE_ENVIO, null);
 		if (!envio) return;
-		const timestamp =
-			envio.timestamp || new Date().toISOString().slice(0, 19);
+		// El ítem abierto debe ser la tesis preparada: un ítem ajeno
+		// (otra pestaña, una búsqueda) no debe pisar la ranura del buzón.
+		const meta = doc.querySelector('meta[name="citation_title"]');
+		const tituloItem = meta ? meta.getAttribute("content") || "" : "";
+		if (envio.titulo && tituloItem && !VBCompuertas.titulosCoinciden(envio.titulo, tituloItem)) {
+			mostrarToast(
+				"El ítem abierto no coincide con la tesis preparada; no se reportó a VistoBueno."
+			);
+			return;
+		}
+		const timestamp = envio.timestamp || VBReloj.ahoraLima();
 		pedir(
 			"/deposito",
 			"POST",
@@ -536,20 +618,26 @@ if (typeof module !== "undefined" && module.exports) {
 	}
 
 	// El SPA de DSpace navega sin recargar: un observador detecta tanto la
-	// aparición del formulario como la página del ítem con el handle.
-	const visto = { formulario: false, handle: false };
+	// aparición del formulario como la página del ítem con el handle. El
+	// estado se recalcula en cada pasada para que una SEGUNDA tesis (u otro
+	// ítem abierto después) no quede bloqueada por la anterior.
+	const visto = { formulario: false, handle: null };
 
 	function revisar() {
-		if (!visto.formulario && VBCompuertas.esFormularioTesis(doc)) {
-			visto.formulario = true;
+		const hayFormulario = VBCompuertas.esFormularioTesis(doc);
+		if (hayFormulario && !visto.formulario) {
 			alAbrirFormulario();
 		}
-		if (!visto.handle) {
-			const handle = VBCompuertas.extraerHandle(doc);
-			if (handle) {
-				visto.handle = true;
-				reportarDeposito(handle);
-			}
+		visto.formulario = hayFormulario;
+
+		const handle = VBCompuertas.esPaginaItem(doc) ? VBCompuertas.extraerHandle(doc) : null;
+		if (!handle) {
+			visto.handle = null;
+			return;
+		}
+		if (handle !== visto.handle) {
+			visto.handle = handle;
+			reportarDeposito(handle);
 		}
 	}
 
@@ -559,7 +647,10 @@ if (typeof module !== "undefined" && module.exports) {
 		temporizador = setTimeout(revisar, 300);
 	}
 
-	new MutationObserver(revisarConCalma).observe(doc.body, {
+	// Se observa el documento entero: `citation_title` vive en <head> y el
+	// cuerpo del ítem se renderiza por separado; con solo <body> la
+	// compuerta podía ver el handle antes que el meta y no reintentar.
+	new MutationObserver(revisarConCalma).observe(doc.documentElement, {
 		childList: true,
 		subtree: true,
 	});
@@ -576,7 +667,7 @@ if (typeof module !== "undefined" && module.exports) {
 			if (boton) {
 				const envio = GM_getValue(CLAVE_ENVIO, null);
 				if (envio) {
-					envio.timestamp = new Date().toISOString().slice(0, 19);
+					envio.timestamp = VBReloj.ahoraLima();
 					GM_setValue(CLAVE_ENVIO, envio);
 				}
 			}

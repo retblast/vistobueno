@@ -100,8 +100,10 @@ _NOMBRE_EXPLICITO = "|".join(NOMBRES_SECRETOS)
 _NOMBRE_GENERICO = (
     r"(?<![A-Z0-9_])(?:[A-Z][A-Z0-9]*_)*(?:" + "|".join(SUFIJOS_SECRETOS) + r")(?![A-Z0-9_])"
 )
+# Las comillas opcionales cubren claves JSON/YAML ("DB_PASSWORD": "x"),
+# un formato que antes pasaba sin bloquear (revisión 2026-10-30).
 PATRON_ASIGNACION = re.compile(
-    rf"({_NOMBRE_EXPLICITO}|{_NOMBRE_GENERICO})\s*[=:]\s*(\S+)",
+    rf"[\"']?({_NOMBRE_EXPLICITO}|{_NOMBRE_GENERICO})[\"']?\s*[=:]\s*(\S+)",
 )
 
 # URL con credenciales embebidas: https://usuario:clave@host
@@ -148,7 +150,10 @@ MSG_ENV = (
 
 def _valor_permitido(valor: str) -> bool:
     """True si el valor capturado es placeholder o autorreferencia ($VAR)."""
-    limpio = valor.strip().strip("\"'")
+    # El valor capturado viene de una línea de texto: puede quedar pegado a
+    # comillas, paréntesis o backticks (por ejemplo, un ejemplo citado
+    # dentro de una frase). Se quita esa envoltura antes de decidir.
+    limpio = valor.strip().strip("\"'`()[]{}.,;:!?")
     if not limpio:
         return True
     if limpio.startswith("$"):
@@ -159,6 +164,10 @@ def _valor_permitido(valor: str) -> bool:
         return True
     if limpio.startswith(PREFIXOS_REFERENCIA):
         # Lectura del entorno, no un valor: os.environ.get("X", "")
+        return True
+    if limpio.rstrip(",").startswith(("self.", "cls.")):
+        # Referencia a un atributo (self.password): el valor vive en el
+        # proceso, no en el archivo. Una credencial real es un literal.
         return True
     if limpio.lower().endswith("-de-prueba"):
         # Convención de los tests del repo: "secreto-de-prueba" no es un

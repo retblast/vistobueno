@@ -21,7 +21,7 @@ Uso:
 import io
 import tempfile
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import cache
 from pathlib import Path
 
@@ -731,12 +731,71 @@ class TestNeutralizacionFormulas:
         texto = respuesta.content.decode("utf-8").lstrip("\ufeff")
         assert "'=WEBSERVICE" in texto
 
+    def test_json_neutraliza_formula(self):
+        """El formato JSON por defecto también entrega la fila neutralizada.
+
+        Hallazgo de la revisión de seguridad (AUD-29): el JSON devolvía
+        la fila cruda. La neutralización se movió a la fuente
+        (`DatosConstancia.fila_registro`), así que los cuatro formatos
+        la heredan.
+        """
+        respuesta = CLIENTE.post("/fila-registro", json=self._solicitud_formula())
+        assert respuesta.status_code == 200
+        fila = respuesta.json()["filas"][0]
+        titulo = fila.split("\t")[1]
+        assert titulo.startswith("'=WEBSERVICE")
+
     def test_campos_normales_no_se_tocan(self):
         """Un título sin prefijo de fórmula llega íntegro: sin comilla extra."""
         respuesta = CLIENTE.post("/fila-registro?formato=csv", json=_solicitud())
         assert respuesta.status_code == 200
         texto = respuesta.content.decode("utf-8")
         assert "'Tesis" not in texto  # sin comilla ante un título normal
+
+
+class TestHoraPeru:
+    """El registro y la constancia usan hora de pared del Perú.
+
+    El userscript reporta `America/Lima` (UTC-5, sin horario de verano).
+    Un timestamp sin offset se interpreta como Lima y uno con offset se
+    convierte, para que ni el navegador ni el servidor cambien la HORA ni
+    el DD/MM/AA del documento.
+    """
+
+    def test_timestamp_sin_offset_se_interpreta_como_lima(self):
+        from validator import api as api_module
+
+        momento = api_module._parsear_timestamp("2026-10-30T23:30:00")
+        assert momento.utcoffset() == timedelta(hours=-5)
+        assert (momento.day, momento.hour, momento.minute) == (30, 23, 30)
+
+    def test_timestamp_con_offset_se_convierte_a_lima(self):
+        from validator import api as api_module
+
+        # 02:00 UTC del 20 es 21:00 del 19 en Lima: cambia día y hora.
+        momento = api_module._parsear_timestamp("2026-10-20T02:00:00+00:00")
+        assert (momento.day, momento.hour) == (19, 21)
+
+    def test_fila_usa_la_hora_peruana_tambien_de_noche(self):
+        """23:30 del 30 no debe convertirse en 04:30 del 31."""
+        solicitud = _solicitud()
+        solicitud["timestamp"] = "2026-10-30T23:30:00"
+        respuesta = CLIENTE.post("/fila-registro", json=solicitud)
+        assert respuesta.status_code == 200
+        columnas = respuesta.json()["filas"][0].split("\t")
+        assert columnas[4] == "30/"  # DD
+        assert columnas[5] == "10/"  # MM
+        assert columnas[6] == "2026"  # AA
+        assert columnas[7] == "23:30:00"  # HORA
+
+    def test_fila_convierte_un_timestamp_con_offset(self):
+        solicitud = _solicitud()
+        solicitud["timestamp"] = "2026-10-20T02:00:00+00:00"
+        respuesta = CLIENTE.post("/fila-registro", json=solicitud)
+        assert respuesta.status_code == 200
+        columnas = respuesta.json()["filas"][0].split("\t")
+        assert columnas[4] == "19/"
+        assert columnas[7] == "21:00:00"
 
 
 # ---------------------------------------------------------------------------

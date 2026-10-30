@@ -7,9 +7,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { JSDOM } = require("jsdom");
 
-const { esFormularioTesis, extraerHandle, normalizar, titulosCoinciden } = require(
-	path.join(__dirname, "..", "src", "compuertas.js")
-);
+const {
+	esFormularioTesis,
+	esPaginaItem,
+	extraerHandle,
+	normalizar,
+	titulosCoinciden,
+} = require(path.join(__dirname, "..", "src", "compuertas.js"));
 
 function domDesde(rel) {
 	const html = fs.readFileSync(path.join(__dirname, "fixtures", rel), "utf8");
@@ -28,6 +32,13 @@ test("esFormularioTesis: false en una página sin formulario (fail-closed)", () 
 
 test("esFormularioTesis: false sin document", () => {
 	assert.strictEqual(esFormularioTesis(null), false);
+});
+
+test("esPaginaItem: true en el ítem y false en el formulario", () => {
+	// La compuerta evita reportar handles de listas de resultados.
+	assert.strictEqual(esPaginaItem(domDesde("item.html").window.document), true);
+	assert.strictEqual(esPaginaItem(domDesde("form.html").window.document), false);
+	assert.strictEqual(esPaginaItem(null), false);
 });
 
 test("extraerHandle encuentra el handle de la página del ítem", () => {

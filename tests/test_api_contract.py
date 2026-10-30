@@ -478,7 +478,7 @@ class TestLimitePeticiones:
         """El cupón es por IP: otra dirección sigue entrando."""
         monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("VISTOBUENO_RATE_LIMIT_VENTANA_SEG", "60")
-        otro = TestClient(app, client=("127.0.0.2", 50001))
+        otro = TestClient(app, client=("127.0.0.2", 50001), base_url="http://127.0.0.1")
         with open(ruta_docx_prueba(), "rb") as f:
             archivos = {"archivo": ("tesis.docx", f.read(), MIME_DOCX)}
         assert CLIENTE.post("/validar", files=archivos).status_code == 200
@@ -507,6 +507,58 @@ class TestLimitePeticiones:
         assert maximo == validator.api.MAXIMO_PETICIONES_DEFAULT
         assert ventana == validator.api.VENTANA_PETICIONES_DEFAULT
         assert subir_plantilla().status_code == 200
+
+    def test_cupo_cpu_corta_la_rafaga(self, monkeypatch):
+        """Sin VISTOBUENO_RATE_LIMIT_MAX rige el cupo adaptativo por CPU."""
+        monkeypatch.delenv("VISTOBUENO_RATE_LIMIT_MAX", raising=False)
+        monkeypatch.setattr(
+            validator.api,
+            "_LIMITADOR_CPU_VALIDACION",
+            # Presupuesto mínimo: cualquier validación real lo agota.
+            validator.api.LimitadorCPU(presupuesto_segundos=0.001),
+        )
+        assert subir_plantilla().status_code == 200
+        rebotada = subir_plantilla()
+        assert rebotada.status_code == 429
+        assert rebotada.headers.get("Retry-After")
+        assert "validación" in rebotada.json()["detail"].lower()
+
+    def test_cupo_cpu_por_defecto_no_bloquea_el_uso_normal(self, monkeypatch):
+        """Con el cupo por defecto, una sesión normal (3 validaciones) entra."""
+        monkeypatch.delenv("VISTOBUENO_RATE_LIMIT_MAX", raising=False)
+        for _ in range(3):
+            assert subir_plantilla().status_code == 200
+
+
+class TestLimitadorCPU:
+    """El cupo adaptativo rinde menos en un equipo lento con el mismo
+    presupuesto: no hace falta calibrar una constante por hardware."""
+
+    @staticmethod
+    def _entran(cupo, coste: float) -> int:
+        """Cuenta peticiones admitidas hasta agotar el presupuesto."""
+        total = 0
+        while cupo.adquirir()[0]:
+            total += 1
+            cupo.registrar_coste(coste)
+            if total > 100:  # pragma: no cover - salvaguarda del test
+                break
+        return total
+
+    def test_el_mismo_presupuesto_admite_menos_en_un_equipo_lento(self):
+        # Ventana enorme: la fuga es despreciable y se mide solo la ráfaga.
+        # Presupuesto 0.55 evita el borde exacto de la suma en coma flotante.
+        rapido = validator.api.LimitadorCPU(presupuesto_segundos=0.55, ventana_segundos=3600)
+        lento = validator.api.LimitadorCPU(presupuesto_segundos=0.55, ventana_segundos=3600)
+        assert self._entran(rapido, 0.06) == 10  # ~60 ms por validación
+        assert self._entran(lento, 0.25) == 3  # ~250 ms por validación
+
+    def test_el_rechazo_indica_cuanto_esperar(self):
+        cupo = validator.api.LimitadorCPU(presupuesto_segundos=0.1)
+        cupo.registrar_coste(0.2)
+        permitido, reintentar = cupo.adquirir()
+        assert permitido is False
+        assert reintentar > 1.0
 
 
 # ---------------------------------------------------------------------------
