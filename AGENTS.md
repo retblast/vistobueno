@@ -9,8 +9,8 @@ Guía para integrantes del proyecto. Define convenciones, arquitectura y flujo d
 > La auditoría corrió el motor contra **una tesis real** y contra **las 5
 > plantillas oficiales**. Salieron **27 hallazgos (4 altos)**. El núcleo está
 > sano (el semáforo se calcula bien, el correo y el buzón no rompen la
-> respuesta), pero **hay bugs abiertos** y **una afirmación del README que el
-> código contradice**.
+> respuesta), pero **hay bugs abiertos**. La afirmación del README que el
+> código contradecía ya se corrigió (2026-10-30).
 >
 > - **Leé esto primero**: [`docs/HANDOVER_AUDITORIA_2026-10-26.md`](docs/HANDOVER_AUDITORIA_2026-10-26.md)
 >   → evidencia, criterios de aceptación, decisiones tomadas y lo que **no**
@@ -27,9 +27,16 @@ Guía para integrantes del proyecto. Define convenciones, arquitectura y flujo d
 >   aceptación de AUD-24 a AUD-27 ya están en `tests/test_captura_ficha.py`
 >   (tests con `xfail(strict=True)`: cuando el motor los cumpla, el CI se
 >   pone rojo hasta que Int1 quite la marca).
-> - **Int1 — API**: AUD-09, AUD-10, AUD-12, AUD-13, AUD-21, AUD-22 y el
->   contrato de la ficha: **cerrados** (PR #65, #66, #67 y #69; ver la tabla
->   §11 del handover).
+> - **Int1 — API**: **cerrado**. AUD-09, AUD-10, AUD-12, AUD-13, AUD-21,
+>   AUD-22 y el contrato de la ficha (PR #65, #66, #67 y #69); además, en la
+>   rama `fix/api-hardening-b0-b1`: AUD-28 (Host y DNS rebinding), AUD-29
+>   (fórmulas en el registro), AUD-30 (acceso al papeleo), AUD-31 (cupo de
+>   CPU), AUD-32 (hora de Perú), AUD-33 (botón "+" del userscript) y AUD-34
+>   (escáner de secretos). Ver la tabla §11 del handover.
+> - **Int3 — propuestas ya escritas, NO aplicadas**: el diff de AUD-04 (notas
+>   `EVALUADO`), AUD-15 (escape del exportador) y del cache compilado por
+>   hilo está en **§12 del handover**. Son del área del motor: Int1 los
+>   revertió y los dejó documentados para que Int3 los implemente.
 > - **Int2 — frontend**: AUD-16 (la pantalla de ficha del handover S8 no
 >   existe), AUD-17, AUD-18.
 > - **Decisiones de dominio abiertas** (las necesita el equipo, no un
@@ -650,14 +657,15 @@ Al revisar un PR, verificar que:
 
 ## Próximos pasos propuestos
 
-1. **Int1**: remediación de la auditoría de 2026-10-26 — protección local del
-   buzón, límite de peticiones, contrato de la ficha y test de paridad no
-   vacía. Detalle y criterios de aceptación:
+1. **Int1**: remediación de la auditoría de 2026-10-26 (API, buzón, papeleo,
+   userscript y escáner de secretos): **resuelto** — PR #65, #66, #67, #69 y
+   rama `fix/api-hardening-b0-b1`. Detalle y criterios de aceptación:
    [`docs/HANDOVER_AUDITORIA_2026-10-26.md`](docs/HANDOVER_AUDITORIA_2026-10-26.md).
 2. **Int3**: correctitud del motor contra la tesis real — AUD-01, AUD-02,
-   AUD-03 (mensajes legibles), AUD-04 (notas `EVALUADO`), AUD-20 (factory con
-   la estructura real) y AUD-24 a AUD-27 (capturas de la ficha). Criterios de
-   aceptación:
+   AUD-03 (mensajes legibles), AUD-04 (notas `EVALUADO`), AUD-15 (escape del
+   exportador), AUD-20 (factory con la estructura real) y AUD-24 a AUD-27
+   (capturas de la ficha). Los diffs propuestos de AUD-04, AUD-15 y del cache
+   compilado están en §12 del handover. Criterios de aceptación:
    [`docs/HANDOVER_AUDITORIA_2026-10-26.md`](docs/HANDOVER_AUDITORIA_2026-10-26.md).
 3. **Int2**: pantalla de ficha de depósito (handover S8, AUD-16).
 4. **Proceso**: `AbortController` en el upload y foco del dropzone bajo
