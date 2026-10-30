@@ -565,7 +565,7 @@
           "estado"
         ],
         "title": "DepositoAPI",
-        "description": "Estado del depósito del documento en DSpace (Actividad 10).\n\nMisma forma que NotificacionAPI: `estado` describe qué pasó con el\ndepósito para que el operador pueda informar al estudiante o reintentar.\nCon \"enviado\", el `detalle` recuerda que el ítem queda en la cola de\naprobación de la sede; con \"fallo\" o \"deshabilitado\", el `detalle`\ntrae el motivo técnico o la nota de configuración."
+        "description": "Estado del depósito del documento en DSpace (Actividad 10).\n\nDEPRECADO (decisión 2026-10-28). Misma forma que NotificacionAPI: el\ncampo se conserva por compatibilidad del contrato, pero el flujo\nvigente solo devuelve `sin_solicitud` (no se pidió) o `deshabilitado`\ncon la nota que explica el flujo oficial (formulario + userscript)."
       },
       "DepositoRecibido": {
         "properties": {
@@ -610,7 +610,7 @@
           "deshabilitado"
         ],
         "title": "EstadoDepositoAPI",
-        "description": "Estado del depósito del documento en DSpace (Actividad 10).\n\nEl depósito es opt-in por solicitud (campo `depositar`) y solo procede\ncon semáforo verde: el operador decide que el documento está apto para\nentrar al repositorio institucional. El ítem queda en la cola de\naprobación de la sede (workflow de DSpace), no se publica directo."
+        "description": "Estado del depósito del documento en DSpace (Actividad 10).\n\nDEPRECADO (decisión 2026-10-28): la app no escribe en la API de DSpace.\nLos valores `enviado` y `fallo` se conservan para no romper el\ncontrato, pero el flujo vigente solo emite `sin_solicitud` o\n`deshabilitado`: el depósito real lo hace el encargado con el\nformulario oficial y el userscript."
       },
       "EstadoNotificacionAPI": {
         "type": "string",
