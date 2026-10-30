@@ -3,7 +3,7 @@
   "info": {
     "title": "VistoBueno API",
     "description": "API de validación automática de formato de tesis — UNT FECyC",
-    "version": "1.11.0"
+    "version": "1.12.0"
   },
   "paths": {
     "/validar": {

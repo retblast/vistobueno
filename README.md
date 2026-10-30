@@ -423,7 +423,7 @@ operador presente).
    resumen: lleno / a mano / sin dato) y corrige el nivel de acceso
    ("Acceso abierto").
 4. El operador arrastra el .docx, marca "Confirmo la licencia" y pulsa
-   Depositar; el clic queda registrado como timestamp.
+   Depositar; el clic queda registrado como timestamp (hora de Perú).
 5. Al abrir el ítem, el userscript reporta el handle al buzón
    (`POST /deposito`).
 6. Con la ficha + handle + timestamp: `POST /fila-registro` (filas TSV

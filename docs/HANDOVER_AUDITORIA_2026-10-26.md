@@ -366,6 +366,17 @@ Los cuatro quedaron cerrados en la rama `fix/api-hardening-b0-b1`.
   **Cierre**: cupo adaptativo que acumula los segundos de trabajo reales
   y se fuga a 2 s por minuto.
 
+### AUD-32 — hora UTC en el registro y la constancia (media, Int1)
+
+El userscript fechaba el clic en Depositar con
+`new Date().toISOString().slice(0, 19)`, que devuelve **UTC**. En Lima
+(UTC-5) la HORA del registro y de la constancia salía 5 horas adelantada
+y, después de las 19:00, el DD/MM/AA saltaba al día siguiente. **Cierre**:
+el userscript formatea el instante en `America/Lima` con `Intl`
+(`src/reloj.js`) y la API normaliza el `timestamp`: sin offset se
+interpreta como Lima, con offset se convierte a Lima. El documento ya no
+depende de la zona del navegador ni del servidor.
+
 ---
 
 ## 11. Estado de los hallazgos
@@ -410,7 +421,8 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | Nuevo: `palabras_clave_minimo` | Int3 | pendiente | — |
 | Nuevo: plantillas no cuantitativas | Int3 | documentar | — |
 | DSpace REST | Int1 | **cerrado: deprecado** | PR #65 |
-| AUD-28 | Int1 | **cerrado** (Host / DNS rebinding) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
-| AUD-29 | Int1 | **cerrado** (fórmulas en JSON) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
-| AUD-30 | Int1 | **cerrado** (acceso al papeleo) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
-| AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-28 | Int1 | **cerrado** (Host / DNS rebinding) | `8efffd7` (PR pendiente) |
+| AUD-29 | Int1 | **cerrado** (fórmulas en JSON) | `8efffd7` (PR pendiente) |
+| AUD-30 | Int1 | **cerrado** (acceso al papeleo) | `8efffd7` (PR pendiente) |
+| AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | `8efffd7` (PR pendiente) |
+| AUD-32 | Int1 | **cerrado** (hora de Perú) | rama `fix/api-hardening-b0-b1` (PR pendiente) |

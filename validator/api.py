@@ -17,10 +17,12 @@ import tempfile
 import threading
 import time
 import zipfile
+from datetime import datetime
 from functools import cache
 from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from email_validator import EmailNotValidError, validate_email
 from fastapi import (
@@ -92,6 +94,11 @@ from .prompts import build_ai_help_section
 REGLAS_YAML_PATH = str(Path(__file__).resolve().parent.parent / "reglas_unt.yaml")
 
 TAMANO_MAXIMO_BYTES = 10 * 1024 * 1024  # 10 MB
+
+# Zona horaria del registro oficial y de la constancia. El userscript
+# reporta la hora de pared del Perú; un timestamp ISO 8601 con offset se
+# convierte a esta zona para que el documento no dependa del navegador.
+ZONA_LIMA = ZoneInfo("America/Lima")
 
 # Tipos de content-type admitidos. La puerta real NO es esta lista: un DOCX
 # es un paquete OPC (ZIP) y algunos clientes lo envían con tipos genéricos.
@@ -724,7 +731,7 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.11.0",
+    version="1.12.0",
 )
 # DNS rebinding: se valida el header Host antes de cualquier endpoint.
 app.add_middleware(MiddlewareHostConfiable)
@@ -1213,11 +1220,19 @@ def _constancias_de_solicitud(solicitud: FilaRegistroRequest) -> list[DatosConst
         raise HTTPException(status_code=422, detail=str(e)) from e
 
 
-def _parsear_timestamp(texto: str):
-    """Parsea el timestamp ISO 8601 reportado por el userscript."""
-    from datetime import datetime
+def _parsear_timestamp(texto: str) -> datetime:
+    """Parsea el timestamp ISO 8601 y lo normaliza a la hora del Perú.
 
-    return datetime.fromisoformat(texto)
+    El userscript envía hora de pared (sin offset), porque el registro
+    oficial y la constancia usan la hora peruana. Un timestamp sin
+    offset se interpreta como `America/Lima`; uno con offset se convierte
+    a esa zona. Así el documento no depende de la zona del navegador ni
+    del servidor.
+    """
+    momento = datetime.fromisoformat(texto)
+    if momento.tzinfo is None:
+        return momento.replace(tzinfo=ZONA_LIMA)
+    return momento.astimezone(ZONA_LIMA)
 
 
 def _nombre_archivo_constancia(datos: DatosConstancia) -> str:

@@ -49,8 +49,7 @@
 	function reportarDeposito(handle) {
 		const envio = GM_getValue(CLAVE_ENVIO, null);
 		if (!envio) return;
-		const timestamp =
-			envio.timestamp || new Date().toISOString().slice(0, 19);
+		const timestamp = envio.timestamp || VBReloj.ahoraLima();
 		pedir(
 			"/deposito",
 			"POST",
@@ -184,7 +183,7 @@
 			if (boton) {
 				const envio = GM_getValue(CLAVE_ENVIO, null);
 				if (envio) {
-					envio.timestamp = new Date().toISOString().slice(0, 19);
+					envio.timestamp = VBReloj.ahoraLima();
 					GM_setValue(CLAVE_ENVIO, envio);
 				}
 			}

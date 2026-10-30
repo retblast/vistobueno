@@ -583,8 +583,10 @@ pegar, sin sesiones: **una ranura en memoria del proceso, TTL de 1 hora,
 - `DepositoRecibido.titulo`: la SPA lo **coteja con la ficha en vuelo**
   antes de usar el handle (defensa contra un handle ajeno).
 - `DepositoRecibido.timestamp`: momento del clic en "Depositar"
-  capturado por el userscript (ISO 8601); alimenta la columna HORA del
-  registro y la constancia.
+  capturado por el userscript (ISO 8601, hora de pared del Perú);
+  alimenta la columna HORA del registro y la constancia. Un timestamp
+  sin offset se interpreta como `America/Lima`; uno con offset se
+  convierte a esa zona (AUD-32).
 
 ### Seguridad
 
@@ -675,7 +677,10 @@ Los dos endpoints que producen el papeleo del registro a partir de la
 ficha completada y del reporte del buzón. Entrada común
 (`FilaRegistroRequest`): la `ficha` (extraídos corregidos + manuales
 llenos), el `handle` del ítem y el `timestamp` del clic en Depositar
-(ISO 8601; alimenta DD/MM/AA, HORA, AÑO y la fecha del documento).
+(ISO 8601; alimenta DD/MM/AA, HORA, AÑO y la fecha del documento). El
+timestamp se normaliza a `America/Lima`: sin offset se interpreta como
+hora peruana, con offset se convierte. Así el papeleo no cambia según la
+zona horaria del navegador o del servidor (AUD-32).
 
 **Convención por autor** (evidencia del registro oficial): una fila y
 una constancia POR ESTUDIANTE. `matricula` y `renati.author.dni`
@@ -721,6 +726,17 @@ dos autores generan dos constancias y dos filas con el mismo handle.
   copia las celdas del archivo descargado.
 
 ## Changelog
+
+### v1.12.0 (2026-10-30 — hora de Perú en el papeleo)
+
+- **El timestamp se normaliza a `America/Lima`** (AUD-32): el userscript
+  reporta hora de pared del Perú. Antes enviaba UTC, 5 horas adelantado y
+  con cambio de día después de las 19:00. En la API, un timestamp sin
+  offset se interpreta como Lima y uno con offset se convierte. HORA,
+  DD/MM/AA, AÑO y la fecha del documento ya no dependen de la zona del
+  navegador ni del servidor.
+- Sin cambios de forma: solicitudes y respuestas conservan sus campos;
+  solo cambia el valor que llega a las columnas de fecha y hora.
 
 ### v1.11.0 (2026-10-30 — endurecimiento del acceso y del cupo)
 
