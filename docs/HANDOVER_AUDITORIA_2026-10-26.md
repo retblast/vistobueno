@@ -455,4 +455,236 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | `8efffd7` (PR pendiente) |
 | AUD-32 | Int1 | **cerrado** (hora de Perú) | `f0ba1f0` (PR pendiente) |
 | AUD-33 | Int1 | **cerrado** (botón "+" del userscript) | `22e6a19` (PR pendiente) |
-| AUD-34 | Int1 | **cerrado** (claves entre comillas en el escáner) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-34 | Int1 | **cerrado** (claves entre comillas en el escáner) | `efca435` (PR pendiente) |
+| Nuevo: cache compilado por hilo | Int3 | pendiente (propuesta de Int1, §12.3) | — |
+
+---
+
+## 12. Propuestas de Int1 para el área de Int3 (NO aplicadas)
+
+Estas propuestas se escribieron desde Int1 (API) y se **revirtieron antes
+de commitear**: `engine.py`, `compilador.py`, `analizadores.py`,
+`exportador.py` y los YAML de reglas son área de Int3 (motor), según la
+tabla de responsabilidades de `AGENTS.md`. Quedan documentadas acá, con el
+diff exacto, para que Int3 las implemente, las descarte o las aplique.
+
+> **Estado**: nada de esto está en el repo. Los archivos del motor están
+> sin tocar. Los parches se transcriben tal cual se escribieron.
+
+### 12.1 AUD-04 — notas `EVALUADO` para las dos reglas de carátula
+
+**Criterio de aceptación**: nota `EVALUADO` con fecha y decisión en
+`reglas_unt.yaml`, como la tiene `sangria_parrafo`.
+
+Diff propuesto (`reglas_unt.yaml`):
+
+```diff
+@@ -225,6 +225,10 @@ reglas:
+   descripcion: Tamaño de letra del título del trabajo en carátula
+   valor_esperado: 14pt
+   severidad: warning
++  # EVALUADO: el manual pide 14pt (sz val 28, párr. 177) pero la plantilla
++  # oficial usa 13pt (sz val 26). Se mantiene la regla del manual y se
++  # deja como warning: el desvío es de la plantilla, no del estudiante.
++  # Decisión 2026-10-30 (auditoría AUD-04).
+   ubicacion: Carátula, especificaciones (párr. 177)
+   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+@@ -242,6 +246,10 @@ reglas:
+     en..."
+   valor_esperado: 13pt
+   severidad: warning
++  # EVALUADO: el manual pide 13pt (sz val 26, párr. 178) pero la plantilla
++  # oficial usa 12pt (sz val 24). Se mantiene la regla del manual y se
++  # deja como warning: el desvío es de la plantilla, no del estudiante.
++  # Decisión 2026-10-30 (auditoría AUD-04).
+   ubicacion: Carátula, especificaciones (párr. 178)
+   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
+```
+
+Nota: el texto de las notas es una propuesta de redacción. Si Int3 prefiere
+otra formulación, lo decide quien conoce el manual.
+
+### 12.2 AUD-15 — escape del texto antes de armar el Markdown
+
+**Criterio de aceptación**: escapar `|`, `<`, `>` y `&` antes de armar el
+Markdown, con test.
+
+Diff propuesto (`validator/exportador.py`):
+
+```diff
+@@ -29,6 +29,24 @@ import markdown
+ _EMOJIS = {"rojo": "🔴", "verde": "🟢"}
+
+
++def _escapar_md(texto: object) -> str:
++    """Escapa el texto que viene del documento antes de interpolarlo.
++
++    Sin este escape, un `|` en la descripción de una regla rompe la tabla
++    Markdown (la fila se parte en dos) y un `<` abre HTML crudo en el PDF
++    (python-markdown no escapa el HTML que recibe). El orden importa: `&`
++    va primero para no escapar dos veces las entidades que se crean
++    después.
++    """
++    return (
++        str(texto)
++        .replace("&", "&amp;")
++        .replace("<", "&lt;")
++        .replace(">", "&gt;")
++        .replace("|", "\\|")
++    )
++
++
+ def reporte_a_markdown(reporte: dict) -> str:
+@@ -52,7 +70,9 @@ def reporte_a_markdown(reporte: dict) -> str:
+     for r in reporte["resultados"]:
+         estado = "✅ cumple" if r["passed"] else "❌ **falla**"
+-        linea = f"| `{r['rule_id']}` | {estado} | `{r['severity']}` | {r['message']} |"
++        linea = (
++            f"| `{r['rule_id']}` | {estado} | `{r['severity']}` | {_escapar_md(r['message'])} |"
++        )
+         lineas.append(linea)
+@@ -60,17 +80,17 @@ def reporte_a_markdown(reporte: dict) -> str:
+         if r["passed"]:
+             continue
+         lineas += [
+-            f"#### `{r['rule_id']}` — {r['message']}",
++            f"#### `{r['rule_id']}` — {_escapar_md(r['message'])}",
+             "",
+-            f"- **Esperado:** {r['expected']}",
+-            f"- **Encontrado:** {r['found']}",
++            f"- **Esperado:** {_escapar_md(r['expected'])}",
++            f"- **Encontrado:** {_escapar_md(r['found'])}",
+         ]
+         if r.get("location"):
+-            lineas.append(f"- **Ubicación:** {r['location']}")
++            lineas.append(f"- **Ubicación:** {_escapar_md(r['location'])}")
+         if r.get("fuente"):
+-            lineas.append(f"- **Fuente:** {r['fuente']}")
++            lineas.append(f"- **Fuente:** {_escapar_md(r['fuente'])}")
+         if r.get("cita"):
+-            lineas.append(f"- **Cita:** {r['cita']}")
++            lineas.append(f"- **Cita:** {_escapar_md(r['cita'])}")
+         lineas.append("")
+```
+
+Tests sugeridos (`tests/test_exportador.py`):
+
+1. Un `|` en `message` no rompe la tabla: la fila del resultado conserva
+   sus cuatro columnas (contar `|` sin escapar).
+2. Un `<script>` en `message` sale escapado en el Markdown (`<script>`)
+   y no como HTML crudo en el HTML que produce `markdown.markdown`.
+
+Nota: el escape no cubre el prompt de "Cómo preguntar a una IA" (va dentro
+de un bloque de código, donde el contenido es literal).
+
+### 12.3 Propuesta: cache compilado por hilo (rendimiento y thread-safety)
+
+**Motivo**: `validate_docx` recompila el DSL en cada petición. Medido en
+este equipo, la validación síncrona tarda ~58 ms (compilación ~2,7 ms).
+
+**Ojo con el estado mutable**: los analizadores guardan estado entre
+llamadas (`analizadores.py:58,63`: `ultimo_nodo`, `valor`) y la lista
+`ficha` **se acumula** si no se limpia (`AnalizadorExtraccion` hace
+`append`). Por eso un cache necesita (a) ser por hilo
+(`threading.local()`) y (b) reiniciar ese estado antes de cada ejecución.
+
+Diff propuesto (`validator/compilador.py`) — reinicio del estado:
+
+```diff
+@@ -585,6 +585,16 @@ class ReglaCompilada:
+         return ""
+
+     def ejecutar(self, extracted: ExtractedDocx) -> RuleResult:
++        # Reinicializamos el estado mutable de los analizadores para evitar
++        # contaminación entre ejecuciones consecutivas (ficha, ultimo_nodo,
++        # valor). Esto es necesario cuando el mismo CompilerDSL se reutiliza
++        # en varias llamadas dentro del mismo hilo (cache compilado).
++        for an in self.analizadores:
++            an.ficha = []
++            if an.valor is not None:
++                an.valor = None
++            an.ultimo_nodo = None
++
+         fallos: list[str] = []
+```
+
+Diff propuesto (`validator/engine.py`) — cache por hilo y ejecución en dos
+fases (el cuerpo de `CompilerDSL.ejecutar` sin la recompilación):
+
+```diff
++import threading
+ from collections.abc import Iterable
+ from pathlib import Path
+@@
+-from .compilador import CompilerDSL
+-from .extractor import extract
++from .compilador import CompilerDSL, _con_sentinel
++from .extractor import ExtractedDocx, extract
+ from .models import RuleResult, Severity
++
++# Cache compilado por hilo (thread-safety): el mismo CompilerDSL se
++# reutiliza entre peticiones consecutivas dentro de un hilo, evitando
++# re-parsear el YAML en cada validación. El estado mutable de los
++# analizadores se reinicia en ReglaCompilada.ejecutar() antes de cada
++# ejecución, así que un analizador compartido no contamina la salida.
++_thread_local = threading.local()
++
++
++def _reglas_compiladas(rules_data: dict) -> list:
++    """Devuelve la lista de `ReglaCompilada` cacheada por hilo.
++
++    Compila una vez por hilo y por objeto ``rules_data`` (clave ``id``).
++    """
++    cache = getattr(_thread_local, "compilados", None)
++    if cache is None:
++        cache = {}
++        _thread_local.compilados = cache
++    clave = id(rules_data)
++    if clave in cache:
++        return cache[clave]
++    reglas = CompilerDSL().compilar(rules_data)
++    cache[clave] = reglas
++    return reglas
++
++
++def _ejecutar_compilado(reglas: list, extracted: ExtractedDocx) -> list[RuleResult]:
++    """Ejecuta reglas ya compiladas en dos fases (ver CompilerDSL.ejecutar)."""
++    contexto: dict[str, str] = {}
++    resultados: list[RuleResult | None] = [None] * len(reglas)
++
++    for i, r in enumerate(reglas):
++        if r.aplicar_si is None:
++            res = r.ejecutar(extracted)
++            resultados[i] = res
++            if r.expone:
++                contexto[r.expone] = r.valor_para_contexto()
++
++    for i, r in enumerate(reglas):
++        if r.aplicar_si is None:
++            continue
++        resultados[i] = r.ejecutar(extracted) if r.aplica_en(contexto) else r.no_aplicable()
++
++    return _con_sentinel(resultados, contexto)
+```
+
+Y en `validate_docx`:
+
+```diff
+     if "reglas" in rules_data:
+-        resultados = CompilerDSL().ejecutar(rules_data, extracted)
++        resultados = _ejecutar_compilado(_reglas_compiladas(rules_data), extracted)
+@@
+     if ficha_data is not None:
+-        resultados = resultados + CompilerDSL().ejecutar(ficha_data, extracted)
++        resultados = resultados + _ejecutar_compilado(_reglas_compiladas(ficha_data), extracted)
+```
+
+**Nota de Int1**: si Int3 prefiere el enfoque "analizadores sin estado"
+(limpiar `ficha`, `valor` y `ultimo_nodo` dentro de cada `analizar`), el
+reinicio explícito queda innecesario y el cache puede ser global, sin
+`threading.local()`. Ese camino es más limpio a largo plazo y es decisión
+del área del motor.
+
+**Verificación realizada con el parche** (en la rama de Int1, ya revertida):
+la suite completa pasó (693 passed, 6 xfailed) y `nix flake check` dio
+"all checks passed".
