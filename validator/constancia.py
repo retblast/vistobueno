@@ -266,11 +266,6 @@ def constancias_por_autor(
 _RE_MERGEFIELD = re.compile(r'MERGEFIELD\s+"?([A-Za-zÑñ0-9_]+)"?')
 
 
-def _runs_del_campo(parrafo, run_actual) -> list:
-    """Runs del párrafo en orden de documento (w:r, incluidos anidados)."""
-    return list(parrafo.iter(qn("w:r")))
-
-
 def _reemplazar_mergefields(doc: DocumentoDocx, valores: dict[str, str]) -> int:
     """Reemplaza cada MERGEFIELD del documento por texto plano con el valor.
 
