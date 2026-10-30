@@ -129,7 +129,7 @@ página del ítem se reconoce por `meta[name="citation_title"]` y el reporte
 exige que el título coincida con la ficha preparada.
 
 **Escáner de secretos (AUD-34):** una clave JSON o YAML entre comillas
-(`"DB_PASSWORD": "..."`) pasaba sin bloquear. El patrón ahora acepta comillas
+(`"DB_PASSWORD": "<valor>"`) pasaba sin bloquear. El patrón ahora acepta comillas
 opcionales alrededor del nombre.
 
 **Verdad de los documentos:** el diagrama de `docs/FLUJO_API.md` describía un
@@ -222,7 +222,7 @@ las 5 plantillas oficiales pasaban. Todo corregido.
   detecta). El paso de deriva quedó en el script de verificación local.
 - **Los placeholders del escáner tienen forma propia**: el escáner acepta
   `dummy`, `prueba`, `test`, `changeme`, `<valor>` y lo que termina en
-  `-de-prueba`. Un `export VISTOBUENO_SMTP_PASSWORD="clave"` en un documento
+  `-de-prueba`. Un `export VISTOBUENO_SMTP_PASSWORD="<valor>"` en un documento
   es una violación, aunque "clave" sea un valor inventado.
 - **Un documento que promete algo que el código no hace**: la guía local
   decía que el script de verificación "se detiene en el primer fallo" y no

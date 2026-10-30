@@ -399,7 +399,7 @@ depende de la zona del navegador ni del servidor.
 
 `PATRON_ASIGNACION` exigía que el nombre del secreto empezara la cadena o
 un separador. Una clave JSON/YAML entre comillas
-(`"VISTOBUENO_SMTP_PASSWORD": "..."`) no casaba, así que una credencial
+(`"VISTOBUENO_SMTP_PASSWORD": "<valor>"`) no casaba, así que una credencial
 real pasaba el pre-commit y el escaneo de la CI. **Cierre**: el patrón
 acepta comillas opcionales alrededor del nombre. Tres tests cubren clave
 JSON, clave con comillas simples y el falso positivo
