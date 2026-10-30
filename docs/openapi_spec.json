@@ -3,7 +3,7 @@
   "info": {
     "title": "VistoBueno API",
     "description": "API de validación automática de formato de tesis — UNT FECyC",
-    "version": "1.10.0"
+    "version": "1.11.0"
   },
   "paths": {
     "/validar": {
@@ -48,6 +48,9 @@
           },
           "400": {
             "description": "Sin archivo en la solicitud"
+          },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
           },
           "413": {
             "description": "Archivo excede el tamaño máximo (10 MB)"
@@ -225,8 +228,14 @@
               }
             }
           },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
+          },
           "422": {
             "description": "Timestamp inválido, falta un dato de la ficha o índice fuera de rango"
+          },
+          "429": {
+            "description": "Demasiadas generaciones de documentos seguidas"
           },
           "500": {
             "description": "Firma o plantilla sin configurar en el servidor"
@@ -280,8 +289,14 @@
               }
             }
           },
+          "403": {
+            "description": "Petición desde otro equipo o sin token válido"
+          },
           "422": {
             "description": "Timestamp inválido, falta un dato de la ficha o formato desconocido"
+          },
+          "429": {
+            "description": "Demasiadas generaciones de documentos seguidas"
           },
           "500": {
             "description": "Firma sin configurar en el servidor"

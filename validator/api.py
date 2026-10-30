@@ -18,6 +18,7 @@ import threading
 import time
 import zipfile
 from functools import cache
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Literal
 
@@ -34,6 +35,9 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.concurrency import run_in_threadpool
+from starlette.datastructures import Headers
+from starlette.responses import PlainTextResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .api_models import (
     CampoExtraidoFicha,
@@ -143,37 +147,106 @@ CAMPOS_MANUALES_FICHA = (
 CABECERA_TOKEN_BUZON = "X-VistoBueno-Token"
 HOSTS_LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
 
+# Hosts admitidos en el header `Host` de cualquier petición. Además del
+# loopback se puede sumar un dominio propio con VISTOBUENO_HOSTS (lista
+# separada por comas), por ejemplo si la API vive detrás de un reverse
+# proxy en la misma máquina. `*` desactiva el chequeo (no recomendado).
+HOSTS_CONFIABLES_DEFAULT = ("127.0.0.1", "localhost", "::1")
 
-def _token_buzon() -> str:
-    """Token compartido del buzón; vacío significa "no se exige token"."""
+
+def _hosts_confiables() -> frozenset[str]:
+    """Hosts admitidos, leídos del entorno en cada petición."""
+    extra = os.environ.get("VISTOBUENO_HOSTS", "")
+    return frozenset(h.strip().lower() for h in HOSTS_CONFIABLES_DEFAULT if h.strip()) | frozenset(
+        h.strip().lower() for h in extra.split(",") if h.strip()
+    )
+
+
+def _host_sin_puerto(valor: str) -> str:
+    """Normaliza el header Host: minúsculas, sin puerto y sin corchetes IPv6."""
+    host = valor.strip().lower()
+    if host.startswith("["):
+        cierre = host.find("]")
+        return host[1:cierre] if cierre != -1 else host
+    return host.split(":", 1)[0]
+
+
+class MiddlewareHostConfiable:
+    """Rechaza peticiones con un header `Host` ajeno (400).
+
+    Cierra el *DNS rebinding*: la página del atacante se sirve desde su
+    dominio (Host: atacante.example) aunque su DNS resuelva a 127.0.0.1.
+    El navegador conserva el Host del dominio en la petición, así que el
+    chequeo corta el ataque en todos los navegadores; no depende de
+    Private Network Access (mitigación solo de Chrome).
+
+    El puerto se ignora y se admite IPv6 literal ("[::1]:8000").
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+        hosts = _hosts_confiables()
+        if "*" in hosts:
+            await self.app(scope, receive, send)
+            return
+        host = _host_sin_puerto(Headers(scope=scope).get("host", ""))
+        if host in hosts:
+            await self.app(scope, receive, send)
+            return
+        respuesta = PlainTextResponse("Host no permitido", status_code=400)
+        await respuesta(scope, receive, send)
+
+
+def _token_api() -> str:
+    """Token compartido de la API; vacío significa "no se exige token"."""
     return (os.environ.get("VISTOBUENO_API_TOKEN") or "").strip()
 
 
 def _es_loopback(host: str | None) -> bool:
-    """True si el host del par es la propia máquina."""
-    return (host or "").strip() in HOSTS_LOOPBACK
+    """True si el host del par es la propia máquina.
+
+    Acepta el nombre "localhost" y cualquier dirección del rango
+    loopback: 127.0.0.0/8 completo (no solo 127.0.0.1) y ::1.
+    """
+    valor = (host or "").strip().lower()
+    if valor in HOSTS_LOOPBACK:
+        return True
+    try:
+        return ip_address(valor).is_loopback
+    except ValueError:
+        return False
 
 
-async def verificar_acceso_buzon(request: Request) -> None:
-    """Dependency de los endpoints del buzón: loopback o token compartido.
+async def verificar_acceso_local(request: Request) -> None:
+    """Dependency de todos los endpoints: loopback o token compartido.
 
-    Reglas (AUD-09):
+    La API se despliega en la PC del operador y `uvicorn` hace bind a
+    127.0.0.1: el loopback es la frontera de confianza del MVP
+    (auditoría 2026-10-26, AUD-09). El control cubre **toda** la API
+    porque el buzón y el papeleo manejan datos personales (DNI, ORCID,
+    resumen) y documentos oficiales: un `curl` desde otro equipo no
+    puede validar, leer la ficha ni generar constancias.
 
-    - **Peer del loopback**: siempre permitido. Es la máquina donde corre
-      la app, que es la frontera de confianza del despliegue local. La SPA
-      y el userscript siempre hablan con `127.0.0.1`, así que no tienen
-      que enviar ningún token.
+    Reglas:
+
+    - **Peer del loopback**: siempre permitido. La SPA y el userscript
+      hablan con `127.0.0.1` y no envían token.
     - **Peer de otra máquina**: permitido solo si hay un token
       configurado (`VISTOBUENO_API_TOKEN`) y el header coincide.
 
     El token se comprueba **antes** de rechazar al peer remoto: sin ese
-    orden, el token no serviría para el único caso que documenta
-    (API expuesta fuera de la máquina) y el remote sería siempre `403`.
+    orden, el token no serviría para el único caso que documenta (API
+    expuesta fuera de la máquina).
     """
     host = request.client.host if request.client else None
     if _es_loopback(host):
         return
-    token = _token_buzon()
+    token = _token_api()
     recibido = request.headers.get(CABECERA_TOKEN_BUZON, "")
     if token and secrets.compare_digest(recibido.encode(), token.encode()):
         return
@@ -181,16 +254,16 @@ async def verificar_acceso_buzon(request: Request) -> None:
         raise HTTPException(
             status_code=403,
             detail=(
-                "El buzón de ficha solo se sirve desde la máquina donde corre "
-                "la app (loopback). Si la API se expone a otros equipos, "
-                "define VISTOBUENO_API_TOKEN y envía el header "
+                "La API de VistoBueno solo se sirve desde la máquina donde "
+                "corre la app (loopback). Si la API se expone a otros "
+                "equipos, define VISTOBUENO_API_TOKEN y envía el header "
                 f"'{CABECERA_TOKEN_BUZON}'."
             ),
         )
     raise HTTPException(
         status_code=403,
         detail=(
-            "Falta o no coincide el token del buzón. Envía el header "
+            "Falta o no coincide el token de la API. Envía el header "
             f"'{CABECERA_TOKEN_BUZON}' con el valor de "
             "VISTOBUENO_API_TOKEN."
         ),
@@ -210,6 +283,16 @@ async def verificar_acceso_buzon(request: Request) -> None:
 
 MAXIMO_PETICIONES_DEFAULT = 60
 VENTANA_PETICIONES_DEFAULT = 60.0
+
+# Cupo adaptativo por CPU (AUD-12, segunda iteración). El límite por
+# número de peticiones asume que todas cuestan lo mismo, y no es cierto:
+# la misma validación tarda ~60 ms en un equipo y ~250 ms en otro. El
+# cupo acumula los segundos de trabajo MEDIDOS y se fuga a
+# `presupuesto_segundos` por ventana, así que se ajusta solo al hardware
+# sin constantes por modelo de PC.
+PRESUPUESTO_CPU_DEFAULT = 2.0  # segundos de trabajo por ventana
+COSTE_CPU_MINIMO = 0.01
+COSTE_CPU_MAXIMO = 10.0  # un documento patológico no bloquea media hora
 
 
 class LimitadorPeticiones:
@@ -257,7 +340,79 @@ class LimitadorPeticiones:
             self._peticiones.clear()
 
 
+class LimitadorCPU:
+    """Cupo adaptativo por presupuesto de CPU (cubo con fugas).
+
+    `_deuda` acumula los segundos de trabajo medidos y se fuga a
+    `presupuesto_segundos / ventana_segundos` por segundo. Una petición
+    entra si la deuda está por debajo del presupuesto. El presupuesto es
+    el mismo en cualquier equipo; lo que cambia es cuántas peticiones
+    caben en él:
+
+    - equipo rápido (~60 ms por validación): ~33 seguidas con 2 s;
+    - equipo lento (~250 ms por validación): ~8 seguidas;
+    - tasa sostenida: 2 s de CPU por minuto en ambos casos.
+
+    El coste se mide en el endpoint (`registrar_coste`) después de la
+    operación pesada, así que no hay números mágicos por hardware.
+
+    Attributes:
+        _deuda: segundos de trabajo acumulados; se recorta al consultar.
+        _lock: el cupo se consulta desde endpoints concurrentes.
+    """
+
+    def __init__(
+        self,
+        *,
+        presupuesto_segundos: float = PRESUPUESTO_CPU_DEFAULT,
+        ventana_segundos: float = VENTANA_PETICIONES_DEFAULT,
+    ) -> None:
+        self._presupuesto = max(presupuesto_segundos, 0.0)
+        self._ventana = max(ventana_segundos, 0.1)
+        self._tasa = self._presupuesto / self._ventana
+        self._deuda = 0.0
+        self._ultimo = time.monotonic()
+        self._lock = threading.Lock()
+
+    def _fugar(self, ahora: float) -> None:
+        """Descuenta la deuda por el tiempo transcurrido (llamar con el lock)."""
+        if ahora <= self._ultimo:
+            return
+        self._deuda = max(0.0, self._deuda - (ahora - self._ultimo) * self._tasa)
+        self._ultimo = ahora
+
+    def adquirir(self) -> tuple[bool, float]:
+        """Consulta si entra una petición más.
+
+        Returns:
+            (permitido, segundos para reintentar). La deuda se cobra al
+            terminar, con el coste real (`registrar_coste`).
+        """
+        with self._lock:
+            self._fugar(time.monotonic())
+            if self._deuda < self._presupuesto:
+                return True, 0.0
+            falta = (
+                (self._deuda - self._presupuesto) / self._tasa if self._tasa > 0 else self._ventana
+            )
+            return False, max(falta, 1.0)
+
+    def registrar_coste(self, segundos: float) -> None:
+        """Suma a la deuda el coste real de la operación pesada."""
+        with self._lock:
+            self._deuda += min(max(segundos, COSTE_CPU_MINIMO), COSTE_CPU_MAXIMO)
+
+    def limpiar(self) -> None:
+        """Vacía el estado (tests y reinicio del flujo)."""
+        with self._lock:
+            self._deuda = 0.0
+            self._ultimo = time.monotonic()
+
+
 _LIMITADOR_PETICIONES = LimitadorPeticiones()
+_LIMITADOR_CPU_VALIDACION = LimitadorCPU()
+# El papeleo (DOCX/XLSX) pesa más que una validación: menos presupuesto.
+_LIMITADOR_CPU_PAPELES = LimitadorCPU(presupuesto_segundos=1.0)
 
 
 def _config_limite_peticiones() -> tuple[int, float]:
@@ -280,22 +435,44 @@ def _config_limite_peticiones() -> tuple[int, float]:
     return max(0, maximo), max(ventana, 0.1)
 
 
+def _rechazar_por_limite(reintentar: float, recurso: str) -> None:
+    """Respuesta 429 uniforme de los cupos."""
+    raise HTTPException(
+        status_code=429,
+        headers={"Retry-After": str(int(reintentar) + 1)},
+        detail=(
+            f"Demasiadas peticiones de {recurso} seguidas. "
+            "Espera unos segundos antes de reintentar."
+        ),
+    )
+
+
 async def limitar_validaciones(request: Request) -> None:
-    """Dependency de POST /validar: corta los abuse de CPU con 429."""
-    maximo, ventana = _config_limite_peticiones()
-    if maximo <= 0:
+    """Dependency de POST /validar: corta los abusos de CPU con 429.
+
+    Si `VISTOBUENO_RATE_LIMIT_MAX` está definido se usa la ventana fija
+    por IP (comportamiento previo; `0` la desactiva). Si no, se usa el
+    cupo adaptativo por CPU, que se ajusta a la velocidad del equipo.
+    """
+    if "VISTOBUENO_RATE_LIMIT_MAX" in os.environ:
+        maximo, ventana = _config_limite_peticiones()
+        if maximo <= 0:
+            return
+        ip = request.client.host if request.client else "desconocido"
+        permitido, reintentar = _LIMITADOR_PETICIONES.registrar(ip, maximo, ventana)
+        if not permitido:
+            _rechazar_por_limite(reintentar, "validación")
         return
-    ip = request.client.host if request.client else "desconocido"
-    permitido, reintentar = _LIMITADOR_PETICIONES.registrar(ip, maximo, ventana)
+    permitido, reintentar = _LIMITADOR_CPU_VALIDACION.adquirir()
     if not permitido:
-        raise HTTPException(
-            status_code=429,
-            headers={"Retry-After": str(int(reintentar) + 1)},
-            detail=(
-                "Demasiadas peticiones de validación seguidas. "
-                "Espera unos segundos antes de reintentar."
-            ),
-        )
+        _rechazar_por_limite(reintentar, "validación")
+
+
+async def limitar_papeleo() -> None:
+    """Dependency de /constancia y /fila-registro: cupo adaptativo por CPU."""
+    permitido, reintentar = _LIMITADOR_CPU_PAPELES.adquirir()
+    if not permitido:
+        _rechazar_por_limite(reintentar, "documentos")
 
 
 @cache
@@ -547,8 +724,10 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.10.0",
+    version="1.11.0",
 )
+# DNS rebinding: se valida el header Host antes de cualquier endpoint.
+app.add_middleware(MiddlewareHostConfiable)
 
 
 @app.post(
@@ -561,13 +740,14 @@ app = FastAPI(
     ),
     responses={
         400: {"description": "Sin archivo en la solicitud"},
+        403: {"description": "Petición desde otro equipo o sin token válido"},
         413: {"description": "Archivo excede el tamaño máximo (10 MB)"},
         415: {"description": "Tipo de archivo no soportado"},
         422: {"description": "Archivo corrupto, no es DOCX válido o correo inválido"},
         429: {"description": "Demasiadas peticiones de validación seguidas"},
         500: {"description": "Error interno del validador"},
     },
-    dependencies=[Depends(limitar_validaciones)],
+    dependencies=[Depends(verificar_acceso_local), Depends(limitar_validaciones)],
 )
 async def validar(
     archivo: UploadFile = File(..., description="Archivo .docx a validar"),
@@ -737,6 +917,7 @@ async def validar(
         # loop mientras dura la validación. Se pasa el ruleset de captura
         # de la ficha (diseño 17) en la MISMA pasada: sus capturas viajan
         # en reporte["ficha"] y no afectan semáforo ni resumen.
+        inicio_cpu = time.perf_counter()
         try:
             resultados_motor = await run_in_threadpool(
                 validate_docx, tmp_path, rules_data, _get_ficha_rules()
@@ -774,6 +955,10 @@ async def validar(
                 status_code=422,
                 detail=(f"El archivo no contiene un documento Word válido: {e}."),
             ) from e
+        finally:
+            # El cupo adaptativo descuenta lo que tardó de verdad la
+            # operación en ESTE equipo (no un número fijo por petición).
+            _LIMITADOR_CPU_VALIDACION.registrar_coste(time.perf_counter() - inicio_cpu)
 
         reporte = build_report(resultados_motor)
 
@@ -892,7 +1077,7 @@ _BUZON = Buzon()
         f"'{CABECERA_TOKEN_BUZON}'."
     ),
     responses={403: {"description": "Petición desde otro equipo o sin token válido"}},
-    dependencies=[Depends(verificar_acceso_buzon)],
+    dependencies=[Depends(verificar_acceso_local)],
 )
 async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
     _BUZON.publicar_ficha(ficha.model_dump())
@@ -913,7 +1098,7 @@ async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
         403: {"description": "Petición desde otro equipo o sin token válido"},
         404: {"description": "Sin ficha pendiente: vacía o expirada"},
     },
-    dependencies=[Depends(verificar_acceso_buzon)],
+    dependencies=[Depends(verificar_acceso_local)],
 )
 async def leer_ficha_pendiente() -> FichaDeposito:
     ficha = _BUZON.leer_ficha()
@@ -938,7 +1123,7 @@ async def leer_ficha_pendiente() -> FichaDeposito:
         f"exige el header '{CABECERA_TOKEN_BUZON}'."
     ),
     responses={403: {"description": "Petición desde otro equipo o sin token válido"}},
-    dependencies=[Depends(verificar_acceso_buzon)],
+    dependencies=[Depends(verificar_acceso_local)],
 )
 async def reportar_deposito(datos: DepositoRecibido) -> None:
     _BUZON.reportar_deposito(datos.model_dump())
@@ -960,7 +1145,7 @@ async def reportar_deposito(datos: DepositoRecibido) -> None:
         403: {"description": "Petición desde otro equipo o sin token válido"},
         404: {"description": "Sin depósito reportado: vacío o expirado"},
     },
-    dependencies=[Depends(verificar_acceso_buzon)],
+    dependencies=[Depends(verificar_acceso_local)],
 )
 async def leer_deposito_reportado() -> DepositoRecibido:
     datos = _BUZON.leer_deposito()
@@ -1058,11 +1243,14 @@ def _nombre_archivo_constancia(datos: DatosConstancia) -> str:
     ),
     responses={
         200: {"description": "Constancia .docx (o paquete .zip con formato=zip)"},
+        403: {"description": "Petición desde otro equipo o sin token válido"},
         422: {
             "description": "Timestamp inválido, falta un dato de la ficha o índice fuera de rango"
         },
+        429: {"description": "Demasiadas generaciones de documentos seguidas"},
         500: {"description": "Firma o plantilla sin configurar en el servidor"},
     },
+    dependencies=[Depends(verificar_acceso_local), Depends(limitar_papeleo)],
 )
 async def descargar_constancia(
     solicitud: ConstanciaRequest,
@@ -1085,6 +1273,7 @@ async def descargar_constancia(
             ),
         )
     objetivo = datos[solicitud.indice_autor]
+    inicio_cpu = time.perf_counter()
     try:
         if formato == "zip":
             return Response(
@@ -1099,6 +1288,8 @@ async def descargar_constancia(
         contenido = llenar_constancia(_ruta_plantilla_constancia(), objetivo)
     except ErrorConfiguracionConstancia as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+    finally:
+        _LIMITADOR_CPU_PAPELES.registrar_coste(time.perf_counter() - inicio_cpu)
     return Response(
         content=contenido,
         media_type=MIME_DOCX_CONSTANCIA,
@@ -1123,9 +1314,12 @@ async def descargar_constancia(
     ),
     responses={
         200: {"description": "Lista de filas TSV (json) o archivo descargable (tsv/csv/xlsx)"},
+        403: {"description": "Petición desde otro equipo o sin token válido"},
         422: {"description": "Timestamp inválido, falta un dato de la ficha o formato desconocido"},
+        429: {"description": "Demasiadas generaciones de documentos seguidas"},
         500: {"description": "Firma sin configurar en el servidor"},
     },
+    dependencies=[Depends(verificar_acceso_local), Depends(limitar_papeleo)],
 )
 async def generar_fila_registro(
     solicitud: FilaRegistroRequest,
@@ -1135,29 +1329,33 @@ async def generar_fila_registro(
     ),
 ):
     datos = _constancias_de_solicitud(solicitud)
-    filas = [d.fila_registro() for d in datos]
+    inicio_cpu = time.perf_counter()
+    try:
+        filas = [d.fila_registro() for d in datos]
 
-    if formato == "json":
-        return FilasRegistroResponse(filas=filas)
+        if formato == "json":
+            return FilasRegistroResponse(filas=filas)
 
-    if formato == "tsv":
+        if formato == "tsv":
+            return Response(
+                content=filas_a_tsv(filas).encode("utf-8"),
+                media_type="text/tab-separated-values; charset=utf-8",
+                headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.tsv"'},
+            )
+        if formato == "csv":
+            return Response(
+                content=filas_a_csv(filas).encode("utf-8"),
+                media_type="text/csv; charset=utf-8",
+                headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.csv"'},
+            )
+        # formato == "xlsx"
         return Response(
-            content=filas_a_tsv(filas).encode("utf-8"),
-            media_type="text/tab-separated-values; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.tsv"'},
+            content=filas_a_xlsx(filas),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.xlsx"'},
         )
-    if formato == "csv":
-        return Response(
-            content=filas_a_csv(filas).encode("utf-8"),
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.csv"'},
-        )
-    # formato == "xlsx"
-    return Response(
-        content=filas_a_xlsx(filas),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="registro_vistobueno.xlsx"'},
-    )
+    finally:
+        _LIMITADOR_CPU_PAPELES.registrar_coste(time.perf_counter() - inicio_cpu)
 
 
 # ---------------------------------------------------------------------------
@@ -1167,4 +1365,15 @@ async def generar_fila_registro(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Bind local por defecto: la API maneja datos personales y documentos
+    # oficiales. Para exponerla en la red hay que pedirlo explícitamente
+    # (VISTOBUENO_HOST) y definir el token.
+    # `proxy_headers=False`: un X-Forwarded-For no puede falsificar el
+    # peer y saltar el control de loopback (ver README).
+    host = (os.environ.get("VISTOBUENO_HOST") or "127.0.0.1").strip()
+    if not _es_loopback(host) and not _token_api():
+        raise SystemExit(
+            "VISTOBUENO_HOST expone la API fuera de la máquina local: "
+            "define VISTOBUENO_API_TOKEN antes de arrancar."
+        )
+    uvicorn.run(app, host=host, port=8000, proxy_headers=False)

@@ -146,11 +146,15 @@ class DatosConstancia:
 
         La columna N° va vacía: la numeración pertenece al registro de la
         biblioteca. Los valores se limpian de tabuladores y saltos para
-        no romper la estructura al pegarlos.
+        no romper la estructura al pegarlos, y se neutralizan los
+        prefijos de fórmula (ver `_neutralizar_formula`).
         """
 
         def limpiar(valor: str) -> str:
-            return " ".join(valor.replace("\t", " ").split())
+            # La neutralización vive aquí, en la fuente de la fila: el
+            # resto de formatos (json, tsv, csv, xlsx) salen de esta
+            # misma fila, así que ninguno puede olvidarse.
+            return _neutralizar_formula(" ".join(valor.replace("\t", " ").split()))
 
         return "\t".join(
             (

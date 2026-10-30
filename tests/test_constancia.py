@@ -731,6 +731,20 @@ class TestNeutralizacionFormulas:
         texto = respuesta.content.decode("utf-8").lstrip("\ufeff")
         assert "'=WEBSERVICE" in texto
 
+    def test_json_neutraliza_formula(self):
+        """El formato JSON por defecto también entrega la fila neutralizada.
+
+        Hallazgo de la revisión de seguridad (AUD-29): el JSON devolvía
+        la fila cruda. La neutralización se movió a la fuente
+        (`DatosConstancia.fila_registro`), así que los cuatro formatos
+        la heredan.
+        """
+        respuesta = CLIENTE.post("/fila-registro", json=self._solicitud_formula())
+        assert respuesta.status_code == 200
+        fila = respuesta.json()["filas"][0]
+        titulo = fila.split("\t")[1]
+        assert titulo.startswith("'=WEBSERVICE")
+
     def test_campos_normales_no_se_tocan(self):
         """Un título sin prefijo de fórmula llega íntegro: sin comilla extra."""
         respuesta = CLIENTE.post("/fila-registro?formato=csv", json=_solicitud())

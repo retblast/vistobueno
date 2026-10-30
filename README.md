@@ -199,8 +199,9 @@ pytest tests/ -v
 nix run .#serve -- validator.api:app --reload
 # Swagger UI: http://localhost:8000/docs
 
-# API (directo)
-uvicorn validator.api:app --reload
+# API (directo). --no-proxy-headers: un X-Forwarded-For no puede
+# falsificar el peer y saltar el control de loopback.
+uvicorn validator.api:app --reload --no-proxy-headers
 
 # validar un DOCX desde CLI
 python -m validator.cli tesis.docx unt_format_rules_schema.yaml
@@ -320,45 +321,67 @@ El flujo completo es:
   - `VISTOBUENO_PLANTILLA_CONSTANCIA` — opcional, si la plantilla vive
     fuera de `recursos/`.
   - `VISTOBUENO_RATE_LIMIT_MAX` / `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` —
-    límite de peticiones de `POST /validar` (default 60 por 60 s, por IP;
-    `0` lo desactiva). `POST /validar` recompila el DSL en cada request:
-    el límite protege el CPU de la máquina.
-  - `VISTOBUENO_API_TOKEN` — opcional. Si se define, los endpoints del
-    buzón exigen además el header `X-VistoBueno-Token` con ese valor.
-    Solo hace falta si la API se expone fuera de la máquina del operador.
+    opcionales. Por defecto rige un cupo adaptativo por CPU (2 s de
+    trabajo por minuto, medido en cada equipo). Al definir
+    `VISTOBUENO_RATE_LIMIT_MAX` vuelve la ventana fija por IP
+    (`0` la desactiva).
+  - `VISTOBUENO_HOST` / `VISTOBUENO_HOSTS` — bind y hosts admitidos.
+    Por defecto `127.0.0.1` y solo loopback/`localhost`; para exponer la
+    API hay que definir `VISTOBUENO_HOST` y un token.
+  - `VISTOBUENO_API_TOKEN` — opcional. Si se define, toda la API exige
+    el header `X-VistoBueno-Token` a los peers remotos. Solo hace falta
+    si la API se expone fuera de la máquina del operador.
 - Userscript en Tampermonkey: crear un script nuevo y pegar el contenido
   de `tools/dspace-fill/dist/vistobueno-dspace-fill.user.js`. El script
   solo se conecta a `localhost` (`@connect localhost`) y **no necesita
   token**: siempre habla con `127.0.0.1`.
 
-### Control de acceso (buzón de ficha)
+### Control de acceso (toda la API)
 
-El buzón travela datos personales del estudiante (DNI, ORCID, resumen) y su
-ranura es de "última gana". Por eso los cuatro endpoints del buzón
-**rechazan con `403` toda petición que no venga de `127.0.0.1`/`::1`**
-(auditoría 2026-10-26, AUD-09): sin ese control, un `curl` desde otro
-equipo de la red podía leer la ficha o pisarla mientras el operador
-trabajaba. La SPA y el userscript corren en la misma máquina, así que el
-flujo normal no cambia.
+La API maneja datos personales (DNI, ORCID, resumen), documentos
+oficiales (constancias) y trabajo de CPU (validación). Por eso **todos
+los endpoints rechazan con `403` toda petición que no venga de la
+máquina local** (`127.0.0.0/8` o `::1`; auditoría 2026-10-26, AUD-09):
+sin ese control, un `curl` desde otro equipo de la red podía validar,
+leer la ficha o generar constancias. La SPA y el userscript corren en la
+misma máquina, así que el flujo normal no cambia.
 
-Si algún día la API se expone fuera de la máquina (bind a `0.0.0.0` o un
-reverse proxy en otro host), define `VISTOBUENO_API_TOKEN` y haz que el
-cliente envíe el header `X-VistoBueno-Token`. Con token configurado, un
-peer remoto entra **solo** si el header coincide (comparación en tiempo
-constante). El loopback no necesita el header: la SPA y el userscript
-hablan con `127.0.0.1` y el flujo local no se rompe por definir el token.
+Además, se rechaza con `400` cualquier petición cuyo header `Host` no
+sea `127.0.0.1`, `localhost` o `::1` (se ignora el puerto). Ese chequeo
+cierra el **DNS rebinding** en todos los navegadores. `VISTOBUENO_HOSTS`
+suma dominios propios si la API vive detrás de un reverse proxy local;
+`*` desactiva el chequeo (no recomendado). El procedimiento de prueba
+está en `docs/HANDOVER_DESPLIEGUE_MAQUINA_OPERADOR.md`.
+
+Si algún día la API se expone fuera de la máquina (`VISTOBUENO_HOST` con
+un bind no-loopback o un reverse proxy en otro host), define
+`VISTOBUENO_API_TOKEN` y haz que el cliente envíe el header
+`X-VistoBueno-Token`. Con token configurado, un peer remoto entra **solo**
+si el header coincide (comparación en tiempo constante). El loopback no
+necesita el header.
+
+`python -m validator.api` arranca con `proxy_headers=False` y la app
+`nix run .#serve` agrega `--no-proxy-headers`: un `X-Forwarded-For`
+falso no puede reescribir el peer y saltar el control.
 
 ### Límite de peticiones de validación
 
-`POST /validar` tiene un límite por IP: `60` peticiones por `60` segundos
-por defecto (`429` con `Retry-After` cuando se excede). Se ajusta con
-`VISTOBUENO_RATE_LIMIT_MAX` y `VISTOBUENO_RATE_LIMIT_VENTANA_SEG`, y
-`0` lo desactiva.
+`POST /validar` usa un **cupo adaptativo por CPU**: acumula los segundos
+reales de trabajo de cada validación y los libera a razón de `2` s por
+minuto. Una petición entra si la deuda está por debajo del presupuesto;
+si no, responde `429` con `Retry-After`. El mismo presupuesto rinde ~33
+validaciones seguidas en un equipo de 60 ms y ~8 en uno de 250 ms: se
+ajusta solo, sin calibrar por hardware.
 
-En el despliegue local **el límite es por máquina, no por persona**: todos
+`POST /constancia` y `POST /fila-registro` tienen su propio cupo (1 s por
+minuto), porque generar DOCX/XLSX es más caro que validar.
+
+Se puede volver al límite anterior de ventana fija por IP definiendo
+`VISTOBUENO_RATE_LIMIT_MAX` (peticiones por IP y ventana; `0` lo
+desactiva), con `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` para la ventana. En
+el despliegue local **el límite es por máquina, no por persona**: todos
 los clientes locales comparten `127.0.0.1` y, por lo tanto, el mismo
-cubo. Para una sesión de validación por lotes (una clase entera en una
-tanda), sube el límite, por ejemplo:
+cupo. Para una sesión de validación por lotes, por ejemplo:
 
 ```bash
 VISTOBUENO_RATE_LIMIT_MAX=300 nix run .#serve -- validator.api:app --reload

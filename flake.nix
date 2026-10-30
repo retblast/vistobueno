@@ -86,9 +86,14 @@
             program = "${pythonEnv}/bin/pytest";
           };
 
+          # `--no-proxy-headers`: sin esto, uvicorn reescribe el peer con
+          # X-Forwarded-For y el control de loopback de la API se puede
+          # saltar con un header falso.
           serve = {
             type = "app";
-            program = "${pythonEnv}/bin/uvicorn";
+            program = toString (pkgs.writeShellScript "serve" ''
+              exec ${pythonEnv}/bin/uvicorn --no-proxy-headers "$@"
+            '');
           };
 
           # Sink SMTP local (aiosmtpd) para probar notificaciones sin

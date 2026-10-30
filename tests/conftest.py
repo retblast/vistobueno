@@ -19,22 +19,28 @@ from validator.api import app
 # Cliente de prueba global
 # ---------------------------------------------------------------------------
 
-# El peer se fija en el loopback: los endpoints del buzón solo se sirven
-# desde la máquina donde corre la app (auditoría 2026-10-26, AUD-09) y el
-# `TestClient` por defecto usa el host "testclient", que no es loopback.
-CLIENTE = TestClient(app, client=("127.0.0.1", 50000))
+# El peer se fija en el loopback: la API solo se sirve desde la máquina
+# donde corre la app (auditoría 2026-10-26, AUD-09) y el `TestClient` por
+# defecto usa el host "testserver", que no es loopback. El `base_url`
+# también es loopback para pasar el chequeo del header Host (AUD-28).
+CLIENTE = TestClient(app, client=("127.0.0.1", 50000), base_url="http://127.0.0.1")
 
 
 @pytest.fixture(autouse=True)
 def _reiniciar_limitador():
-    """El limitador de peticiones es estado del proceso: cada test arranca limpio.
+    """Los limitadores son estado del proceso: cada test arranca limpio.
 
     Sin esto, el cupón por IP se llenaría a lo largo de la suite y las
-    pruebas de `POST /validar` empezarían a recibir 429.
+    pruebas de `POST /validar` empezarían a recibir 429. Se limpian los
+    tres cupos: la ventana fija (legacy) y los dos adaptativos por CPU.
     """
     api_module._LIMITADOR_PETICIONES.limpiar()
+    api_module._LIMITADOR_CPU_VALIDACION.limpiar()
+    api_module._LIMITADOR_CPU_PAPELES.limpiar()
     yield
     api_module._LIMITADOR_PETICIONES.limpiar()
+    api_module._LIMITADOR_CPU_VALIDACION.limpiar()
+    api_module._LIMITADOR_CPU_PAPELES.limpiar()
 
 
 # ---------------------------------------------------------------------------

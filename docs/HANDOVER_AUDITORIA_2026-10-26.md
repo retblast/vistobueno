@@ -335,6 +335,39 @@ versionan: son de un solo uso.
 
 ---
 
+### AUD-28 a AUD-31 — revisión de seguridad de la API (alta/media, Int1)
+
+Hallazgos de la revisión de 2026-10-30 sobre el área de Int1 (backend).
+Los cuatro quedaron cerrados en la rama `fix/api-hardening-b0-b1`.
+
+- **AUD-28 (alta) — DNS rebinding**: el control de acceso miraba solo
+  `request.client.host`; una página servida desde un dominio del atacante
+  cuyo DNS resuelve a `127.0.0.1` queda en el mismo origen y podía leer
+  el buzón. En Chrome lo frena Private Network Access; Firefox y WebKit
+  no lo implementan. Además, uvicorn reescribe el peer con
+  `X-Forwarded-For` (proxy headers habilitados por defecto). **Cierre**:
+  chequeo del header `Host` (400) + `--no-proxy-headers` en el arranque
+  documentado y en la app `serve`.
+- **AUD-29 (alta) — inyección de fórmulas en el JSON**: `POST
+  /fila-registro` neutralizaba las fórmulas en tsv/csv/xlsx, pero el
+  formato `json` por defecto devolvía la fila cruda. Un título
+  `=WEBSERVICE(...)` capturado del DOCX llegaba a Excel. **Cierre**: la
+  neutralización se movió a `DatosConstancia.fila_registro`, la fuente de
+  todos los formatos.
+- **AUD-30 (media) — papeleo abierto**: `POST /constancia` y `POST
+  /fila-registro` no tenían control de acceso ni límite; un peer remoto
+  podía generar constancias oficiales con datos arbitrarios y consumir
+  CPU. **Cierre**: dependency de acceso en toda la API + cupo adaptativo
+  propio para el papeleo.
+- **AUD-31 (media) — límite no adaptativo**: la ventana fija de 60
+  peticiones/minuto asumía un coste por petición; medido en este equipo,
+  una validación tarda ~58 ms (~33/min con 2 s de CPU por minuto), y en
+  un equipo 4× más lento el mismo número permite 4× más presión de CPU.
+  **Cierre**: cupo adaptativo que acumula los segundos de trabajo reales
+  y se fuga a 2 s por minuto.
+
+---
+
 ## 11. Estado de los hallazgos
 
 Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
@@ -377,3 +410,7 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | Nuevo: `palabras_clave_minimo` | Int3 | pendiente | — |
 | Nuevo: plantillas no cuantitativas | Int3 | documentar | — |
 | DSpace REST | Int1 | **cerrado: deprecado** | PR #65 |
+| AUD-28 | Int1 | **cerrado** (Host / DNS rebinding) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-29 | Int1 | **cerrado** (fórmulas en JSON) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-30 | Int1 | **cerrado** (acceso al papeleo) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
