@@ -16,7 +16,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { JSDOM } = require("jsdom");
+const { JSDOM, VirtualConsole } = require("jsdom");
 
 const MOCK = process.env.MOCK_URL || "http://127.0.0.1:8080";
 const API = process.env.API_URL || "http://127.0.0.1:8000";
@@ -41,6 +41,21 @@ async function esperar(condicion, msTotal, mensaje) {
 	throw new Error("❌ " + mensaje);
 }
 
+// jsdom no implementa la navegación entre páginas (location.href). El mock
+// navega al ítem al pulsar Depositar, así que ese error es esperado y no
+// dice nada del userscript: se filtra para no ensuciar la salida verde del
+// ensayo. Los demás errores de jsdom sí se muestran.
+function consolaVirtual() {
+	const vc = new VirtualConsole();
+	vc.sendTo(console, { omitJSDOMErrors: true });
+	vc.on("jsdomError", (error) => {
+		const mensaje = (error && error.message) || String(error);
+		if (/Not implemented: navigation/.test(mensaje)) return;
+		console.error("[jsdom]", mensaje);
+	});
+	return vc;
+}
+
 async function nuevaPagina(ruta) {
 	const respuesta = await fetch(MOCK + ruta);
 	if (!respuesta.ok) {
@@ -50,6 +65,7 @@ async function nuevaPagina(ruta) {
 		url: MOCK + ruta,
 		runScripts: "dangerously", // el JS vanilla del mock (filas, combobox, Depositar)
 		pretendToBeVisual: true,
+		virtualConsole: consolaVirtual(),
 	});
 	// El shim usa fetch relativo: se resuelve contra el mock (el proxy
 	// /api-proxy del mock habla con la API real — la invariante sin-CORS
