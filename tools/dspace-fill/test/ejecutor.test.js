@@ -136,3 +136,93 @@ test("operación sobre selector ausente queda como fallida, no explota", async (
 	const resumen = await VBEjecutor.aplicarPlan(doc, plan, { dormir: dormirRapido });
 	assert.deepStrictEqual(resumen.fallidos, ["texto", "filas", "qualdrop"]);
 });
+
+// ---------------------------------------------------------------------------
+// Filas repetibles: el botón "+" real (ds-form-add-more) dentro de #N_array
+// ---------------------------------------------------------------------------
+
+function domConFilasRepetibles() {
+	// Estructura mínima equivalente al DOM real de "Editar envío":
+	// cada campo repetible tiene su contenedor #N_array con la lista de
+	// filas y su botón "+".
+	const dom = new JSDOM(`<!doctype html><html><body>
+		<div id="11_array">
+			<div class="cdk-drop-list">
+				<div class="cdk-drag form-row"><input type="text" name="dc.contributor.author"></div>
+			</div>
+			<div class="cdk-drag form-row"><div class="btn-group"><button type="button" class="ds-form-add-more"></button></div></div>
+		</div>
+		<div id="13_array">
+			<div class="cdk-drop-list">
+				<div class="cdk-drag form-row">
+					<select name="renati.author_QUALDROP_METADATA">
+						<option value="0: renati.author.dni">DNI</option>
+					</select>
+					<input type="text" name="renati.author_QUALDROP_VALUE">
+				</div>
+			</div>
+			<div class="cdk-drag form-row"><div class="btn-group"><button type="button" class="ds-form-add-more"></button></div></div>
+		</div>
+		<div id="99_array"><button type="button" class="ds-form-add-more" id="ajeno"></button></div>
+	</body></html>`);
+	const doc = dom.window.document;
+	let ajeno = 0;
+	doc.getElementById("ajeno").addEventListener("click", () => ajeno++);
+	// Los ids reales empiezan con dígito (#11_array): no son válidos como
+	// selector CSS, se buscan por atributo.
+	doc.querySelectorAll('[id="11_array"], [id="13_array"]').forEach((array) => {
+		const lista = array.querySelector(".cdk-drop-list");
+		const fila = lista.querySelector(".cdk-drag.form-row");
+		array.querySelector(".ds-form-add-more").addEventListener("click", () => {
+			lista.appendChild(fila.cloneNode(true));
+		});
+	});
+	return { doc, ajeno: () => ajeno };
+}
+
+test("el botón + real agrega filas dentro de su propia array", async () => {
+	const { doc, ajeno } = domConFilasRepetibles();
+	const plan = {
+		operaciones: [
+			{ tipo: "filas", selector: 'input[name="dc.contributor.author"]', valores: ["A", "B", "C"] },
+		],
+		omitidos: [],
+	};
+	const resumen = await VBEjecutor.aplicarPlan(doc, plan, { dormir: dormirRapido });
+
+	assert.deepStrictEqual(resumen.exitosos, ["filas"]);
+	const valores = Array.from(doc.querySelectorAll('input[name="dc.contributor.author"]')).map(
+		(el) => el.value
+	);
+	assert.deepStrictEqual(valores, ["A", "B", "C"]);
+	// El "+" de otro contenedor no se pulsó (scope por #N_array).
+	assert.strictEqual(ajeno(), 0);
+});
+
+test("autores y DNI crecen en arrays distintas y quedan alineados", async () => {
+	const { doc } = domConFilasRepetibles();
+	const plan = {
+		operaciones: [
+			{ tipo: "filas", selector: 'input[name="dc.contributor.author"]', valores: ["A", "B"] },
+			{
+				tipo: "qualdrop",
+				selectorMeta: 'select[name="renati.author_QUALDROP_METADATA"]',
+				opcionSufijo: "renati.author.dni",
+				selectorValor: 'input[name="renati.author_QUALDROP_VALUE"]',
+				valores: ["11111111", "22222222"],
+			},
+		],
+		omitidos: [],
+	};
+	const resumen = await VBEjecutor.aplicarPlan(doc, plan, { dormir: dormirRapido });
+
+	assert.deepStrictEqual(resumen.fallidos, []);
+	const metas = Array.from(
+		doc.querySelectorAll('select[name="renati.author_QUALDROP_METADATA"]')
+	).map((el) => el.value);
+	const valores = Array.from(doc.querySelectorAll('input[name="renati.author_QUALDROP_VALUE"]')).map(
+		(el) => el.value
+	);
+	assert.deepStrictEqual(metas, ["0: renati.author.dni", "0: renati.author.dni"]);
+	assert.deepStrictEqual(valores, ["11111111", "22222222"]);
+});

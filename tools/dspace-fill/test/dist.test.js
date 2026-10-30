@@ -34,5 +34,6 @@ test("el dist contiene los módulos y el wrapper", () => {
 	assert.ok(dist.includes("VBMapeador"));
 	assert.ok(dist.includes("VBEjecutor"));
 	assert.ok(dist.includes("VBReloj"));
+	assert.ok(dist.includes("ds-form-add-more"));
 	assert.ok(dist.includes("UserScript"));
 });

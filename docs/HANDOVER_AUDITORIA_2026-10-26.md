@@ -366,6 +366,24 @@ Los cuatro quedaron cerrados en la rama `fix/api-hardening-b0-b1`.
   **Cierre**: cupo adaptativo que acumula los segundos de trabajo reales
   y se fuga a 2 s por minuto.
 
+### AUD-33 — el botón "+" del formulario no se encontraba (media, Int1)
+
+La lista `BOTONES_AGREGAR` del userscript (`ds-add-button button`,
+`button.add-button`, …) no coincide con ninguna clase del formulario
+real: en el DOM guardado de "Editar envío" el botón es
+`button.ds-form-add-more` (24 veces) y cada fila repetible vive en un
+contenedor `[id$="_array"]` (11, 13, 15, 43…). Como los selectores no
+existían, las filas extra se llenaban solo si el operador las agregaba a
+mano, y el resumen lo reportaba como pendiente. **Cierre**: el ejecutor
+busca `button.ds-form-add-more` dentro del contenedor `[id$="_array"]`
+del propio campo (nunca a nivel global, que agregaría la fila de otro
+campo). Además: la página del ítem se reconoce por
+`meta[name="citation_title"]` (antes cualquier enlace
+`hdl.handle.net` de una búsqueda podía reportar un handle ajeno), el
+estado de auto-relleno se recalcula por ruta (una segunda tesis ya no
+queda bloqueada) y el reporte exige que el título del ítem coincida con
+la ficha preparada.
+
 ### AUD-32 — hora UTC en el registro y la constancia (media, Int1)
 
 El userscript fechaba el clic en Depositar con
@@ -425,4 +443,5 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-29 | Int1 | **cerrado** (fórmulas en JSON) | `8efffd7` (PR pendiente) |
 | AUD-30 | Int1 | **cerrado** (acceso al papeleo) | `8efffd7` (PR pendiente) |
 | AUD-31 | Int1 | **cerrado** (cupo adaptativo por CPU) | `8efffd7` (PR pendiente) |
-| AUD-32 | Int1 | **cerrado** (hora de Perú) | rama `fix/api-hardening-b0-b1` (PR pendiente) |
+| AUD-32 | Int1 | **cerrado** (hora de Perú) | `f0ba1f0` (PR pendiente) |
+| AUD-33 | Int1 | **cerrado** (botón "+" del userscript) | rama `fix/api-hardening-b0-b1` (PR pendiente) |

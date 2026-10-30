@@ -7,15 +7,14 @@
 // despachan input/change (el patrón estándar de los autocompletadores).
 
 const VBEjecutor = (() => {
-	// El botón "+" de filas repetibles no está en la captura estática
-	// (lo renderiza Angular en vivo): candidatos por orden; si ninguno
-	// funciona, se llenan las filas existentes y el resumen avisa.
-	const BOTONES_AGREGAR = [
-		"ds-add-button button",
-		"ds-add-group-buttons button",
-		"button.add-button",
-		"button[data-test='add']",
-	];
+	// Cada fila repetible del formulario oficial (DSpace 8.1) vive en un
+	// contenedor `#N_array` (evidencia: DOM real de "Editar envío"), y el
+	// botón "+" de ESA fila es `button.ds-form-add-more`, dentro del mismo
+	// contenedor. Los selectores adivinados de la versión anterior no
+	// existían en la página: se llenaban las filas visibles y las demás
+	// quedaban a mano sin avisar.
+	const SELECTOR_ARRAY = '[id$="_array"]';
+	const SELECTOR_AGREGAR = "button.ds-form-add-more";
 
 	function _evento(doc, el, tipo) {
 		const vista = el.ownerDocument.defaultView;
@@ -36,8 +35,12 @@ const VBEjecutor = (() => {
 	}
 
 	function _elegirOpcion(doc, select, sufijo) {
-		const opcion = Array.from(select.options || []).find(
-			(o) => (o.value || "").endsWith(sufijo) || (o.value || "").includes(sufijo)
+		// Los QUALDROP del formulario real usan valores "N: campo" (p. ej.
+		// "0: renati.author.dni"): basta con el sufijo exacto. El
+		// `includes()` anterior podía elegir una opción de otro campo cuyo
+		// nombre contuviera el sufijo.
+		const opcion = Array.from(select.options || []).find((o) =>
+			(o.value || "").endsWith(sufijo)
 		);
 		if (!opcion) return false;
 		select.value = opcion.value;
@@ -80,18 +83,19 @@ const VBEjecutor = (() => {
 	}
 
 	function _agregarFila(doc, selectorCercano) {
-		// Busca el botón "+" más cercano al campo (mismo contenedor de
-		// formulario) y lo pulsa; si no aparece, no insiste: el resumen
-		// reporta filas pendientes y el operador agrega a mano.
-		for (const sel of BOTONES_AGREGAR) {
-			const boton = doc.querySelector(sel);
-			if (boton) {
-				boton.click();
-				const despues = doc.querySelectorAll(selectorCercano).length;
-				if (despues > 0) return true;
-			}
-		}
-		return false;
+		// El botón se busca SOLO dentro del contenedor del campo: pulsar
+		// un "+" global agregaría la fila de otro campo y desalinearía los
+		// índices. Si el campo no existe o no hay botón, no se insiste: el
+		// resumen reporta el faltante y el operador agrega a mano.
+		const campo = doc.querySelector(selectorCercano);
+		const contenedor = campo ? campo.closest(SELECTOR_ARRAY) : null;
+		const boton = contenedor ? contenedor.querySelector(SELECTOR_AGREGAR) : null;
+		if (!boton) return false;
+		const antes = doc.querySelectorAll(selectorCercano).length;
+		boton.click();
+		// Angular agrega la fila en el mismo tick del clic; si no lo hizo,
+		// no se insiste (la siguiente iteración no vería el cambio).
+		return doc.querySelectorAll(selectorCercano).length > antes;
 	}
 
 	function _aplicarQualdrop(doc, op) {
@@ -165,7 +169,7 @@ const VBEjecutor = (() => {
 		return { exitosos, fallidos, omitidos: plan.omitidos };
 	}
 
-	return { aplicarPlan, BOTONES_AGREGAR };
+	return { aplicarPlan, SELECTOR_ARRAY, SELECTOR_AGREGAR };
 })();
 
 if (typeof module !== "undefined" && module.exports) {
