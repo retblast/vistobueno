@@ -635,12 +635,13 @@ class ReglaCompilada:
         for an in self.analizadores:
             for item in getattr(an, "ficha", []):
                 nodo = item.get("nodo")
+                valor = item.get("valor")
                 capturado.append(
                     {
                         "campo": item.get("campo", ""),
-                        "valor": item.get("valor"),
+                        "valor": valor,
                         "pagina": extracted.pagina_de(nodo) if nodo is not None else None,
-                        "detectado": True,
+                        "detectado": valor is not None and valor != "",
                     }
                 )
         return capturado

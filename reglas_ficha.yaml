@@ -31,6 +31,7 @@ reglas:
     contexto: caratula
     campo: dc.title
     modo: texto
+    quitar_prefijo: ^Título del trabajo de investigación\s*[:]?\s*
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'tesis') and string-length(normalize-space(.)) < 40)][1]
 
 - id: ficha_autores
@@ -46,7 +47,7 @@ reglas:
     contexto: caratula
     campo: dc.contributor.author
     modo: lista
-    separador: \s*(?:,|;|\by\b|\be\b)\s*
+    etiqueta: autores
     xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]
 
 - id: ficha_asesor
@@ -94,10 +95,11 @@ reglas:
   # (quirk heredado del reglamento, handover issue #4).
   extraccion:
     parte: document
-    contexto: caratula
+    contexto: caratula_ficha
     campo: dc.date.issued
     modo: texto
     patron: \b(?:19|20)\d{2}\b
+    seleccion: ultimo
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'trujillo') and translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü') != 'universidad nacional de trujillo'][1]
 
 - id: ficha_resumen
@@ -132,5 +134,6 @@ reglas:
     etiqueta: palabras clave
     separador: \s*[,;]\s*
     filtro: ^\s*palabras\s+clave
+    quitar_sufijo: \s*\.\s*$
     seccion:
       inicio: ^\s*resumen\s*$

@@ -117,15 +117,6 @@ def test_palabras_clave_sin_puntuacion_final(ficha):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "AUD-25: el motor publica detectado=True con valor '' para el "
-        "asesor. Cuando Int3 corrija la captura, este test pasa y el "
-        "XPASS estricto pone el CI en rojo hasta que Int1 quite la "
-        "marca. Ver docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-25)."
-    ),
-)
 def test_el_motor_no_marca_el_asesor_vacio_como_detectado(ficha):
     """Un valor vacío no puede viajar como detectado.
 
