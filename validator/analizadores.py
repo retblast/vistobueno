@@ -123,20 +123,27 @@ class AnalizadorXML(Analizador):
                 return len(nodes) > 0, f"exists {len(nodes)} nodos"
             return len(nodes) == 0, f"not_exists {len(nodes)} nodos"
 
+        # Sin nodos no hay atributo que comparar. `n_a_si_sin_nodos` permite
+        # declarar que la regla no aplica (p. ej. una línea de carátula que
+        # solo existe en cierto tipo de título), en vez de fallar con
+        # `@w:val=[] esperado=...` (AUD-07).
+        if not nodes and self.config.get("n_a_si_sin_nodos"):
+            return True, "no aplica (sin nodos)"
+
         # Atributo
         atributo = self.config.get("atributo")
         esperado = self.config.get("esperado")
         if atributo is None:
             return False, "falta 'atributo' para comparación de atributo"
         key = _resolve_attr_key(atributo)
-        # pares conserva la posición (1-based) de cada nodo en el resultado
-        # del xpath: al fallar `all_eq` es lo que permite señalar QUÉ valor
-        # incumple, en vez de mostrar solo los primeros 3 (que suelen ser los
-        # conformes y esconden al culpable — handover issue #7).
+        # pares conserva la posición (1-based) y el nodo de cada valor: al
+        # fallar `all_eq` permite señalar QUÉ valor incumple y en qué página
+        # está, en vez de mostrar solo los primeros 3 (que suelen ser los
+        # conformes y esconden al culpable — handover issue #7 / AUD-03).
         pares = [
-            (i, self._valor_margen(extracted, n, atributo, key)) for i, n in enumerate(nodes, 1)
+            (i, n, self._valor_margen(extracted, n, atributo, key)) for i, n in enumerate(nodes, 1)
         ]
-        vals = [v for _, v in pares if v is not None]
+        vals = [v for _, _, v in pares if v is not None]
         self.valor = vals[0] if vals else None
 
         # Tolerancia numérica opcional (twips): el valor cumple si su distancia
@@ -164,11 +171,20 @@ class AnalizadorXML(Analizador):
                 ok = bool(vals) and all(esperado in v for v in vals)
         else:
             return False, f"comparación '{comp}' no soportada"
-        detalle = f"{atributo}={vals[:3]} esperado={esperado}"
+        # Sin el repr crudo de Python; la muestra es solo contexto (AUD-03).
+        muestra = ", ".join(str(v) for v in vals[:3])
+        detalle = f"{atributo}=[{muestra}] esperado={esperado}"
         if comp == "all_eq" and not ok and vals:
-            incumplen = [(i, v) for i, v in pares if v is not None and not _acepta(v)]
-            resumen = ", ".join(f"#{i}={v}" for i, v in incumplen[:3])
-            detalle += f"; incumplen=[{resumen}]"
+            incumplen = [(i, v, n) for i, n, v in pares if v is not None and not _acepta(v)]
+            if incumplen:
+                # La página del reporte es la del primer nodo que incumple,
+                # no la del primero del xpath (que suele ser conforme).
+                self.ultimo_nodo = incumplen[0][2]
+                # Culpables primero, para que no los esconda la muestra.
+                resumen = ", ".join(f"#{i}={v}" for i, v, _ in incumplen[:3])
+                detalle = (
+                    f"{atributo} esperado={esperado}; incumplen=[{resumen}]; muestra=[{muestra}]"
+                )
         return ok, detalle
 
 
@@ -363,8 +379,15 @@ class AnalizadorListaObligatoria(Analizador):
     def _texto(self, extracted: ExtractedDocx) -> str:
         sec = self.config.get("seccion")
         if sec:
-            corte = seccion(tokenizar(extracted), sec["inicio"], sec.get("fin"))
-            return " ".join(t.texto for t in corte if t.tipo == PARRAFO)
+            corte = seccion(
+                tokenizar(extracted),
+                sec["inicio"],
+                sec.get("fin"),
+                hasta_final=bool(sec.get("hasta_final")),
+            )
+            return " ".join(
+                t.texto for t in corte if t.tipo in (PARRAFO, TITULO) and t.texto.strip()
+            )
         nodos = self._nodos(
             extracted,
             self.config.get("parte", "document"),
@@ -385,7 +408,7 @@ class AnalizadorListaObligatoria(Analizador):
         faltan = [it for it in items if _norm(it) not in texto_norm]
         if not faltan:
             return True, f"items_obligatorios={len(items)} completo"
-        return False, f"items_obligatorios={len(items)} faltan={faltan[:8]}"
+        return False, f"items_obligatorios={len(items)} faltan={faltan}"
 
 
 class AnalizadorPaginacion(Analizador):
@@ -536,24 +559,49 @@ def _sin_acentos(s: str) -> str:
     return s.translate(_MAP_ACENTOS)
 
 
-def _norm_indice(texto: str) -> str:
-    """Texto de una entrada de índice normalizado para MATCHING (ítem 11).
-
-    Quita el prefijo de numeración (romano "I." o decimal "1.1."), el número
-    de página al final (arábigo "10" o romano "ii"), separadores sueltos,
-    tildes y colapsa el whitespace, en mayúsculas.
-    """
+def _normalizar_base_indice(texto: str) -> str:
     s = texto.strip()
     s = re.sub(r"^\s*(?:[IVXLC]+\s*\.|(?:\d+)+(?:\.\d+)*\s*\.?\s*)", "", s)
-    s = re.sub(r"\s*[ivxlc]{1,5}\s*$", "", s)
-    s = re.sub(r"\s*\d+\s*$", "", s)
     s = re.sub(r"[()\[\],;:¿?¡!.]", " ", s)
     s = s.translate(_MAP_ACENTOS)
     return re.sub(r"\s+", " ", s).upper().strip()
 
 
+def _norm_titulo_cuerpo(texto: str) -> str:
+    """Título del cuerpo: sin numeración, pero SIN recortar sufijo romano.
+
+    Los títulos de sección (p.ej. "General") no llevan número de página, así
+    que no deben perder su última letra por el heurístico de páginas romanas.
+    """
+    return _normalizar_base_indice(texto)
+
+
+def _norm_indice(texto: str) -> str:
+    """Texto de una entrada de índice normalizado para MATCHING (ítem 11).
+
+    Quita el prefijo de numeración (romano "I." o decimal "1.1."), el número
+    de página al final (arábigo "10" o romano "ii"), separadores sueltos,
+    tildes y colapsa el whitespace.
+    """
+    s = texto.strip()
+    s = re.sub(r"^\s*(?:[IVXLC]+\s*\.|(?:\d+)+(?:\.\d+)*\s*\.?\s*)", "", s)
+    s = re.sub(r"[()\[\],;:¿?¡!.]", " ", s)
+    s = s.translate(_MAP_ACENTOS)
+    s = re.sub(r"\s+", " ", s).strip().upper()
+    if re.search(r"\s+[IVXLC]{1,5}$", s) or re.search(r"\s+\d+$", s):
+        s = re.sub(r"\s+[IVXLC]{1,5}\s*$", "", s)
+        s = re.sub(r"\s+\d+\s*$", "", s)
+    return s.strip()
+
+
 def _sigpalabra(s: str) -> str:
-    """Primera palabra con >=4 caracteres de un texto normalizado (o vacío)."""
+    """Primera palabra con >=4 caracteres de un texto normalizado (o vacío).
+
+    El umbral descarta tokens de numeración o romanos ("I", "1.2", "A") como
+    señal de contenido. Si la entrada no tiene ninguna palabra de 4+
+    caracteres, se devuelve "" y el chequeo la omite: no hay señal suficiente
+    para verificar que apunte a una sección real (AUD-06).
+    """
     for tk in s.split():
         if len(tk) >= 4:
             return tk
@@ -599,7 +647,7 @@ def _títulos_cuerpo(extracted: ExtractedDocx) -> set[str]:
         if es_heading(estilo):
             texto = text_of(p).strip()
             if texto:
-                titulos.add(_norm_indice(texto))
+                titulos.add(_norm_titulo_cuerpo(texto))
     return titulos
 
 

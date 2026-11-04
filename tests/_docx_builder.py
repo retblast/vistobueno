@@ -315,12 +315,43 @@ def configuracion_base() -> dict:
         "palabras_clave_n": 3,
         "referencias_n": 30,
         "anexos_items": list(ANEXOS_BASE),
+        "anexos_como_titulos": False,
         "indices_paginas_separadas": True,
         "header_logo": True,
         "header_fuente": "Times New Roman",
         "notas_pie_ids": [],
         "tdc_entradas": list(TDC_ENTRADAS_BASE),
     }
+
+
+def configuracion_anexos_titulos() -> dict:
+    """Fixture AUD-02/AUD-20: anexos con la estructura real de la plantilla.
+
+    En los DOCX reales cada "Anexo N. <ítem>" es un Título1, no un párrafo
+    del cuerpo. Antes de AUD-02 el analizador de lista obligatoria solo leía
+    párrafos, así que no encontraba ninguno de estos anexos.
+    """
+    cfg = configuracion_base()
+    cfg["anexos_como_titulos"] = True
+    return cfg
+
+
+def configuracion_titulo_romano() -> dict:
+    """Fixture AUD-01/AUD-20: título que acaba en letra romana.
+
+    "GENERAL" termina en "L" (letra romana). Con el heurístico antiguo, el
+    título del cuerpo perdía esa letra ("GENERA") mientras la entrada del
+    índice se normalizaba a "GENERAL": el match fallaba y
+    `indice_apunta_secciones` daba un falso positivo.
+    """
+    cfg = configuracion_base()
+    idx = cfg["headings"].index("OBJETIVOS")
+    cfg["headings"].insert(idx + 1, "GENERAL")
+    for i, (_nivel, texto) in enumerate(cfg["tdc_entradas"]):
+        if texto == "1.4. OBJETIVOS 9":
+            cfg["tdc_entradas"].insert(i + 1, (2, "1.4.1. GENERAL 9"))
+            break
+    return cfg
 
 
 # ---------------------------------------------------------------------------
@@ -397,9 +428,17 @@ def _document_xml(cfg: dict) -> str:
                 for i in range(cfg["referencias_n"])
             )
         if h == "ANEXOS":
-            paras.extend(
-                _body_para(f"Anexo {i + 1}. {item}") for i, item in enumerate(cfg["anexos_items"])
-            )
+            if cfg.get("anexos_como_titulos"):
+                # Estructura real de las plantillas: cada "Anexo N." es un
+                # Título1, no un párrafo del cuerpo (AUD-02/AUD-20).
+                paras.extend(
+                    _heading(f"Anexo {i + 1}. {item}") for i, item in enumerate(cfg["anexos_items"])
+                )
+            else:
+                paras.extend(
+                    _body_para(f"Anexo {i + 1}. {item}")
+                    for i, item in enumerate(cfg["anexos_items"])
+                )
 
     # Marcador de sección (fin de preliminares); la prosa del cuerpo ya se
     # insertó tras el heading "INTRODUCCIÓN". Los párrafos que siguen al

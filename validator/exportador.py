@@ -16,6 +16,7 @@ Uso:
 
 from __future__ import annotations
 
+import html
 import json
 import sys
 from pathlib import Path
@@ -52,7 +53,7 @@ def reporte_a_markdown(reporte: dict) -> str:
 
     for r in reporte["resultados"]:
         estado = "✅ cumple" if r["passed"] else "❌ **falla**"
-        linea = f"| `{r['rule_id']}` | {estado} | `{r['severity']}` | {r['message']} |"
+        linea = f"| `{r['rule_id']}` | {estado} | `{r['severity']}` | {html.escape(r['message'])} |"
         lineas.append(linea)
 
     lineas += ["", "### Detalle de reglas fallidas", ""]
@@ -60,10 +61,10 @@ def reporte_a_markdown(reporte: dict) -> str:
         if r["passed"]:
             continue
         lineas += [
-            f"#### `{r['rule_id']}` — {r['message']}",
+            f"#### `{r['rule_id']}` — {html.escape(r['message'])}",
             "",
-            f"- **Esperado:** {r['expected']}",
-            f"- **Encontrado:** {r['found']}",
+            f"- **Esperado:** {html.escape(r['expected'])}",
+            f"- **Encontrado:** {html.escape(r['found'])}",
         ]
         if r.get("location"):
             lineas.append(f"- **Ubicación:** {r['location']}")
@@ -80,7 +81,7 @@ def reporte_a_markdown(reporte: dict) -> str:
                 f"### `{p['rule_id']}`",
                 "",
                 "```",
-                p["prompt"],
+                html.escape(p["prompt"]),
                 "```",
                 "",
             ]

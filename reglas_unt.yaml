@@ -178,6 +178,12 @@ reglas:
     atributo: '@w:val'
     comparacion: all_eq
     esperado: '24'
+# EVALUADO (AUD-05): las reglas de carátula usan `w:r[1]` y
+# `following-sibling::w:p[1]`, asumiendo que el texto relevante está en el
+# primer run y en el párrafo inmediatamente siguiente. Word puede partir el
+# texto en varios runs o intercalar párrafos vacíos, así que la regla podría
+# leer otro run/párrafo. Se documenta la limitación y se difiere el
+# endurecimiento hasta contar con documentos reales que la manifiesten.
 - id: caratula_universidad_tamano
   tipo: atributo_xml
   descripcion: Tamaño de letra del nombre de la Universidad en carátula
@@ -229,6 +235,9 @@ reglas:
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   cita: '"Título del Trabajo de Investigación: Centrado, con negrita y con letras mayúsculas y minúsculas
     (tamaño de letra, 14 puntos)."'
+  # EVALUADO: el manual pide 14 pt (sz 28), pero la plantilla oficial de
+  # EDUCACIÓN INICIAL usa 13 pt (sz 26). Se mantiene el valor del manual como
+  # warning: no bloquea la entrega y deja documentado el desvío (AUD-04).
   atributo_xml:
     parte: document
     contexto: caratula
@@ -246,14 +255,21 @@ reglas:
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   cita: '"Trabajo de Investigación para optar el grado de Bachiller: Centrado, con negrita y con mayúsculas
     (tamaño de letra, 13 puntos)."'
+  # EVALUADO: el manual pide 13 pt (sz 26) para la línea "para optar el
+  # grado de Bachiller"; por eso el selector se acota a "bachiller" y no
+  # evalúa otras titulaciones (la plantilla de Licenciatura usa 12 pt,
+  # sz 24). `n_a_si_sin_nodos` evita el falso warning "no encontrado" en
+  # documentos que no llevan esa línea (AUD-07; ver también AUD-04).
   atributo_xml:
     parte: document
     contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'para optar')][1]/w:r[1]/w:rPr/w:sz
+      'para optar')][contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+      'bachiller')][1]/w:r[1]/w:rPr/w:sz
     atributo: '@w:val'
     comparacion: eq
     esperado: '26'
+    n_a_si_sin_nodos: true
 - id: caratula_autores_tamano
   tipo: atributo_xml
   descripcion: Tamaño de letra de autores, asesor, línea de investigación, ciudad y año en carátula
@@ -1187,6 +1203,7 @@ reglas:
   lista_obligatoria:
     seccion:
       inicio: anexo
+      hasta_final: true
     ignore_case: true
     items:
     - Matriz de consistencia
@@ -1220,6 +1237,7 @@ reglas:
   lista_obligatoria:
     seccion:
       inicio: anexo
+      hasta_final: true
     ignore_case: true
     items:
     - Matriz de consistencia

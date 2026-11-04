@@ -73,11 +73,18 @@ def run_check(check: dict, extracted: ExtractedDocx, rule: dict) -> tuple[bool, 
             ok = bool(vals) and all(_acepta(v) for v in vals)
         else:
             return False, f"comparacion '{comp}' no soportada para xml_atributo"
-        detalle = f"{check['atributo']}={vals[:3]} esperado={esperado}"
+        # Mismo formato que AnalizadorXML (AUD-03): la paridad legacy↔DSL
+        # compara el `found` literal.
+        muestra = ", ".join(str(v) for v in vals[:3])
+        detalle = f"{check['atributo']}=[{muestra}] esperado={esperado}"
         if comp == "all_eq" and not ok and vals:
             desvios = [(i, v) for i, v in pares if v is not None and not _acepta(v)]
-            resumen = ", ".join(f"#{i}={v}" for i, v in desvios[:3])
-            detalle += f"; incumplen=[{resumen}]"
+            if desvios:
+                resumen = ", ".join(f"#{i}={v}" for i, v in desvios[:3])
+                detalle = (
+                    f"{check['atributo']} esperado={esperado}; incumplen=[{resumen}]; "
+                    f"muestra=[{muestra}]"
+                )
         return ok, detalle
 
     if tipo == "texto_regex":

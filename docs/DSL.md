@@ -117,6 +117,12 @@ atributo_xml:
   toman todos los párrafos del cuerpo. Sirve para reglas que en el manual
   aplican solo a la portada y que, evaluadas sobre todo el documento,
   producirían falsos positivos.
+- `n_a_si_ausente` (opcional): si la parte XML no existe, la regla se
+  considera n/a en vez de fallar.
+- `n_a_si_sin_nodos` (opcional): en comparaciones de atributo, si el XPath no
+  encuentra ningún nodo, la regla se considera n/a (`no aplica (sin nodos)`).
+  Se usa para reglas acotadas a un tipo de título cuya línea puede no existir
+  en otros documentos (p. ej. `caratula_optar_grado_tamano`, AUD-07).
 
 ### 2. `patron_texto` → `AnalizadorRegex`
 

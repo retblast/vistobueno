@@ -109,6 +109,7 @@ def seccion(
     tokens: Sequence[Token],
     inicio: str,
     fin: str | None = None,
+    hasta_final: bool = False,
 ) -> list[Token]:
     """Slice de una sección delimitada por títulos (F3).
 
@@ -125,6 +126,10 @@ def seccion(
         Regex de corte (opcional). Solo un TITULO posterior cuyo texto la
         matchee cierra la sección; si se omite, corta ante el primer
         TITULO posterior (o al final del flujo si no hay más títulos).
+    hasta_final:
+        Si es True y no hay fin que matchee, la sección va hasta el final
+        del documento (AUD-02). Por defecto False para mantener el
+        comportamiento histórico.
 
     Semántica y advertencias
     ------------------------
@@ -135,15 +140,15 @@ def seccion(
       "ANEXOS Y RECURSOS".
     - Sin ningún TITULO que matchee `inicio`: devuelve ``[]``.
     - Si `inicio` matchea y `fin` es ``None`` (o nunca matchea): devuelve
-      el resto del flujo.
+      el resto del flujo, a menos que `hasta_final` sea True en cuyo caso
+      va hasta el final.
     - `inicio`/`fin` vacíos o en blanco: levanta ``ValueError``.
 
     Ejemplos
     --------
     >>> seccion(flujo, r"^resumen$")            # resumen → siguiente título
     >>> seccion(flujo, r"^referencias$", fin=r"^anexos$")   # hasta ANEXOS
-    >>> seccion(flujo, "referencias", fin="anexos")  # ojo: corta en
-    # "ANEXOS Y RECURSOS" también (match de subcadena, sin anclar).
+    >>> seccion(flujo, r"^anexos$", hasta_final=True)        # hasta fin del doc
     """
     if not inicio or not inicio.strip():
         raise ValueError("'inicio' no puede ser una regex vacía o en blanco")
@@ -159,10 +164,18 @@ def seccion(
             if rx0.search(t.texto):
                 begin = i
             continue
-        if rx1 is None or rx1.search(t.texto):
+        if rx1 is None:
+            if hasta_final:
+                continue
+            return list(tokens[begin + 1 : i])
+        if rx1.search(t.texto):
             return list(tokens[begin + 1 : i])
     if begin == -1:
         return []
+    if rx1 is None and hasta_final:
+        return list(tokens[begin + 1 :])
+    if rx1 is None:
+        return list(tokens[begin + 1 :])
     return list(tokens[begin + 1 :])
 
 
