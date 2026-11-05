@@ -1,6 +1,6 @@
 # Plan de lotes previos al piloto — Integrante 1 (Backend / API)
 
-> **Estado**: en ejecución. Lotes 1 a 5 cerrados; el lote 6 queda pendiente.
+> **Estado**: en ejecución. Lotes 1 a 6 cerrados; el piloto real (Actividad 16) y el cierre de hallazgos (Actividad 17) quedan fuera de este plan.
 > **Fecha de creación**: 2026-11-04.
 > **Alcance**: todo el trabajo de Integrante 1 que se puede cerrar **sin** la
 > presencia del operador de la biblioteca. El piloto real (Actividad 16) y el
@@ -53,7 +53,7 @@ Ninguno toca `master` directamente.
 | 3 | Verificación del frontend (Act. 15) | 1–2 h | tests, lint, build y checklist de navegador registrado | **cerrado** (PR #79) |
 | 4 | Kit del piloto y borrador de coordinación | 1–2 h | checklist ejecutable, sin datos personales | **cerrado** (PR #80) |
 | 5 | Ensayo completo contra el mock | 1–2 h | flujo completo OK, sin drift en `dist` | **cerrado** (PR #81) |
-| 6 | Cierre de evidencias de la semana 10 | 30 min | registro de regresión y de PRs completo | pendiente |
+| 6 | Cierre de evidencias de la semana 10 | 30 min | registro de regresión y de PRs completo | **cerrado** (PR #82) |
 
 ---
 
@@ -298,6 +298,12 @@ El informe y el portafolio de prácticas viven fuera del repositorio, en
 `~/Documents/University/2026-II/PRAPRE`. Ahí se actualizaron el estado de las
 actividades, las rutas de la columna de evidencia (que apuntaban a una
 estructura de carpetas que ya no existe) y el conteo de PRs.
+
+**Estado:** cerrado (2026-11-04, PR #82). La bitácora de la semana 10
+registra la fila de regresión de la suite (Actividad 18), el registro de pull
+requests (Actividad 19) y el cierre del lote. El informe y el portafolio
+quedaron regenerados: 258 archivos, índice de 10 páginas, escaneo de secretos
+limpio.
 
 ---
 
