@@ -1,6 +1,6 @@
 # Plan de lotes previos al piloto — Integrante 1 (Backend / API)
 
-> **Estado**: en ejecución. Lotes 1 a 4 cerrados; el lote 5 queda pendiente.
+> **Estado**: en ejecución. Lotes 1 a 5 cerrados; el lote 6 queda pendiente.
 > **Fecha de creación**: 2026-11-04.
 > **Alcance**: todo el trabajo de Integrante 1 que se puede cerrar **sin** la
 > presencia del operador de la biblioteca. El piloto real (Actividad 16) y el
@@ -52,7 +52,7 @@ Ninguno toca `master` directamente.
 | 2 | Registro propuesto de la sede (Act. 14) | 30 min | sin datos personales, enlaces resueltos | **cerrado** (PR #77) |
 | 3 | Verificación del frontend (Act. 15) | 1–2 h | tests, lint, build y checklist de navegador registrado | **cerrado** (PR #79) |
 | 4 | Kit del piloto y borrador de coordinación | 1–2 h | checklist ejecutable, sin datos personales | **cerrado** (PR #80) |
-| 5 | Ensayo completo contra el mock | 1–2 h | flujo completo OK, sin drift en `dist` | **cerrado** |
+| 5 | Ensayo completo contra el mock | 1–2 h | flujo completo OK, sin drift en `dist` | **cerrado** (PR #81) |
 | 6 | Cierre de evidencias de la semana 10 | 30 min | registro de regresión y de PRs completo | pendiente |
 
 ---
@@ -276,6 +276,28 @@ repositorio) para que no digan que la Actividad 14 sigue pendiente.
 
 **Compuerta:** `git status` limpio salvo los archivos locales conocidos;
 registro completo.
+
+**Cifras reales al 2026-11-04** (las del enunciado del lote quedaron
+desfasadas al escribirse el plan):
+
+- suite: **742 recolectados, 736 pasan, 6 `xfail`**;
+- frontend: **76 tests en 9 archivos**;
+- PRs: **60 mergeados en `master`**, 31 propios y 29 de compañeros
+  revisados e integrados. El repositorio suma el PR #10, pero su commit de
+  merge no está en el historial de `master`: se integró a una rama de
+  trabajo, así que no cuenta como mergeado en `master`;
+- contrato de la ficha: **v1.12.0**;
+- Actividad 14: **concluida** el 2026-11-04 (PR #77). La actividad entrega la
+  estructura del registro, no los documentos reales de la sede: eso se
+  completa en el piloto;
+- Actividad 15: **en ejecución** (PR #79). La verificación contra la API real
+  está hecha; falta el clic manual en un navegador real contra la instancia
+  de la sede, que es parte del piloto.
+
+El informe y el portafolio de prácticas viven fuera del repositorio, en
+`~/Documents/University/2026-II/PRAPRE`. Ahí se actualizaron el estado de las
+actividades, las rutas de la columna de evidencia (que apuntaban a una
+estructura de carpetas que ya no existe) y el conteo de PRs.
 
 ---
 

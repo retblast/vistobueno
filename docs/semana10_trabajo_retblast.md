@@ -7,7 +7,10 @@
   constancias y registro, escáner de secretos)
 - **Ramas**: `fix/api-hardening-b0-b1` (25 commits sobre `master`; PR #71
   mergeado el 2026-11-03) y `docs/registro-documentos-sede` (cierre de la
-  Actividad 14). El 2026-11-01 el trabajo siguió en la primera rama.
+  Actividad 14). El 2026-11-01 el trabajo siguió en la primera rama. Después
+  se usaron las ramas `feature/act15-verificacion-frontend` (PR #79),
+  `docs/kit-piloto-operador` (PR #80) y `fix/ensayos-aislados` (PR #81), los
+  tres mergeados el 2026-11-04.
 
 ---
 
@@ -253,6 +256,83 @@ lote.
 
 ---
 
+## 2026-11-04 — Cierre de evidencias de la semana 10 (lote 6)
+
+Lote 6 del plan previo al piloto (`docs/PLAN_LOTES_PRE_PILOTO.md`). El objeto
+es que el registro de la semana no contradiga al repositorio: la suite, el
+frontend, el estado de las actividades y el conteo de PRs tienen que coincidir
+con lo que hay en `master`.
+
+### Fila de regresión de la semana (Actividad 18)
+
+| Momento | Tests en la suite |
+|---|---|
+| S1 — contrato inicial | 18 |
+| S3–S4 — cierre de la Unidad I | 148 |
+| S5 — notificación por correo | 244 |
+| S6 — estructuras pendientes y contrato `tipo_documento` | 371 |
+| S7 — depósito en DSpace y escáner de credenciales | 429 |
+| S8 — ficha de depósito v1.7.0 | 622 |
+| S9 — endurecimiento de API y userscript | 696 |
+| **S10 — verificación frontend, kit del piloto y ensayos aislados** | **742** |
+
+La medición es reproducible: `pytest tests/ -v` sobre `master` da 742
+recolectados, 736 pasan y 6 quedan como `xfail(strict=True)`. Los 3 tests
+que dependen de `recursos/` se omiten cuando esa carpeta no está, como pasa
+en el CI.
+
+### Registro de pull requests (Actividad 19)
+
+**60 PRs mergeados en `master`**: 31 de autoría propia y 29 de compañeros
+revisados e integrados. El repositorio suma el PR #10, pero su commit de
+merge no está en el historial de `master`: se integró a una rama de trabajo,
+así que no cuenta como mergeado en `master`. El conteo sale del historial de
+git (`git log --merges master`) y los títulos y fechas, de GitHub.
+
+PRs mergeados en la semana universitaria 11:
+
+| N.° | Título | Fecha | Rol |
+|---|---|---|---|
+| #62 | feat(frontend): limite de error, envio con Enter y toggle de tema con SVG (cierre S10, dia 1) | 2026-11-03 | Revisión e integración (autor: Rodo00) |
+| #68 | feat(frontend): pantalla de ficha de deposito + cierre AUD-16/17/18 (Int2) | 2026-11-03 | Revisión e integración (autor: Rodo00) |
+| #71 | fix(api): endurecer acceso, Host, cupo de CPU y userscript (AUD-28 a AUD-34) | 2026-11-03 | Autor |
+| #74 | docs: corregir el estado de Int2 en los handover de auditoria | 2026-11-03 | Autor |
+| #76 | docs: sincronizar contrato, README y handovers con el estado actual | 2026-11-04 | Autor |
+| #77 | docs: agregar propuesta de registro de documentos de la sede | 2026-11-04 | Autor |
+| #78 | fix(motor): enumerar todos los incumplimientos en el detalle de las reglas (AUD-03) | 2026-11-04 | Revisión e integración (autor: Rodo00) |
+| #79 | test(frontend): verificar el flujo de la ficha de depósito (Actividad 15) | 2026-11-04 | Autor |
+| #80 | docs: escribir el kit del piloto para el operador de la biblioteca | 2026-11-04 | Autor |
+| #81 | fix(ensayos): que los dos ensayos no se pisen entre sí ni con otras sesiones | 2026-11-04 | Autor |
+
+PRs abiertos que no son de este autor y siguen esperando al responsable del
+motor: #72, #73 y #75.
+
+### Informe y portafolio de prácticas
+
+El informe de avance y el portafolio viven fuera del repositorio, en la
+carpeta de la asignatura. Se actualizaron tres cosas:
+
+- **Estado de las actividades**: la 14 pasó de *en ejecución* a *concluida*
+  (PR #77) y la 15 quedó como *en ejecución* (PR #79), con el detalle de lo
+  que falta: el clic manual en un navegador real contra la instancia de la
+  sede, que es parte del piloto.
+- **Rutas de la columna de evidencia**: la tabla de cobertura del índice
+  apuntaba a una estructura de carpetas anterior (`02_BITACORAS_SEMANALES/`,
+  `03_API_Y_VALIDACION/`, `07_CODIGO_Y_RESPALDO_TECNICO/`). Ninguna de esas
+  rutas existía en la carpeta generada, así que toda evidencia citada era
+  un enlace roto. Se reescribieron las 17 actividades con rutas reales
+  (`semana N/`, `semana N/codigo/`) y se comprobó que todas existen.
+- **Conteo de PRs**: el informe decía 61 PRs y 32 propios. El número
+  correcto para `master` es 60 y 31, por el caso del PR #10 explicado
+  arriba.
+
+El portafolio quedó con **258 archivos (19 MB)**, semanas 2 a 11, con el
+índice de 10 páginas. La carpeta `semana 11/` lleva la bitácora de la
+semana, el kit del operador, el plan de los lotes, la propuesta de registro de
+la sede, el par de ejemplo con sus respuestas y el código de los ensayos.
+
+---
+
 ## Evidencias producidas
 
 | Evidencia | Dónde |
@@ -263,8 +343,12 @@ lote.
 | Propuesta de registro de documentos de la sede | `docs/REGISTRO_DOCUMENTOS_SEDE.md` |
 | Generador del par | `scripts/ejemplo_bueno_malo.py` |
 | Plan de lotes previos al piloto | `docs/PLAN_LOTES_PRE_PILOTO.md` |
+| Kit del piloto para el operador | `docs/PILOTO_OPERADOR.md` |
 | Verificación de la Actividad 15 | `docs/HANDOVER_FRONTEND_FICHA_DEPOSITO.md` §8 |
-| Guía de ejemplos en el portafolio | `semana 10/GUIA_EJEMPLOS.pdf` (carpeta de la asignatura) |
+| Guía de ejemplos en el portafolio | `semana 11/GUIA_EJEMPLOS.pdf` (carpeta de la asignatura) |
+| Kit del piloto en el portafolio | `semana 11/PILOTO_OPERADOR.pdf` (carpeta de la asignatura) |
+| Plan de lotes en el portafolio | `semana 11/PLAN_LOTES_PRE_PILOTO.pdf` (carpeta de la asignatura) |
+| Índice y mapeo de evidencias | `semana 11/../00_INDICE_y_MAPEO.pdf` (carpeta de la asignatura) |
 | Bitácora | este archivo |
 
 - Commits de la semana: `7d7a26c` (generador del par de ejemplo),
