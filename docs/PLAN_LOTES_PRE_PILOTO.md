@@ -282,7 +282,7 @@ desfasadas al escribirse el plan):
 
 - suite: **742 recolectados, 736 pasan, 6 `xfail`**;
 - frontend: **76 tests en 9 archivos**;
-- PRs: **62 mergeados en `master`**, 33 propios y 29 de compañeros
+- PRs: **64 mergeados en `master`**, 35 propios y 29 de compañeros
   revisados e integrados. El repositorio suma el PR #10, pero su commit de
   merge no está en el historial de `master`: se integró a una rama de
   trabajo, así que no cuenta como mergeado en `master`. El conteo tiene que
@@ -301,7 +301,8 @@ El informe y el portafolio de prácticas viven fuera del repositorio, en
 actividades, las rutas de la columna de evidencia (que apuntaban a una
 estructura de carpetas que ya no existe) y el conteo de PRs.
 
-**Estado:** cerrado (2026-11-04, PR #82). La bitácora de la semana 10
+**Estado:** cerrado (2026-11-04, PR #82; correcciones de registro en el PR
+#85). La bitácora de la semana 10
 registra la fila de regresión de la suite (Actividad 18), el registro de pull
 requests (Actividad 19) y el cierre del lote. El informe y el portafolio
 quedaron regenerados: 258 archivos, índice de 10 páginas, escaneo de secretos
