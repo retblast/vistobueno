@@ -282,10 +282,12 @@ desfasadas al escribirse el plan):
 
 - suite: **742 recolectados, 736 pasan, 6 `xfail`**;
 - frontend: **76 tests en 9 archivos**;
-- PRs: **60 mergeados en `master`**, 31 propios y 29 de compañeros
+- PRs: **62 mergeados en `master`**, 33 propios y 29 de compañeros
   revisados e integrados. El repositorio suma el PR #10, pero su commit de
   merge no está en el historial de `master`: se integró a una rama de
-  trabajo, así que no cuenta como mergeado en `master`;
+  trabajo, así que no cuenta como mergeado en `master`. El conteo tiene que
+  cubrir los dos formatos de integración: los commits de merge y los
+  commits squash (`<título> (#N)`), que no dejan commit de merge;
 - contrato de la ficha: **v1.12.0**;
 - Actividad 14: **concluida** el 2026-11-04 (PR #77). La actividad entrega la
   estructura del registro, no los documentos reales de la sede: eso se

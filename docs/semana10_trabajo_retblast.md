@@ -283,11 +283,18 @@ en el CI.
 
 ### Registro de pull requests (Actividad 19)
 
-**60 PRs mergeados en `master`**: 31 de autoría propia y 29 de compañeros
+**62 PRs mergeados en `master`**: 33 de autoría propia y 29 de compañeros
 revisados e integrados. El repositorio suma el PR #10, pero su commit de
 merge no está en el historial de `master`: se integró a una rama de trabajo,
-así que no cuenta como mergeado en `master`. El conteo sale del historial de
-git (`git log --merges master`) y los títulos y fechas, de GitHub.
+así que no cuenta como mergeado en `master`.
+
+El conteo sale del historial de git y de GitHub: los títulos y las fechas,
+de `gh`; el conjunto de PRs que llegaron a `master`, de `git log`. Hay que
+contar **los dos formatos de integración** del repositorio: los commits de
+merge (`Merge pull request #N`) y los commits squash (`<título> (#N)`), que
+GitHub crea al aplanar un PR. Un PR integrado con squash no deja commit de
+merge, así que contar solo con `git log --merges` lo deja fuera: por eso el
+conteo con `--merges` solo daba 60.
 
 PRs mergeados en la semana universitaria 11:
 
@@ -303,6 +310,8 @@ PRs mergeados en la semana universitaria 11:
 | #79 | test(frontend): verificar el flujo de la ficha de depósito (Actividad 15) | 2026-11-04 | Autor |
 | #80 | docs: escribir el kit del piloto para el operador de la biblioteca | 2026-11-04 | Autor |
 | #81 | fix(ensayos): que los dos ensayos no se pisen entre sí ni con otras sesiones | 2026-11-04 | Autor |
+| #82 | docs: registrar el cierre de evidencias del lote 6 | 2026-11-04 | Autor |
+| #83 | docs: registrar el PR #82 en el plan de lotes | 2026-11-04 | Autor |
 
 PRs abiertos que no son de este autor y siguen esperando al responsable del
 motor: #72, #73 y #75.
@@ -323,8 +332,10 @@ carpeta de la asignatura. Se actualizaron tres cosas:
   un enlace roto. Se reescribieron las 17 actividades con rutas reales
   (`semana N/`, `semana N/codigo/`) y se comprobó que todas existen.
 - **Conteo de PRs**: el informe decía 61 PRs y 32 propios. El número
-  correcto para `master` es 60 y 31, por el caso del PR #10 explicado
-  arriba.
+  correcto para `master` es 62 y 33, por dos razones: el PR #10 explicado
+  arriba no cuenta, y el conteo tiene que incluir los PRs integrados con
+  squash, que no dejan commit de merge. El caso del PR #10 estaba resuelto;
+  el del squash, no: faltaba la mitad de los 62.
 
 El portafolio quedó con **258 archivos (19 MB)**, semanas 2 a 11, con el
 índice de 10 páginas. La carpeta `semana 11/` lleva la bitácora de la
