@@ -173,8 +173,10 @@ for campo in ficha["manuales"]:
         campo["valor"] = "12345678"
 
 pub = httpx.post("$API/ficha-pendiente", json=ficha, timeout=30)
-assert pub.status_code == 204, pub.text
-print("  ✅ verde + ficha capturada + publicada en el buzón (204)")
+assert pub.status_code == 201, pub.text
+publicada = pub.json()
+assert publicada["tramite_id"], pub.text
+print("  ✅ verde + ficha capturada + publicada en el buzón (201, trámite " + publicada["tramite_id"] + ")")
 PY
 [ $? -eq 0 ] || fallar "validación/publicación de la ficha" 5
 
@@ -194,9 +196,17 @@ import zipfile
 dep = httpx.get("$API/deposito", timeout=30).json()
 assert "hdl.handle.net" in dep["handle"], dep
 assert dep["timestamp"], dep
+assert dep["tramite_id"], dep
+assert dep["titulo_observado"], dep
 
-ficha = httpx.get("$API/ficha-pendiente", timeout=30).json()
-cuerpo = {"ficha": ficha, "handle": dep["handle"], "timestamp": dep["timestamp"]}
+sobre = httpx.get("$API/ficha-pendiente", timeout=30).json()
+ficha = sobre["ficha"]
+cuerpo = {
+    "ficha": ficha,
+    "tramite_id": sobre["tramite_id"],
+    "handle": dep["handle"],
+    "timestamp": dep["timestamp"],
+}
 
 for formato, firma in (("csv", b"registro.csv"), ("xlsx", b"registro.xlsx")):
     r = httpx.post("$API/fila-registro?formato=" + formato, json=cuerpo, timeout=30)

@@ -314,10 +314,12 @@
 			try {
 				const r = await fetch("/api-proxy/ficha-pendiente");
 				if (r.status === 200) {
-					const ficha = await r.json();
+					const sobre = await r.json();
+					const ficha = sobre.ficha || {};
 					const titulo = (ficha.extraidos || []).find(function (e) { return e.campo === "dc.title"; });
 					estadoFicha.innerHTML = "✅ <strong>Ficha en el buzón</strong> — \"" +
-						(titulo ? String(titulo.valor || "").slice(0, 60) : "?") + "…\" — el userscript la usará.";
+						(titulo ? String(titulo.valor || "").slice(0, 60) : "?") + "…\" — el userscript la usará." +
+						" <small>trámite: " + (sobre.tramite_id || "?") + "</small>";
 				} else if (r.status === 404) {
 					estadoFicha.innerHTML = "Sin ficha en el buzón (vacía o expirada). <strong>Publica una con el botón azul.</strong>";
 				} else {
@@ -336,8 +338,10 @@
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(ficha),
 				});
-				if (r.status === 204) {
-					estadoFicha.innerHTML = "✅ <strong>Ficha publicada</strong> — pulsa el botón verde flotante " +
+				if (r.status === 201) {
+					const publicada = await r.json();
+					estadoFicha.innerHTML = "✅ <strong>Ficha publicada</strong> — trámite <code>" +
+						(publicada.tramite_id || "?") + "</code>. Pulsa el botón verde flotante " +
 						"<strong>\"Rellenar\"</strong> (arriba a la derecha) para llenar el formulario con esta ficha.";
 				} else if (r.status === 502) {
 					estadoFicha.textContent = "La API no responde en :8000 — ¿corrió nix run .#serve?";

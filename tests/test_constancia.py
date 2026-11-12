@@ -31,6 +31,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+import validator.api
 from validator.constancia import (
     DatosConstancia,
     ErrorDatosConstancia,
@@ -43,6 +44,7 @@ RUTA_PLANTILLA_REAL = RECURSOS_DIR / "TESIS DIGITAL MODELO B-2026.docx"
 HANDLE = "https://hdl.handle.net/20.500.14414/26042"
 TIMESTAMP = "2026-01-20T18:10:00"
 FIRMA = "Lic. José Prueba"
+TRAMITE_ID = ""
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +177,24 @@ def _entorno_constancia(monkeypatch):
     monkeypatch.setenv("VISTOBUENO_FIRMA", FIRMA)
     monkeypatch.setenv("VISTOBUENO_PLANTILLA_CONSTANCIA", str(_plantilla_sintetica()))
     yield
+
+
+@pytest.fixture(autouse=True)
+def _deposito_vigente():
+    """Ata el papeleo a un depósito vigente, como exige el contrato v1.13.0."""
+    global TRAMITE_ID
+    validator.api._BUZON.limpiar()
+    TRAMITE_ID, _ = validator.api._BUZON.publicar_ficha({"extraidos": [], "manuales": []})
+    validator.api._BUZON.reportar_deposito(
+        {
+            "tramite_id": TRAMITE_ID,
+            "handle": HANDLE,
+            "titulo_observado": "Tesis de prueba",
+            "timestamp": TIMESTAMP,
+        }
+    )
+    yield
+    validator.api._BUZON.limpiar()
 
 
 def _document_xml(contenido: bytes) -> str:
@@ -433,7 +453,13 @@ def _solicitud(autores=None, matriculas=None, indice=0):
         autores=autores,
         matriculas=matriculas,
     )
-    return {"ficha": ficha, "handle": HANDLE, "timestamp": TIMESTAMP, "indice_autor": indice}
+    return {
+        "ficha": ficha,
+        "tramite_id": TRAMITE_ID,
+        "handle": HANDLE,
+        "timestamp": TIMESTAMP,
+        "indice_autor": indice,
+    }
 
 
 class TestEndpointConstancia:
@@ -496,6 +522,29 @@ class TestEndpointConstancia:
         assert respuesta.status_code == 500
         assert "VISTOBUENO_FIRMA" in respuesta.json()["detail"]
 
+    def test_sin_deposito_vigente_es_409(self):
+        """Sin depósito vigente no se puede generar papeleo."""
+        validator.api._BUZON.limpiar()
+        respuesta = CLIENTE.post("/constancia", json=_solicitud())
+        assert respuesta.status_code == 409
+        assert "depósito" in respuesta.json()["detail"]
+
+    def test_tramite_ajeno_es_409(self):
+        """El papeleo de un trámite anterior no se genera."""
+        solicitud = _solicitud()
+        solicitud["tramite_id"] = "tramite-anterior"
+        respuesta = CLIENTE.post("/constancia", json=solicitud)
+        assert respuesta.status_code == 409
+        assert "trámite" in respuesta.json()["detail"]
+
+    def test_handle_ajeno_es_409(self):
+        """El handle debe ser el que reportó el userscript."""
+        solicitud = _solicitud()
+        solicitud["handle"] = "https://hdl.handle.net/20.500.14414/00000"
+        respuesta = CLIENTE.post("/constancia", json=solicitud)
+        assert respuesta.status_code == 409
+        assert "handle" in respuesta.json()["detail"]
+
     def test_plantilla_ausente_es_500(self, monkeypatch):
         monkeypatch.setenv("VISTOBUENO_PLANTILLA_CONSTANCIA", "/no/existe.docx")
         respuesta = CLIENTE.post("/constancia", json=_solicitud())
@@ -540,6 +589,21 @@ class TestEndpointFilaRegistro:
         respuesta = CLIENTE.post("/fila-registro", json=solicitud)
         assert respuesta.status_code == 422
         assert "matrícula" in respuesta.json()["detail"]
+
+    def test_sin_deposito_vigente_es_409(self):
+        """La fila también exige el depósito vigente."""
+        validator.api._BUZON.limpiar()
+        respuesta = CLIENTE.post("/fila-registro", json=_solicitud())
+        assert respuesta.status_code == 409
+        assert "depósito" in respuesta.json()["detail"]
+
+    def test_tramite_ajeno_es_409(self):
+        """Una fila de un trámite anterior no se genera."""
+        solicitud = _solicitud()
+        solicitud["tramite_id"] = "tramite-anterior"
+        respuesta = CLIENTE.post("/fila-registro", json=solicitud)
+        assert respuesta.status_code == 409
+        assert "trámite" in respuesta.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
@@ -839,6 +903,7 @@ class TestConstanciasConCapturaReal:
         manuales.append({"campo": "matricula", "valor": ["15185003-20", "10130005-20"]})
         return {
             "ficha": {"extraidos": extraidos, "manuales": manuales},
+            "tramite_id": TRAMITE_ID,
             "handle": HANDLE,
             "timestamp": TIMESTAMP,
             "indice_autor": indice,

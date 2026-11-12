@@ -49,6 +49,15 @@ const VBCompuertas = (() => {
 		return enlace ? enlace.getAttribute("href") : null;
 	}
 
+	function tituloDeItem(doc) {
+		// El título REAL del ítem: lo publica DSpace como meta de cita.
+		// No es el título esperado de la ficha: el userscript lo compara
+		// y lo envía como `titulo_observado`.
+		if (!doc) return "";
+		const meta = doc.querySelector('meta[name="citation_title"]');
+		return meta ? (meta.getAttribute("content") || "").trim() : "";
+	}
+
 	function normalizar(texto) {
 		// Minúsculas, sin acentos, espacios colapsados: para comparar
 		// títulos entre la ficha y el ítem sin morir por el detalle.
@@ -62,12 +71,13 @@ const VBCompuertas = (() => {
 	}
 
 	function titulosCoinciden(tituloFicha, tituloItem) {
-		// La SPA lo usa para cotejar el handle reportado contra la ficha
-		// en vuelo; aquí se exporta para probarlo y reutilizarlo.
+		// Igualdad NORMALIZADA, no inclusión: un título que solo contiene
+		// al otro puede ser otra tesis. El flujo v1.13.0 compara el
+		// título esperado de la ficha con el título real del ítem.
 		const a = normalizar(tituloFicha);
 		const b = normalizar(tituloItem);
 		if (!a || !b) return false;
-		return a === b || a.includes(b) || b.includes(a);
+		return a === b;
 	}
 
 	return {
@@ -75,6 +85,7 @@ const VBCompuertas = (() => {
 		esFormularioTesis,
 		esPaginaItem,
 		extraerHandle,
+		tituloDeItem,
 		normalizar,
 		titulosCoinciden,
 	};

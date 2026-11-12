@@ -184,7 +184,7 @@ return _validate_legacy(rules_data, extracted)
 
 ---
 
-## Buzón de una ranura (ficha de depósito, desde v1.7.0)
+## Buzón de una ranura (ficha de depósito, desde v1.7.0, v1.13.0)
 
 Comunicación entre la SPA y el userscript que corre sobre las páginas de
 DSpace en el navegador del operador. Sin archivos, sin pegar, sin
@@ -203,7 +203,13 @@ SPA                        buzón (api.py)              userscript (DSpace)
 ```
 
 - La ficha solo existe con semáforo verde (invariante con test).
-- `POST /deposito` viaja con el título: la SPA lo coteja con la ficha
-  en vuelo antes de usar el handle.
+- `POST /ficha-pendiente` responde **201** con
+  `{tramite_id, vence_en}`. Cada publicación crea un trámite nuevo y
+  descarta el depósito anterior, aunque el título sea el mismo.
+- `GET /ficha-pendiente` devuelve `{ficha, tramite_id, vence_en}`.
+- `POST /deposito` viaja con `{tramite_id, handle, titulo_observado,
+  timestamp}`. El trámite debe coincidir con la ficha vigente.
+- `GET /deposito` devuelve `{tramite_id, handle, titulo_observado,
+  timestamp, titulo}` (el alias `titulo` es deprecado).
 - El buzón no emite CORS: una página web cualquiera del navegador no
   puede leer la ficha (datos personales del estudiante).

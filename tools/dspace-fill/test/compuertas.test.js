@@ -11,6 +11,7 @@ const {
 	esFormularioTesis,
 	esPaginaItem,
 	extraerHandle,
+	tituloDeItem,
 	normalizar,
 	titulosCoinciden,
 } = require(path.join(__dirname, "..", "src", "compuertas.js"));
@@ -54,15 +55,29 @@ test("extraerHandle devuelve null fuera de páginas de ítem", () => {
 	assert.strictEqual(extraerHandle(dom.window.document), null);
 });
 
+test("tituloDeItem lee el título real de la página del ítem", () => {
+	const dom = domDesde("item.html");
+	assert.strictEqual(tituloDeItem(dom.window.document), "Taller de dramatización de títeres");
+});
+
+test("tituloDeItem devuelve vacío fuera de páginas de ítem", () => {
+	assert.strictEqual(tituloDeItem(domDesde("form.html").window.document), "");
+	assert.strictEqual(tituloDeItem(null), "");
+});
+
 test("normalizar quita acentos, mayúsculas y espacios extra", () => {
 	assert.strictEqual(normalizar("  Taller  de Títeres "), "taller de titeres");
 	assert.strictEqual(normalizar("Árbol Año Él"), "arbol ano el");
 	assert.strictEqual(normalizar(null), "");
 });
 
-test("titulosCoinciden tolera acentos y ediciones menores", () => {
+test("titulosCoinciden tolera acentos y diferencias de caja", () => {
 	assert.strictEqual(titulosCoinciden("Taller de dramatización de títeres", "Taller de Dramatización de Títeres"), true);
-	assert.strictEqual(titulosCoinciden("Taller de dramatización de títeres", "Taller de dramatización de títeres (edición 2)"), true);
+});
+
+test("titulosCoinciden exige igualdad: la inclusión no basta", () => {
+	// Un título que solo contiene al otro puede ser otra tesis.
+	assert.strictEqual(titulosCoinciden("Taller de dramatización de títeres", "Taller de dramatización de títeres (edición 2)"), false);
 	assert.strictEqual(titulosCoinciden("Una tesis", "Otra tesis completamente distinta"), false);
 	assert.strictEqual(titulosCoinciden("", "Algo"), false);
 });

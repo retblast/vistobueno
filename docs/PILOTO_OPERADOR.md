@@ -139,7 +139,7 @@ cada uno, en el mismo orden.
 Se corrige lo que haga falta y se pulsa **«Preparar depósito»**.
 
 **Esperado:** la pantalla entra en el panel de espera y la API responde
-`204` a `POST /ficha-pendiente`.
+**`201`** `POST /ficha-pendiente` y muestra el `tramite_id` generado.
 
 Comprobación por terminal:
 
@@ -147,7 +147,8 @@ Comprobación por terminal:
 curl -s http://127.0.0.1:8000/ficha-pendiente | head -c 400
 ```
 
-**Esperado:** la ficha editada, con los valores corregidos del paso 4.
+**Esperado:** la ficha editada, con los valores corregidos del paso 4. El
+panel muestra también el `tramite_id` de la ficha publicada.
 
 ### Paso 6 — Rellenar el formulario de DSpace
 
@@ -169,16 +170,19 @@ El userscript **no** toca el selector de archivos. El operador adjunta el
 
 Se pulsa **Depositar**.
 
-**Esperado:** el userscript reporta el handle y el timestamp al buzón:
+**Esperado:** el userscript reporta el handle, el trámite, el título
+observado y el timestamp al buzón:
 
 ```bash
 curl -s http://127.0.0.1:8000/deposito
 ```
 
-**Esperado:** `handle`, `titulo` y `timestamp` (ISO 8601, hora de Perú).
+**Esperado:** `handle`, `tramite_id`, `titulo_observado` y `timestamp`
+(ISO 8601, hora de Perú). El campo `titulo` se conserva como alias
+deprecado.
 
-La SPA coteja el `titulo` recibido con la ficha en vuelo. Si no coinciden,
-avisa y no usa el handle: es la defensa contra un handle ajeno.
+La SPA coteja el `titulo_observado` recibido con la ficha en vuelo. Si no
+coinciden, avisa y no usa el handle: es la defensa contra un handle ajeno.
 
 ### Paso 9 — Generar la constancia
 

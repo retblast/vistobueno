@@ -3,7 +3,7 @@
   "info": {
     "title": "VistoBueno API",
     "description": "API de validación automática de formato de tesis — UNT FECyC",
-    "version": "1.12.0"
+    "version": "1.13.0"
   },
   "paths": {
     "/validar": {
@@ -73,7 +73,7 @@
     "/ficha-pendiente": {
       "get": {
         "summary": "Leer la ficha pendiente del buzón",
-        "description": "El userscript lee aquí la ficha a rellenar en el formulario oficial de DSpace. 404 cuando no hay ficha o la publicada expiró (TTL de 1 hora). Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
+        "description": "El userscript lee aquí la ficha a rellenar y su `tramite_id`. 404 cuando no hay ficha o la publicada expiró (TTL de 1 hora). Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "leer_ficha_pendiente_ficha_pendiente_get",
         "responses": {
           "200": {
@@ -81,7 +81,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FichaDeposito"
+                  "$ref": "#/components/schemas/FichaPendienteLeida"
                 }
               }
             }
@@ -96,7 +96,7 @@
       },
       "post": {
         "summary": "Publicar la ficha completada en el buzón",
-        "description": "La SPA publica la ficha (extraídos + manuales) para que el userscript de depósito la lea desde el navegador del operador. El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo reemplaza la ficha anterior ('última gana'). Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
+        "description": "La SPA publica la ficha (extraídos + manuales) para que el userscript de depósito la lea desde el navegador del operador. Cada publicación crea un `tramite_id` nuevo y descarta el depósito anterior, aunque el título sea el mismo. El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo reemplaza la ficha anterior ('última gana'). Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "publicar_ficha_pendiente_ficha_pendiente_post",
         "requestBody": {
           "content": {
@@ -109,8 +109,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "Successful Response"
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FichaPendientePublicada"
+                }
+              }
+            }
           },
           "403": {
             "description": "Petición desde otro equipo o sin token válido"
@@ -131,7 +138,7 @@
     "/deposito": {
       "get": {
         "summary": "Leer el depósito reportado",
-        "description": "La SPA sondea aquí mientras espera el handle del ítem. 404 cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, la SPA debe cotejar el `titulo` reportado con la ficha en vuelo antes de usar el handle. Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
+        "description": "La SPA sondea aquí mientras espera el handle del ítem. 404 cuando no hay reporte o expiró (TTL de 1 hora). El `tramite_id` ata el reporte a la ficha vigente; `titulo_observado` es el título real del ítem. El campo `titulo` se conserva como alias deprecado de `titulo_observado`. Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "leer_deposito_reportado_deposito_get",
         "responses": {
           "200": {
@@ -154,13 +161,13 @@
       },
       "post": {
         "summary": "Reportar un depósito realizado",
-        "description": "El userscript reporta el depósito desde la página del ítem archivado: handle del ítem, título y el timestamp del clic en Depositar. La SPA lo recoge sondeando GET /deposito y arma la constancia y la fila del registro. Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
+        "description": "El userscript reporta el depósito desde la página del ítem archivado: `tramite_id`, handle, título observado y el timestamp del clic en Depositar. La SPA lo recoge sondeando GET /deposito y arma la constancia y la fila del registro. 404 si no hay ficha vigente; 409 si el trámite no coincide. Solo se sirve desde la máquina donde corre la app (loopback); si hay token configurado, exige el header 'X-VistoBueno-Token'.",
         "operationId": "reportar_deposito_deposito_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DepositoRecibido"
+                "$ref": "#/components/schemas/DepositoReportado"
               }
             }
           },
@@ -172,6 +179,12 @@
           },
           "403": {
             "description": "Petición desde otro equipo o sin token válido"
+          },
+          "404": {
+            "description": "Sin ficha vigente para aceptar el reporte"
+          },
+          "409": {
+            "description": "El trámite del reporte no es el vigente"
           },
           "422": {
             "description": "Validation Error",
@@ -514,6 +527,12 @@
             "$ref": "#/components/schemas/FichaDeposito",
             "description": "La ficha completada por el operador (extraídos corregidos + manuales llenos)"
           },
+          "tramite_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Tramite Id",
+            "description": "Trámite de la ficha que produjo este depósito"
+          },
           "handle": {
             "type": "string",
             "title": "Handle",
@@ -535,6 +554,7 @@
         "type": "object",
         "required": [
           "ficha",
+          "tramite_id",
           "handle",
           "timestamp"
         ],
@@ -569,10 +589,29 @@
       },
       "DepositoRecibido": {
         "properties": {
+          "tramite_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Tramite Id",
+            "description": "Trámite de la ficha en vuelo"
+          },
           "handle": {
             "type": "string",
+            "minLength": 1,
             "title": "Handle",
             "description": "URI del ítem (https://hdl.handle.net/…)"
+          },
+          "titulo_observado": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Titulo Observado",
+            "description": "Título leído en la página del ítem archivado"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Timestamp",
+            "description": "Momento del clic en Depositar (ISO 8601), hora de Perú"
           },
           "titulo": {
             "anyOf": [
@@ -584,21 +623,55 @@
               }
             ],
             "title": "Titulo",
-            "description": "Título de la tesis depositada; la SPA lo coteja con la ficha en vuelo"
-          },
-          "timestamp": {
-            "type": "string",
-            "title": "Timestamp",
-            "description": "Momento del clic en Depositar (ISO 8601), capturado por el userscript"
+            "description": "DEPRECADO: alias de titulo_observado; se retirará en la próxima versión"
           }
         },
         "type": "object",
         "required": [
+          "tramite_id",
           "handle",
+          "titulo_observado",
           "timestamp"
         ],
         "title": "DepositoRecibido",
-        "description": "Depósito reportado por el userscript desde la página del ítem (v1.7.0).\n\nEl userscript detecta el handle del ítem archivado y lo reporta al\nbuzón; la SPA lo recoge sondeando GET /deposito y arma la constancia\ny la fila del registro. El `titulo` permite a la SPA confirmar que\nel handle corresponde a la ficha en vuelo (por seguridad, la\ncoincidencia se verifica contra el título de la ficha preparada)."
+        "description": "Respuesta de GET /deposito (v1.13.0).\n\nConserva el alias `titulo` por una versión, marcado como deprecado.\nEs el mismo valor que `titulo_observado`; la SPA debe usar el campo\nnuevo. El alias nunca se acepta como entrada."
+      },
+      "DepositoReportado": {
+        "properties": {
+          "tramite_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Tramite Id",
+            "description": "Trámite de la ficha en vuelo"
+          },
+          "handle": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Handle",
+            "description": "URI del ítem (https://hdl.handle.net/…)"
+          },
+          "titulo_observado": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Titulo Observado",
+            "description": "Título leído en la página del ítem archivado"
+          },
+          "timestamp": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Timestamp",
+            "description": "Momento del clic en Depositar (ISO 8601), hora de Perú"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tramite_id",
+          "handle",
+          "titulo_observado",
+          "timestamp"
+        ],
+        "title": "DepositoReportado",
+        "description": "Cuerpo de POST /deposito (v1.13.0).\n\nEl userscript reporta lo que leyó en la página del ítem. `tramite_id`\nata el reporte a la ficha vigente y `titulo_observado` conserva el\ntítulo real del ítem, no el título esperado de la ficha."
       },
       "EstadoDepositoAPI": {
         "type": "string",
@@ -652,11 +725,66 @@
         "title": "FichaDeposito",
         "description": "Ficha de depósito: valores detectados + campos manuales (v1.7.0).\n\nLa SPA la recibe en la respuesta de POST /validar (solo con semáforo\nverde), el operador la corrige y completa, y viaja intacta por el\nbuzón hasta el userscript que rellena el formulario oficial."
       },
+      "FichaPendienteLeida": {
+        "properties": {
+          "ficha": {
+            "$ref": "#/components/schemas/FichaDeposito",
+            "description": "Ficha completada por el operador"
+          },
+          "tramite_id": {
+            "type": "string",
+            "title": "Tramite Id",
+            "description": "Identificador efímero de esta ficha"
+          },
+          "vence_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vence En",
+            "description": "Instante en que expira la ficha (UTC)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ficha",
+          "tramite_id",
+          "vence_en"
+        ],
+        "title": "FichaPendienteLeida",
+        "description": "Respuesta de GET /ficha-pendiente (v1.13.0).\n\nEl userscript lee la ficha y su trámite juntos. El `tramite_id` debe\nviajar de vuelta en POST /deposito: evita reportar un ítem de una\nficha anterior."
+      },
+      "FichaPendientePublicada": {
+        "properties": {
+          "tramite_id": {
+            "type": "string",
+            "title": "Tramite Id",
+            "description": "Identificador efímero de la ficha publicada"
+          },
+          "vence_en": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Vence En",
+            "description": "Instante en que expira la ficha (UTC)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tramite_id",
+          "vence_en"
+        ],
+        "title": "FichaPendientePublicada",
+        "description": "Respuesta de POST /ficha-pendiente (v1.13.0).\n\nEl trámite identifica esta ficha concreta. La SPA lo conserva y lo\nenvía en cada solicitud de papeleo. Publicar una ficha nueva crea un\ntrámite nuevo, aunque el título sea el mismo."
+      },
       "FilaRegistroRequest": {
         "properties": {
           "ficha": {
             "$ref": "#/components/schemas/FichaDeposito",
             "description": "La ficha completada por el operador (extraídos corregidos + manuales llenos)"
+          },
+          "tramite_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Tramite Id",
+            "description": "Trámite de la ficha que produjo este depósito"
           },
           "handle": {
             "type": "string",
@@ -672,11 +800,12 @@
         "type": "object",
         "required": [
           "ficha",
+          "tramite_id",
           "handle",
           "timestamp"
         ],
         "title": "FilaRegistroRequest",
-        "description": "Solicitud de la fila de registro (v1.7.0).\n\nLa SPA la envía cuando el buzón reporta el depósito (handle +\ntimestamp del clic en Depositar). El timestamp alimenta DD/MM/AA,\nHORA, AÑO y la fecha del documento, igual que en el registro\noficial de la biblioteca."
+        "description": "Solicitud de la fila de registro (v1.7.0; trámite desde v1.13.0).\n\nLa SPA la envía cuando el buzón reporta el depósito (handle +\ntimestamp del clic en Depositar). El `tramite_id` debe ser el de la\nficha vigente: la API rechaza el papeleo de un trámite anterior. El\ntimestamp alimenta DD/MM/AA, HORA, AÑO y la fecha del documento,\nigual que en el registro oficial de la biblioteca."
       },
       "FilasRegistroResponse": {
         "properties": {

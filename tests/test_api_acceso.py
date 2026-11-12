@@ -35,6 +35,7 @@ SOLICITUD_PAPEL = {
         ],
         "manuales": [],
     },
+    "tramite_id": "tramite-de-prueba",
     "handle": "https://hdl.handle.net/20.500.14414/1",
     "timestamp": "2026-10-19T18:10:00",
 }

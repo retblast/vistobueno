@@ -5,12 +5,15 @@
 	<title>Ítem archivado (MOCK)</title>
 	<!-- Igual que el componente de ítem de DSpace 8.1: el userscript usa
 	     esta meta como compuerta de "página de ítem". -->
-	<meta name="citation_title" content="Estrategias lúdicas para el desarrollo de la motricidad fina">
+	<!-- El título del ítem debe coincidir con el de la ficha: el
+	     userscript compara igualdad normalizada y reporta el valor REAL
+	     leído aquí como `titulo_observado`. -->
+	<meta name="citation_title" content="Título del trabajo de investigación: Estrategias lúdicas para el desarrollo de la motricidad fina.">
 </head>
 <body>
 	<h1>Ítem archivado (MOCK)</h1>
 	<p>Simulación de la página del ítem tras aprobarse el envío.</p>
-	<p id="titulo-item">Taller de dramatización de títeres (título de la ficha)</p>
+	<p id="titulo-item">Título del trabajo de investigación: Estrategias lúdicas para el desarrollo de la motricidad fina.</p>
 	<p>
 		URI:
 		<a href="https://hdl.handle.net/20.500.14414/99999">
@@ -40,7 +43,8 @@
 					if (r.status === 200) {
 						const d = await r.json();
 						el.innerHTML = "✅ Handle reportado: <code>" + d.handle +
-							"</code> · timestamp: <code>" + d.timestamp + "</code>";
+							"</code> · timestamp: <code>" + d.timestamp + "</code>" +
+							" · título observado: <code>" + (d.titulo_observado || "?") + "</code>";
 						return;
 					}
 					if (r.status === 404 && i < maximos - 1) {
