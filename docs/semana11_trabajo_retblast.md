@@ -243,3 +243,66 @@ validaciones consecutivas sin limpiar el limitador.
    - **B1**: medir en la máquina del operador y acordar el cupo, más la
      prueba de dos validaciones consecutivas.
 8. B5 y B6 quedan bloqueados hasta que Int3 entregue M1a y M11.
+
+## Actualización 2026-11-12 — Handover de correctitud
+
+- Se creó `docs/HANDOVER_CORRECTITUD_2026-11-12.md` con tareas para los tres
+  integrantes: dueño, archivos, dependencias y criterios de aceptación.
+  El índice enlaza tres documentos separados, uno por integrante.
+  retblast ejecuta solo las tareas B1–B8 de Int1. Los cambios de frontend
+  pertenecen a Int2; extractor, motor y factory pertenecen a Int3.
+- Se registraron VA-01 a VA-21 en el seguimiento de §11 del handover de la
+  auditoría. Los defectos siguen pendientes; escribir el plan no los cierra.
+- Se confirmó que PR #73 ya está mergeado y PR #75 sigue abierto, con
+  conflictos. Se conserva el historial anterior de esta bitácora.
+- Se añadió una puerta previa al piloto: diagnóstico del formulario, lectura
+  posterior al relleno y persistencia en un borrador autorizado de DSpace.
+  El HTML guardado declara Angular 17.3.12. Un mock DOM no demuestra que el
+  formulario reactivo real conserve los datos.
+- Se reprodujo que el ejecutor informa éxito con controles deshabilitados,
+  readonly o con un listener que restaura el valor anterior. La restauración
+  y el autofill del navegador requieren además verificación real.
+- Se incluyeron el alcance de «verde» y las pruebas que faltan para declarar
+  listo el producto. No se modificó código, contrato, CI ni `AGENTS.md`.
+- Verificación de la base: `nix develop -c pytest tests/ -v -p no:cacheprovider`
+  → 828 passed, 6 xfailed, 1 warning. Los seis xfail siguen siendo limitaciones
+  conocidas, no criterios de aceptación cumplidos.
+- Siguiente paso: ejecutar los lotes del handover y registrar evidencia de
+  cierre. Int1 coordina el contrato del trámite y el ensayo previo de Angular.
+
+## Actualización 2026-11-12 — Revisión normativa completa de fuentes disponibles
+
+- Se contrastaron manual, tablas, ocho rúbricas, cinco plantillas y las dos
+  RCU locales con el motor. Se conservaron SHA-256 y localizadores de fuente.
+- Se entregaron auditoría normativa, matriz de 66 grupos de requisitos,
+  inventario de 226 criterios y catálogo inverso de 49 reglas activas.
+  No se afirma revisión visual de todas las páginas ni vigencia legal actual.
+- Se ejecutaron ocho casos XML desde el factory para paginación y carátula.
+  Se registraron falsos verdes y un falso rojo; el factory conserva VA-17.
+- NM-01 a NM-07 se asignaron a Int3 en M12. Int2 amplía la comunicación de
+  alcance en F3. Retblast mantiene únicamente B1–B8, sin implementar motor.
+- El usuario confirmó que el jefe siempre elige acceso abierto. NM-08 registra
+  esa política como decidida. No se pide selector ni trabajo funcional B9.
+  El plan node fuerza abierto; comprobar guardado Angular sigue dentro de B3.
+- Verificación actual: `nix develop -c pytest tests/ -q` → 824 passed,
+  4 skipped, 6 xfailed, 1 warning. Hay recursos/build locales ausentes en este
+  worktree; los omitidos no se presentan como comprobados. No cambió código.
+- Validación documental: conteos e ID únicos de los CSV, correspondencia de las
+  226 filas con fuente, enlaces y cercas Markdown correctos. API local:
+  `/docs` y `/openapi.json` respondieron 200. Diff sin errores de espacios.
+
+
+## Aclaración 2026-11-12 — Laboratorio y observación DSpace
+
+- El usuario confirmó nombres mixtos como referencia aprobada por el jefe.
+  Se actualizó REQ-20 como decisión resuelta, sin cambiar código del motor.
+- Se sustituyó el ensayo en borrador institucional por un laboratorio local.
+  No se permiten guardados experimentales en UNT.
+- Se escribió `PLAN_LAB_DSPACE_LOCAL_2026-11-12.md`: evidencia ya disponible,
+  checklist para otra observación, límites del HAR, fuentes oficiales, setup
+  por fases y aceptación. No se instaló, construyó ni inició el laboratorio.
+- Se comprobó que Docker y su daemon responden. No se modificaron servicios,
+  NixOS, userscript, aplicación, CI ni configuración del navegador del jefe.
+- Verificación de esta entrega: enlaces, matrices y Markdown correctos;
+  `git diff --check` sin errores. Suite: 824 passed, 4 skipped, 6 xfailed,
+  1 warning. No se presenta la suite como prueba del lab aún no implementado.
