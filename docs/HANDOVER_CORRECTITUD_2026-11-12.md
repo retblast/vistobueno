@@ -71,7 +71,7 @@ están pendientes de integración y verificación final. NM-08 registra una pol�
 | VA-06 | P2 | Resumen sin máximo de palabras | M5 / Int3 | Pendiente |
 | VA-07 | P2 | Abstract vacío; palabras clave incompletas | M5 / Int3 | Pendiente |
 | VA-08 | P1 | Permanecen filas de autores/DNI anteriores | B4 / Int1 | Pendiente |
-| VA-09 | P1 | Ficha y depósito sin identidad de trámite | B2 + F2 / Int1, Int2 | Pendiente |
+| VA-09 | P1 | Ficha y depósito sin identidad de trámite | B2 + F2 / Int1, Int2 | PR #95 abierto (Int1); contrato v1.13.0 publicado. Falta F2 (Int2) para la SPA |
 | VA-10 | P1 | Resguardo identificado solo por filename | F1 / Int2 | Pendiente |
 | VA-11 | P2 | DOCX malformado devuelve 500 | M1a + B5 / Int3, Int1 | Pendiente |
 | VA-12 | P2 | Markdown activo en el PDF | M9 / Int3 | Pendiente |
@@ -80,7 +80,7 @@ están pendientes de integración y verificación final. NM-08 registra una pol�
 | VA-15 | P2 | Se anuncia tamaño de logo sin medirlo | M7 / Int3 | Pendiente |
 | VA-16 | P2 | ORCID sin comprobación por persona/destino | M8 / Int3 | Pendiente |
 | VA-17 | P1 | Ejemplos DOCX dañados; guardia incompleta | B6 / Int1; M11 / Int3 | Pendiente |
-| VA-18 | P2 | Total presentado como reglas evaluadas | B7 + M10 / Int1, Int3 | Pendiente |
+| VA-18 | P2 | Total presentado como reglas evaluadas | B7 + M10 / Int1, Int3 | PR #93 abierto (Int1). Falta M10 (Int3) para CLI y exportador |
 | VA-19 | P1 | Un archivo real bloquea la siguiente validación | B1 + F4 / Int1, Int2 | Pendiente |
 | VA-20 | P1 | Éxito de relleno sin comprobar aceptación de Angular | B3 / Int1 | Pendiente |
 | VA-21 | P1 | Autofill y restauración del navegador pueden recuperar datos ajenos | B8 + F5 / Int1, Int2 | Riesgo reportado; verificar en navegador real |
@@ -92,6 +92,18 @@ están pendientes de integración y verificación final. NM-08 registra una pol�
 | NM-06 | P2 | Anexos incompletos y fuentes contradictorias | M12f / Int3 | Pendiente de decisiones y reglas |
 | NM-07 | P2 | Citas normativas sin origen literal comprobado | M12g / Int3 | Pendiente |
 | NM-08 | Decisión | Acceso abierto fijo reproduce al jefe | B3 / Int1 | Política decidida 2026-11-12; persistencia pendiente en B3 |
+
+### 2.1 Registro de ejecución de Int1
+
+Comando, resultado, limitaciones y PR de cada lote entregado. Un PR abierto no
+cierra el hallazgo: falta la integración y, cuando aplica, la evidencia en el
+navegador real.
+
+| Lote | Hallazgo | PR / commit | Comandos de verificación | Resultado | Limitaciones |
+|---|---|---|---|---|---|
+| B7 | VA-18 | PR #93, commit `38868b9` | `nix run .#test -- tests/test_notificacion.py -v` (27 passed); `nix run .#test -- tests/ -q` (825 passed, 4 skipped, 6 xfailed); `ruff check` | El correo usa `resumen.total_evaluadas`: 49 totales y 41 evaluadas muestran 41 en HTML y texto | El mismo cambio en CLI y exportador es de Int3 (M10) |
+| B2 | VA-09 | PR #95, commit `d9b7e1d` | `pytest tests/ -q` (837 passed, 4 skipped, 6 xfailed, cobertura 93.60 %); `ruff check`; `ruff format --check`; `mypy validator/ scripts/`; `python3 scripts/generate_openapi.py --check`; `npm --prefix tools/dspace-fill test` (42 passed) y drift de `dist/`; `npm --prefix frontend test|lint|build` (76 tests); `nix run .#test-ficha-deposito` (FLUJO COMPLETO OK); `nix flake check` | Contrato v1.13.0: `tramite_id` obligatorio, título observado, papeleo ligado al depósito vigente (409 si no) | La SPA sigue en v1.12.0 hasta que Int2 cierre F2. Eluserscript antiguo falla cerrado: sin `tramite_id` no reporta |
+| B1 | VA-19 | — | Medición local con la plantilla oficial: 0.196 s de `thread_time` y 17.99 s de latencia de pared; la latencia del auditor no se reproduce aquí | No se tocaron los valores por defecto | Bloqueado por decisión del responsable: falta medir en la máquina del operador y acordar presupuesto y ventana. El test de dos validaciones consecutivas sin limpiar el limitador sigue pendiente |
 
 ## 3. Orden de integración y cierre
 
