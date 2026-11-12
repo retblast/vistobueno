@@ -270,6 +270,19 @@ class TestPlantillaCorreo:
         assert "<strong>error</strong>" in html_body
         assert "<strong>warning</strong>" in html_body
 
+    def test_resumen_cuenta_reglas_evaluadas_no_totales(self):
+        """B7: «evaluadas» debe usar ``total_evaluadas``, no ``total``."""
+        dto = dto_rojo()
+        dto.resumen.total = 49
+        dto.resumen.total_evaluadas = 41
+        dto.resumen.reglas_no_aplicables = 8
+
+        html_body, texto = plantilla_correo(dto)
+
+        for cuerpo in (html_body, texto):
+            assert "Reglas evaluadas: 41." in cuerpo
+            assert "Reglas evaluadas: 49." not in cuerpo
+
     def test_caso_defensivo_verde(self):
         html_body, texto = plantilla_correo(dto_verde())
         assert "No se detectaron observaciones" in html_body

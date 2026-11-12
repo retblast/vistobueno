@@ -142,7 +142,7 @@ def plantilla_correo(respuesta: ValidarResponse) -> tuple[str, str]:
         f"UNT. A continuación encontrará el detalle de las observaciones detectadas."
     )
     resumen_texto = (
-        f"Reglas evaluadas: {resumen.total}. "
+        f"Reglas evaluadas: {resumen.total_evaluadas}. "
         f"Observaciones de tipo error: {resumen.fallidos_error}. "
         f"Advertencias (no bloquean): {resumen.fallidos_warning}."
     )
