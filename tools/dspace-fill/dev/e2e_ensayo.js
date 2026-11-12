@@ -142,7 +142,11 @@ function migrarLocalStorage(origen, destino) {
 	if (!envio || !envio.timestamp) {
 		throw new Error("❌ el clic en Depositar no registró el timestamp");
 	}
+	if (!envio.tramite_id) {
+		throw new Error("❌ el envío en curso no guardó el tramite_id");
+	}
 	console.log("  ✅ timestamp del clic en Depositar:", envio.timestamp);
+	console.log("  ✅ trámite del envío en curso:", envio.tramite_id);
 
 	// --- 3. Página del ítem: reporte del handle ---
 	const domItem = await nuevaPagina("/mock/item");
@@ -175,8 +179,21 @@ function migrarLocalStorage(origen, destino) {
 	if (!deposito.timestamp) {
 		throw new Error("❌ el depósito llegó sin timestamp");
 	}
+	if (deposito.tramite_id !== envio.tramite_id) {
+		throw new Error(
+			"❌ el depósito no lleva el trámite del envío: " +
+				deposito.tramite_id +
+				" ≠ " +
+				envio.tramite_id
+		);
+	}
+	const tituloObservado = String(deposito.titulo_observado || "");
+	if (!tituloObservado.includes("Estrategias lúdicas")) {
+		throw new Error("❌ el título observado no corresponde a la tesis: " + tituloObservado);
+	}
 	console.log("  ✅ handle en el buzón:", deposito.handle);
 	console.log("  ✅ timestamp reportado:", deposito.timestamp);
+	console.log("  ✅ título observado:", tituloObservado);
 
 	// --- 4. Hallazgo 12: el botón flotante debe ser usable en una
 	// SEGUNDA carga de página (el fail-closed anterior lo ocultaba si
@@ -247,7 +264,8 @@ function migrarLocalStorage(origen, destino) {
 		async () => {
 			const r = await fetch(MOCK + "/api-proxy/ficha-pendiente");
 			if (r.status !== 200) return false;
-			const ficha = await r.json();
+			const sobre = await r.json();
+			const ficha = sobre.ficha || {};
 			const autores = (ficha.extraidos || []).find((e) => e.campo === "dc.contributor.author");
 			return autores && Array.isArray(autores.valor) && autores.valor.length === 2;
 		},
@@ -294,6 +312,34 @@ function migrarLocalStorage(origen, destino) {
 		throw new Error("❌ DNI con dos filas: " + JSON.stringify(dnisDos));
 	}
 	console.log("  ✅ dos autores: el + agregó la fila y los DNI quedaron alineados");
+
+	// --- 7. El handle se reporta para el TRÁMITE vigente ---
+	// Publicar una ficha nueva invalida el depósito anterior (contrato
+	// v1.13.0). El papeleo necesita un depósito del trámite actual: por
+	// eso el clic en Depositar y el reporte del handle se repiten con la
+	// ficha de dos autores.
+	docDos2.getElementById("deposit").click();
+	await dormir(400);
+	const envioDos = JSON.parse(domDos2.window.localStorage.getItem("vb:vb_envio") || "null");
+	if (!envioDos || !envioDos.timestamp) {
+		throw new Error("❌ el clic en Depositar no registró el timestamp del trámite de dos autores");
+	}
+
+	const domItemDos = await nuevaPagina("/mock/item");
+	migrarLocalStorage(domDos2.window.localStorage, domItemDos.window.localStorage);
+	ejecutarUserscript(domItemDos);
+	await esperar(
+		async () => {
+			const r = await fetch(API + "/deposito");
+			if (r.status !== 200) return false;
+			const d = await r.json();
+			return d.tramite_id === envioDos.tramite_id;
+		},
+		8000,
+		"el handle no llegó al buzón para el trámite vigente (dos autores)"
+	);
+	const depositoDos = await (await fetch(API + "/deposito")).json();
+	console.log("  ✅ handle reportado para el trámite vigente:", depositoDos.tramite_id);
 
 	console.log("OK");
 	process.exit(0);

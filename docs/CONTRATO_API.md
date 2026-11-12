@@ -1,7 +1,7 @@
 # Contrato de API — VistoBueno
 
-**Versión**: 1.12.0 (2026-10-30 — hora de Perú en el papeleo)<br>
-**Fecha**: 2026-10-30<br>
+**Versión**: 1.13.0 (2026-11-12 — trámite del depósito y título observado)<br>
+**Fecha**: 2026-11-12<br>
 **Estado**: Implementado
 
 > **Nota de lectura**: los títulos de sección con versión (por ejemplo,
@@ -742,6 +742,29 @@ dos autores generan dos constancias y dos filas con el mismo handle.
   copia las celdas del archivo descargado.
 
 ## Changelog
+
+### v1.13.0 (2026-11-12 — trámite del depósito y título observado)
+
+- **Nuevo trámite `tramite_id` en el buzón de ficha y depósito** (v1.13.0):
+  `POST /ficha-pendiente` ahora responde `201` con
+  `{tramite_id, vence_en}` en vez de `204`. Cada publicación crea un
+  trámite nuevo y descarta el depósito anterior, aunque el título sea
+  igual.
+- **Nuevo envelope `GET /ficha-pendiente`**:
+  `{ficha, tramite_id, vence_en}`. El userscript lo usa para atar el
+  depósito a la ficha correcta.
+- **Nuevo payload `POST /deposito`** con `{tramite_id, handle,
+  titulo_observado, timestamp}`. Falta el trámite o el título esperado,
+  y no se reporta. El antiguo `{handle, titulo, timestamp}` responde
+  `422` (cierre de contrato v1.12.0).
+- **Nuevos códigos para papeleo**: `POST /constancia` y
+  `POST /fila-registro` exigen el depósito vigente. Sin depósito o con
+  trámite/ajuste ajeno devuelven `409`.
+- **Título observado**: `DepositoRecibido.titulo_observado` es el valor
+  leído del ítem. El alias `titulo` se conserva una versión como
+  deprecado; el input nuevo nunca acepta `titulo`.
+- **Límite de papeleo**: `POST /deposito` responde `404` si no hay ficha
+  vigente y `409` si el trámite no coincide.
 
 ### v1.12.0 (2026-10-30 — hora de Perú en el papeleo)
 

@@ -49,9 +49,12 @@ from .api_models import (
     ConstanciaRequest,
     DepositoAPI,
     DepositoRecibido,
+    DepositoReportado,
     EstadoDepositoAPI,
     EstadoNotificacionAPI,
     FichaDeposito,
+    FichaPendienteLeida,
+    FichaPendientePublicada,
     FilaRegistroRequest,
     FilasRegistroResponse,
     MetadatosValidacion,
@@ -62,7 +65,7 @@ from .api_models import (
     SeveridadAPI,
     ValidarResponse,
 )
-from .buzon import Buzon
+from .buzon import Buzon, SinFichaVigente, TramiteNoCoincide
 from .constancia import (
     MIME_DOCX as MIME_DOCX_CONSTANCIA,
 )
@@ -928,7 +931,7 @@ def _validar_correo(correo: str | None) -> str | None:
 app = FastAPI(
     title="VistoBueno API",
     description="API de validación automática de formato de tesis — UNT FECyC",
-    version="1.12.0",
+    version="1.13.0",
 )
 # DNS rebinding: se valida el header Host antes de cualquier endpoint.
 app.add_middleware(MiddlewareHostConfiable)
@@ -1270,13 +1273,16 @@ _BUZON = Buzon()
 
 @app.post(
     "/ficha-pendiente",
-    status_code=204,
+    status_code=201,
+    response_model=FichaPendientePublicada,
     summary="Publicar la ficha completada en el buzón",
     description=(
         "La SPA publica la ficha (extraídos + manuales) para que el "
         "userscript de depósito la lea desde el navegador del operador. "
-        "El buzón tiene UNA ranura con TTL de 1 hora: publicar de nuevo "
-        "reemplaza la ficha anterior ('última gana'). "
+        "Cada publicación crea un `tramite_id` nuevo y descarta el "
+        "depósito anterior, aunque el título sea el mismo. El buzón tiene "
+        "UNA ranura con TTL de 1 hora: publicar de nuevo reemplaza la "
+        "ficha anterior ('última gana'). "
         "Solo se sirve desde la máquina donde corre la app (loopback); "
         "si hay token configurado, exige el header "
         f"'{CABECERA_TOKEN_BUZON}'."
@@ -1284,20 +1290,21 @@ _BUZON = Buzon()
     responses={403: {"description": "Petición desde otro equipo o sin token válido"}},
     dependencies=[Depends(verificar_acceso_local)],
 )
-async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
-    _BUZON.publicar_ficha(ficha.model_dump())
+async def publicar_ficha_pendiente(ficha: FichaDeposito) -> FichaPendientePublicada:
+    tramite_id, vence_en = _BUZON.publicar_ficha(ficha.model_dump())
+    return FichaPendientePublicada(tramite_id=tramite_id, vence_en=vence_en)
 
 
 @app.get(
     "/ficha-pendiente",
-    response_model=FichaDeposito,
+    response_model=FichaPendienteLeida,
     summary="Leer la ficha pendiente del buzón",
     description=(
-        "El userscript lee aquí la ficha a rellenar en el formulario "
-        "oficial de DSpace. 404 cuando no hay ficha o la publicada "
-        "expiró (TTL de 1 hora). Solo se sirve desde la máquina donde "
-        "corre la app (loopback); si hay token configurado, exige el "
-        f"header '{CABECERA_TOKEN_BUZON}'."
+        "El userscript lee aquí la ficha a rellenar y su `tramite_id`. "
+        "404 cuando no hay ficha o la publicada expiró (TTL de 1 hora). "
+        "Solo se sirve desde la máquina donde corre la app (loopback); si "
+        "hay token configurado, exige el header "
+        f"'{CABECERA_TOKEN_BUZON}'."
     ),
     responses={
         403: {"description": "Petición desde otro equipo o sin token válido"},
@@ -1305,14 +1312,19 @@ async def publicar_ficha_pendiente(ficha: FichaDeposito) -> None:
     },
     dependencies=[Depends(verificar_acceso_local)],
 )
-async def leer_ficha_pendiente() -> FichaDeposito:
-    ficha = _BUZON.leer_ficha()
-    if ficha is None:
+async def leer_ficha_pendiente() -> FichaPendienteLeida:
+    vigente = _BUZON.leer_ficha()
+    if vigente is None:
         raise HTTPException(
             status_code=404,
             detail="Sin ficha pendiente: vacía o expirada (TTL de 1 hora).",
         )
-    return FichaDeposito(**ficha)
+    ficha, tramite_id, vence_en = vigente
+    return FichaPendienteLeida(
+        ficha=FichaDeposito(**ficha),
+        tramite_id=tramite_id,
+        vence_en=vence_en,
+    )
 
 
 @app.post(
@@ -1321,17 +1333,28 @@ async def leer_ficha_pendiente() -> FichaDeposito:
     summary="Reportar un depósito realizado",
     description=(
         "El userscript reporta el depósito desde la página del ítem "
-        "archivado: handle del ítem, título y el timestamp del clic en "
-        "Depositar. La SPA lo recoge sondeando GET /deposito y arma la "
-        "constancia y la fila del registro. Solo se sirve desde la "
-        "máquina donde corre la app (loopback); si hay token configurado, "
-        f"exige el header '{CABECERA_TOKEN_BUZON}'."
+        "archivado: `tramite_id`, handle, título observado y el timestamp "
+        "del clic en Depositar. La SPA lo recoge sondeando GET /deposito "
+        "y arma la constancia y la fila del registro. "
+        "404 si no hay ficha vigente; 409 si el trámite no coincide. "
+        "Solo se sirve desde la máquina donde corre la app (loopback); si "
+        "hay token configurado, exige el header "
+        f"'{CABECERA_TOKEN_BUZON}'."
     ),
-    responses={403: {"description": "Petición desde otro equipo o sin token válido"}},
+    responses={
+        403: {"description": "Petición desde otro equipo o sin token válido"},
+        404: {"description": "Sin ficha vigente para aceptar el reporte"},
+        409: {"description": "El trámite del reporte no es el vigente"},
+    },
     dependencies=[Depends(verificar_acceso_local)],
 )
-async def reportar_deposito(datos: DepositoRecibido) -> None:
-    _BUZON.reportar_deposito(datos.model_dump())
+async def reportar_deposito(datos: DepositoReportado) -> None:
+    try:
+        _BUZON.reportar_deposito(datos.model_dump())
+    except SinFichaVigente as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except TramiteNoCoincide as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @app.get(
@@ -1340,11 +1363,12 @@ async def reportar_deposito(datos: DepositoRecibido) -> None:
     summary="Leer el depósito reportado",
     description=(
         "La SPA sondea aquí mientras espera el handle del ítem. 404 "
-        "cuando no hay reporte o expiró (TTL de 1 hora). Por seguridad, "
-        "la SPA debe cotejar el `titulo` reportado con la ficha en vuelo "
-        "antes de usar el handle. Solo se sirve desde la máquina donde "
-        "corre la app (loopback); si hay token configurado, exige el "
-        f"header '{CABECERA_TOKEN_BUZON}'."
+        "cuando no hay reporte o expiró (TTL de 1 hora). El `tramite_id` "
+        "ata el reporte a la ficha vigente; `titulo_observado` es el "
+        "título real del ítem. El campo `titulo` se conserva como alias "
+        "deprecado de `titulo_observado`. Solo se sirve desde la máquina "
+        "donde corre la app (loopback); si hay token configurado, exige "
+        f"el header '{CABECERA_TOKEN_BUZON}'."
     ),
     responses={
         403: {"description": "Petición desde otro equipo o sin token válido"},
@@ -1359,7 +1383,13 @@ async def leer_deposito_reportado() -> DepositoRecibido:
             status_code=404,
             detail="Sin depósito reportado: vacío o expirado (TTL de 1 hora).",
         )
-    return DepositoRecibido(**datos)
+    return DepositoRecibido(
+        tramite_id=datos["tramite_id"],
+        handle=datos["handle"],
+        titulo_observado=datos["titulo_observado"],
+        timestamp=datos["timestamp"],
+        titulo=datos["titulo_observado"],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1383,6 +1413,40 @@ def _ruta_plantilla_constancia() -> Path:
 def _firma_operador() -> str:
     """Firma del responsable (columna FIRMA del registro), por entorno."""
     return os.environ.get("VISTOBUENO_FIRMA", "").strip()
+
+
+def _verificar_tramite_depositado(solicitud: FilaRegistroRequest) -> None:
+    """Ata el papeleo al depósito vigente de la misma ficha.
+
+    El papeleo no puede generarse con un `tramite_id` viejo ni con un
+    handle que no sea el reportado. Si no hay depósito vigente, la
+    respuesta es 409: la SPA debe volver a preparar y depositar.
+    """
+    deposito = _BUZON.leer_deposito()
+    if deposito is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No hay un depósito vigente para este papeleo: expiró o no se "
+                "reportó el handle. Vuelve a preparar la ficha."
+            ),
+        )
+    if deposito.get("tramite_id") != solicitud.tramite_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El trámite de la solicitud no coincide con el depósito vigente. "
+                "Vuelve a preparar la ficha."
+            ),
+        )
+    if deposito.get("handle") != solicitud.handle:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El handle de la solicitud no coincide con el depósito vigente. "
+                "Usa el handle reportado por el userscript."
+            ),
+        )
 
 
 def _constancias_de_solicitud(solicitud: FilaRegistroRequest) -> list[DatosConstancia]:
@@ -1481,6 +1545,7 @@ async def descargar_constancia(
         ),
     ),
 ) -> Response:
+    _verificar_tramite_depositado(solicitud)
     datos = _constancias_de_solicitud(solicitud)
     if solicitud.indice_autor >= len(datos):
         raise HTTPException(
@@ -1553,6 +1618,7 @@ async def generar_fila_registro(
         description="json: la lista TSV (retrocompatible). tsv/csv/xlsx: archivo descargable",
     ),
 ):
+    _verificar_tramite_depositado(solicitud)
     datos = _constancias_de_solicitud(solicitud)
     medidor = _MedidorCPU()
     try:

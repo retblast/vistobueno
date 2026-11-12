@@ -7,6 +7,7 @@ del modelo interno `RuleResult` (dataclass) para:
 3. Permitir versionar el contrato sin romper el motor de validación.
 """
 
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -252,39 +253,79 @@ class FichaDeposito(BaseModel):
     )
 
 
-class DepositoRecibido(BaseModel):
-    """Depósito reportado por el userscript desde la página del ítem (v1.7.0).
+class FichaPendientePublicada(BaseModel):
+    """Respuesta de POST /ficha-pendiente (v1.13.0).
 
-    El userscript detecta el handle del ítem archivado y lo reporta al
-    buzón; la SPA lo recoge sondeando GET /deposito y arma la constancia
-    y la fila del registro. El `titulo` permite a la SPA confirmar que
-    el handle corresponde a la ficha en vuelo (por seguridad, la
-    coincidencia se verifica contra el título de la ficha preparada).
+    El trámite identifica esta ficha concreta. La SPA lo conserva y lo
+    envía en cada solicitud de papeleo. Publicar una ficha nueva crea un
+    trámite nuevo, aunque el título sea el mismo.
     """
 
-    handle: str = Field(..., description="URI del ítem (https://hdl.handle.net/…)")
-    titulo: str | None = Field(
-        default=None,
-        description="Título de la tesis depositada; la SPA lo coteja con la ficha en vuelo",
+    tramite_id: str = Field(..., description="Identificador efímero de la ficha publicada")
+    vence_en: datetime = Field(..., description="Instante en que expira la ficha (UTC)")
+
+
+class FichaPendienteLeida(BaseModel):
+    """Respuesta de GET /ficha-pendiente (v1.13.0).
+
+    El userscript lee la ficha y su trámite juntos. El `tramite_id` debe
+    viajar de vuelta en POST /deposito: evita reportar un ítem de una
+    ficha anterior.
+    """
+
+    ficha: FichaDeposito = Field(..., description="Ficha completada por el operador")
+    tramite_id: str = Field(..., description="Identificador efímero de esta ficha")
+    vence_en: datetime = Field(..., description="Instante en que expira la ficha (UTC)")
+
+
+class DepositoReportado(BaseModel):
+    """Cuerpo de POST /deposito (v1.13.0).
+
+    El userscript reporta lo que leyó en la página del ítem. `tramite_id`
+    ata el reporte a la ficha vigente y `titulo_observado` conserva el
+    título real del ítem, no el título esperado de la ficha.
+    """
+
+    tramite_id: str = Field(..., min_length=1, description="Trámite de la ficha en vuelo")
+    handle: str = Field(..., min_length=1, description="URI del ítem (https://hdl.handle.net/…)")
+    titulo_observado: str = Field(
+        ..., min_length=1, description="Título leído en la página del ítem archivado"
     )
     timestamp: str = Field(
-        ...,
-        description="Momento del clic en Depositar (ISO 8601), capturado por el userscript",
+        ..., min_length=1, description="Momento del clic en Depositar (ISO 8601), hora de Perú"
+    )
+
+
+class DepositoRecibido(DepositoReportado):
+    """Respuesta de GET /deposito (v1.13.0).
+
+    Conserva el alias `titulo` por una versión, marcado como deprecado.
+    Es el mismo valor que `titulo_observado`; la SPA debe usar el campo
+    nuevo. El alias nunca se acepta como entrada.
+    """
+
+    titulo: str | None = Field(
+        default=None,
+        description="DEPRECADO: alias de titulo_observado; se retirará en la próxima versión",
     )
 
 
 class FilaRegistroRequest(BaseModel):
-    """Solicitud de la fila de registro (v1.7.0).
+    """Solicitud de la fila de registro (v1.7.0; trámite desde v1.13.0).
 
     La SPA la envía cuando el buzón reporta el depósito (handle +
-    timestamp del clic en Depositar). El timestamp alimenta DD/MM/AA,
-    HORA, AÑO y la fecha del documento, igual que en el registro
-    oficial de la biblioteca.
+    timestamp del clic en Depositar). El `tramite_id` debe ser el de la
+    ficha vigente: la API rechaza el papeleo de un trámite anterior. El
+    timestamp alimenta DD/MM/AA, HORA, AÑO y la fecha del documento,
+    igual que en el registro oficial de la biblioteca.
     """
 
     ficha: FichaDeposito = Field(
         ...,
         description="La ficha completada por el operador (extraídos corregidos + manuales llenos)",
+    )
+    tramite_id: str = Field(
+        ..., min_length=1, description="Trámite de la ficha que produjo este depósito"
     )
     handle: str = Field(..., description="URI del ítem depositado (https://hdl.handle.net/…)")
     timestamp: str = Field(
