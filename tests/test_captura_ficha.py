@@ -11,10 +11,9 @@ etiqueta `AUTORES:` en su propio párrafo, un autor por párrafo, líneas
 de ORCID intercaladas, la etiqueta `ASESORA:` en su propio párrafo y el
 año en la última línea de la portada.
 
-Los tests marcados `xfail(strict=True)` fallan hoy: son la especificación
-del arreglo de Int3. Cuando el motor los cumpla, el `XPASS` estricto
-pone el CI en rojo hasta que Int1 quite la marca (ver
-`docs/HANDOVER_AUDITORIA_2026-10-26.md` §6).
+Los criterios de aceptación quedaron cubiertos por el arreglo de Int3
+(semana 11): las capturas se contrastan aquí contra la estructura real,
+no contra el factory idealizado (AUD-20).
 
 Uso:
     pytest tests/test_captura_ficha.py -v
@@ -38,19 +37,33 @@ def ficha() -> dict:
         Path(ruta).unlink(missing_ok=True)
 
 
+def _ficha_de(portada: list[str], **kwargs) -> dict:
+    """Captura la ficha de una portada alternativa (casos límite del PR #75)."""
+    ruta = crear_docx_caratula(portada=portada, **kwargs)
+    try:
+        return capturar_ficha(ruta)
+    finally:
+        Path(ruta).unlink(missing_ok=True)
+
+
+# Portada mínima realista: título, "para optar" (lo usa la regla del título)
+# y autores. El resto de líneas lo agrega cada test.
+def _portada(*lineas: str) -> list[str]:
+    return [
+        "UNIVERSIDAD NACIONAL DE TRUJILLO",
+        "FACULTAD DE EDUCACIÓN Y CIENCIAS DE LA COMUNICACIÓN",
+        "Título del trabajo de investigación: Estrategias lúdicas, Trujillo 2024",
+        "TESIS",
+        "Para Optar el Título Profesional de Licenciado en Educación Primaria",
+        *lineas,
+    ]
+
+
 # ---------------------------------------------------------------------------
 # AUD-24 — los autores se parten por la coma de "Apellidos, Nombres"
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "AUD-24: la captura parte cada autor por la coma de 'Apellidos, "
-        "Nombres' y se queda con un solo párrafo. Ver "
-        "docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-24)."
-    ),
-)
 def test_autores_un_por_parrafo(ficha):
     """Dos párrafos de autor → DOS autores, sin partir por la coma."""
     assert valor(ficha, "dc.contributor.author") == [
@@ -64,14 +77,6 @@ def test_autores_un_por_parrafo(ficha):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "AUD-25: la etiqueta 'ASESORA:' va en su propio párrafo; el nombre "
-        "está en el siguiente. La captura toma la etiqueta y devuelve ''. "
-        "Ver docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-25)."
-    ),
-)
 def test_asesor_toma_el_parrafo_siguiente(ficha):
     """El asesor es el párrafo que sigue a la etiqueta."""
     assert valor(ficha, "dc.contributor.advisor") == "Dra. Apellido, Nombre"
@@ -82,14 +87,6 @@ def test_asesor_toma_el_parrafo_siguiente(ficha):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "AUD-26: el ancla 'trujillo' casa el párrafo del título (que "
-        "termina en ', Trujillo 2024') en vez de la línea de portada. "
-        "Ver docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-26)."
-    ),
-)
 def test_anio_toma_el_anio_de_portada(ficha):
     """El año es el de la portada (2026), no el que aparece en el título."""
     assert valor(ficha, "dc.date.issued") == "2026"
@@ -100,43 +97,155 @@ def test_anio_toma_el_anio_de_portada(ficha):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "AUD-27: la última palabra clave conserva el punto final de la "
-        "línea APA. Ver docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-27)."
-    ),
-)
 def test_palabras_clave_sin_puntuacion_final(ficha):
     """Las palabras clave van limpias de puntuación final."""
     assert valor(ficha, "dc.subject") == ["Educación", "Cultura", "Identidad cultural"]
 
 
 # ---------------------------------------------------------------------------
-# Lo que Int1 SÍ garantiza hoy: la API no publica un valor inservible
+# Título y resumen: el prefijo se recorta y la sección se encuentra
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "AUD-25: el motor publica detectado=True con valor '' para el "
-        "asesor. Cuando Int3 corrija la captura, este test pasa y el "
-        "XPASS estricto pone el CI en rojo hasta que Int1 quite la "
-        "marca. Ver docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-25)."
-    ),
-)
-def test_el_motor_no_marca_el_asesor_vacio_como_detectado(ficha):
-    """Un valor vacío no puede viajar como detectado.
+def test_titulo_sin_prefijo(ficha):
+    """El título llega sin la etiqueta «Título del trabajo de investigación:»."""
+    titulo = valor(ficha, "dc.title")
+    assert titulo == (
+        "Estrategias lúdicas para mejorar la identidad cultural en estudiantes "
+        "de primaria de una institución educativa, Trujillo 2024"
+    )
+    assert "Título del trabajo de investigación" not in titulo
 
-    Hoy el motor publica `detectado=True` con `valor=''`: ese dato
-    llega al formulario de DSpace, a la constancia y al registro. La
-    API lo degrada (ver `TestContratoFichaUtilizable`), pero el
-    arreglo de fondo es del motor.
+
+def test_resumen_capturado(ficha):
+    """El abstract es el texto de la sección RESUMEN, no la carátula."""
+    assert valor(ficha, "dc.description.abstract") == (
+        "El presente estudio analiza la relación entre las estrategias lúdicas "
+        "y la identidad cultural en estudiantes de primaria."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Revisión del PR #75 — casos límite de la carátula
+# ---------------------------------------------------------------------------
+
+
+def test_autores_cortan_en_linea_con_tilde_sin_asesor():
+    """«Línea de Investigación:» (con tilde) corta aunque no haya ASESOR.
+
+    Antes el `translate` solo normalizaba mayúsculas: la comparación
+    `'linea'` no casaba con «línea» y la captura seguía hasta el final de la
+    carátula, tomando la línea, el año y el resumen como autores.
     """
-    asesor = ficha.get("dc.contributor.advisor") or {}
-    assert asesor.get("detectado") is False
-    assert asesor.get("valor") in (None, "")
+    ficha = _ficha_de(
+        _portada(
+            "AUTORES:",
+            "Br. Apellido, Nombre",
+            "Línea de Investigación:",
+            "Educación y Ciencias de la Comunicación y Desarrollo Sostenible",
+            "Trujillo – Perú",
+            "2026",
+        )
+    )
+    assert valor(ficha, "dc.contributor.author") == ["Br. Apellido, Nombre"]
+
+
+@pytest.mark.parametrize("etiqueta", ["AUTORES:", "AUTORA:"])
+def test_autores_en_el_mismo_parrafo_de_la_etiqueta(etiqueta):
+    """«AUTORES: Br. Apellido, Nombre» no pierde al primer autor."""
+    ficha = _ficha_de(
+        _portada(
+            f"{etiqueta} Br. Apellido, Nombre",
+            "ASESORA:",
+            "Dra. Apellido, Nombre",
+            "Línea de Investigación:",
+            "Educación",
+            "Trujillo – Perú",
+            "2026",
+        )
+    )
+    assert valor(ficha, "dc.contributor.author") == ["Br. Apellido, Nombre"]
+
+
+def test_asesor_salta_parrafos_vacios():
+    """Un párrafo vacío entre «ASESORA:» y el nombre no pierde al asesor."""
+    ficha = _ficha_de(
+        _portada(
+            "AUTORES:",
+            "Br. Apellido, Nombre",
+            "ASESORA:",
+            "",
+            "Dra. Apellido, Nombre",
+            "Línea de Investigación:",
+            "Educación",
+            "Trujillo – Perú",
+            "2026",
+        )
+    )
+    assert valor(ficha, "dc.contributor.advisor") == "Dra. Apellido, Nombre"
+
+
+def test_anio_ignora_referencias_sin_salto_de_seccion():
+    """Sin `sectPr`, una referencia «López, J. 2024.» no le gana al año.
+
+    El fixture de python-docx no trae saltos de sección, así que
+    `caratula_ficha` cae al fallback: se corta en el primer encabezado
+    (RESUMEN/REFERENCIAS) y las referencias quedan fuera del contexto.
+    """
+    ficha = _ficha_de(
+        _portada(
+            "AUTORES:",
+            "Br. Apellido, Nombre",
+            "ASESORA:",
+            "Dra. Apellido, Nombre",
+            "Línea de Investigación:",
+            "Educación",
+            "Trujillo – Perú",
+            "2026",
+        ),
+        referencias=["López, J. 2024."],
+    )
+    assert valor(ficha, "dc.date.issued") == "2026"
+
+
+# ---------------------------------------------------------------------------
+# F-4 — el motor no publica un valor inservible como detectado
+# ---------------------------------------------------------------------------
+
+
+class _AnalizadorFalso:
+    """Analizador mínimo que deja un único item en `ficha`."""
+
+    def __init__(self, valor):
+        self.ficha = [{"campo": "dc.contributor.author", "valor": valor, "nodo": object()}]
+
+
+class _ExtraidoFalso:
+    """ExtractedDocx mínimo: solo resuelve la página de un nodo."""
+
+    def pagina_de(self, nodo):
+        return 1
+
+
+@pytest.mark.parametrize("valor", ["", "   ", [], [""], ["  "], None])
+def test_el_motor_no_publica_valores_inservibles(valor):
+    """Cadena vacía, solo espacios o lista vacía → `detectado=False`.
+
+    El contrato exige que un valor inservible viaje como `None` y sin
+    página: el formulario de DSpace, la constancia y el registro no deben
+    recibir un dato fantasma (AUD-24 y AUD-25).
+    """
+    from validator.compilador import ReglaCompilada
+
+    regla = ReglaCompilada(rule={"id": "ficha_autores"}, analizadores=[_AnalizadorFalso(valor)])
+    assert regla._ficha(_ExtraidoFalso()) == [
+        {
+            "campo": "dc.contributor.author",
+            "valor": None,
+            "pagina": None,
+            "detectado": False,
+        }
+    ]
 
 
 def test_la_api_degrada_el_valor_inservible_a_no_detectado():

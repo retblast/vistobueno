@@ -64,8 +64,8 @@ la sede.
 | Userscript de relleno | Listo | Versión 1.1.0, `@connect localhost` |
 | Mock de DSpace | Listo | Para ensayo sin tocar la instancia real |
 | Constancia (Modelo B) y fila del registro | Listo | Requiere `VISTOBUENO_FIRMA` y la plantilla oficial |
-| Hallazgos AUD-24 a AUD-27 del motor | **Abiertos** | Los ve el operador; ver §7 |
-| Pruebas automatizadas | 755 recolectados: 749 pasan y 6 `xfail` | Con `recursos/` y `frontend/dist`. En un clon limpio (sin `recursos/` ni `frontend/dist`) pasan 745 y se omiten 4. Los 6 `xfail` son los hallazgos del punto anterior |
+| Hallazgos AUD-24 a AUD-27 del motor | **Cerrados** | PR #75: autores completos, asesora, año de portada y palabras clave limpias; ver §7 |
+| Pruebas automatizadas | En verde, sin `xfail` | Referencia en un clon sin `recursos/` ni `frontend/dist`: `857 passed, 4 skipped` (los `skipped` no son fallos) |
 
 ---
 
@@ -238,24 +238,18 @@ después.
 
 ## 7. Limitaciones conocidas
 
-El operador las va a ver. No son fallos de la interfaz: son
-limitaciones del motor que están registradas en
-`docs/HANDOVER_AUDITORIA_2026-10-26.md` (AUD-24 a AUD-27) y que Int3
-tiene asignadas.
+**AUD-24 a AUD-27 quedaron cerrados en el PR #75**: el motor ya captura
+todos los autores (sin partir por la coma), el asesor (etiqueta en párrafo
+propio o junto al nombre), el año de portada (no el del título), el
+abstract y las palabras clave sin puntuación final. El operador puede
+seguir corrigiendo cualquier campo a mano en la pantalla.
 
-| Síntoma | Detalle | Qué hace el operador |
-|---|---|---|
-| Los autores se parten por la coma | `dc.contributor.author` toma la coma como separador | Separa a los autores a mano en la pantalla |
-| El asesor llega vacío | La captura del asesor no es confiable | Teclea el asesor |
-| El año sale del título | `dc.date.issued` toma un año que aparece en el texto | Corrige el año |
-| La última palabra clave conserva el punto final | El punto de la oración queda pegado a la palabra | Lo quita al editar |
-| `dc.title` conserva el prefijo | Llega como «Título del trabajo de investigación: …» | Lo recorta |
-| `palabras_clave_minimo` marca error | Las plantillas oficiales vacías no tienen palabras clave | No es un fallo real: se sube un documento real, no una plantilla vacía |
-
-Además:
+Quedan estas limitaciones:
 
 - El **jurado** no se captura (`renati.juror` no es confiable). Se teclea
   a mano o no se usa.
+- `palabras_clave_minimo` marca `error` en las plantillas oficiales vacías;
+  no es un fallo real: se sube una tesis, no una plantilla vacía.
 - 16 campos del formulario oficial **no viajan** en la ficha: el servidor
   de DSpace los pre-llena según la colección destino.
 - La app **no escribe** en la API de DSpace. Todo depósito pasa por el

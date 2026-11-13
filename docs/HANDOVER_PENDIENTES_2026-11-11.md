@@ -167,6 +167,12 @@ AUD-05/06 y actualizar docs/body.
 
 ## 3. PR #75 — motor de ficha de depósito
 
+> **Resuelto (2026-11-11)**: Int3 continuó el PR #75. Se corrigieron
+> AUD-24 a AUD-27, F-4 (valores inservibles) y F-6 (`reglas`/`rules`); se
+> retiraron los `xfail` de captura y constancia. La ficha sobre la tesis
+> real devuelve dos autores, asesora, año 2026, abstract y palabras clave
+> limpias. El diagnóstico de abajo queda como registro histórico.
+
 ### 3.1 Qué contiene realmente
 
 El body dice “sin código de motor todavía”. Es falso. El diff contiene:

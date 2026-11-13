@@ -1133,12 +1133,19 @@ class AnalizadorExtraccion(Analizador):
                       `lista` (varios valores: texto de cada nodo, sin vacíos).
       separador:      si viene, parte el texto de cada nodo por ese separador y
                       concatena los trozos (p. ej. autores "A, B y C" → lista).
-      etiqueta:       si viene, captura solo lo que sigue a la primera aparición
-                      de `etiqueta` + ":" (p. ej. "Palabras clave: a, b" → "a, b").
-      patron:         regex; si viene, captura `group(1)` (o el match completo
-                      si no hay grupo) del texto resultante (p. ej. el año).
-      quitar_prefijo: regex que se elimina del inicio del texto (etiquetas como
-                      "Asesor(a): ").
+       etiqueta:       si viene, captura solo lo que sigue a la primera aparición
+                       de `etiqueta` + ":" (p. ej. "Palabras clave: a, b" → "a, b").
+       patron:         regex; si viene, captura `group(1)` (o el match completo
+                       si no hay grupo) del texto resultante (p. ej. el año).
+       quitar_prefijo: regex que se elimina del inicio del texto (etiquetas como
+                       "Asesor(a): ").
+       quitar_sufijo:  regex que se elimina del final del texto (p. ej. ", Trujillo
+                       2026").
+       seleccion:      `primero`, `ultimo` o `primero_no_vacio`: con más de un
+                       match, elige la pieza #1, la última (p. ej. para el año
+                       vs título) o la primera cuyo texto limpio no quede vacío
+                       (asesor con la etiqueta en un párrafo aparte). Aplica
+                       DESPUÉS de `filtro`, NO tras `etiqueta`/`patron`.
     """
 
     def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
@@ -1189,6 +1196,20 @@ class AnalizadorExtraccion(Analizador):
         if filtro:
             rx = re.compile(filtro, re.IGNORECASE if self.config.get("ignore_case", True) else 0)
             piezas = [p for p in piezas if rx.search(p[0])]
+        # `seleccion` elige qué pieza usar cuando hay más de una (p. ej. el año
+        # es el último match, el título el primero). Se aplica DESPUÉS de
+        # `filtro`, así que filtra primero y luego elige.
+        seleccion = self.config.get("seleccion")
+        if seleccion == "ultimo" and piezas:
+            piezas = piezas[-1:]
+        elif seleccion == "primero" and piezas:
+            piezas = piezas[:1]
+        elif seleccion == "primero_no_vacio" and piezas:
+            # El asesor puede venir como «ASESOR(A):» en un párrafo y el
+            # nombre en el siguiente, o ambos en el mismo párrafo. Se queda
+            # con la primera pieza que, ya limpiada, no quede vacía (AUD-25).
+            elegida = next((p for p in piezas if self._limpiar(p)), None)
+            piezas = [elegida] if elegida is not None else piezas[:1]
         # Con `seccion` los tokens no traen su nodo; para poder publicar la
         # página se resuelve el `w:p` por texto exacto (mapa por texto).
         if sec and piezas:
@@ -1220,6 +1241,9 @@ class AnalizadorExtraccion(Analizador):
         prefijo = self.config.get("quitar_prefijo")
         if prefijo:
             texto = re.sub(prefijo, "", texto, count=1, flags=re.IGNORECASE).strip()
+        sufijo = self.config.get("quitar_sufijo")
+        if sufijo:
+            texto = re.sub(sufijo, "", texto, count=1, flags=re.IGNORECASE).strip()
         patron = self.config.get("patron")
         if patron:
             m = re.search(patron, texto)

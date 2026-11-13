@@ -31,7 +31,8 @@ reglas:
     contexto: caratula
     campo: dc.title
     modo: texto
-    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'tesis') and string-length(normalize-space(.)) < 40)][1]
+    quitar_prefijo: ^Título del trabajo de investigación\s*[:]?\s*
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'para optar')][1]/preceding-sibling::w:p[normalize-space(.)][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'universidad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'facultad'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'escuela'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'programa'))][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'tesis') and string-length(normalize-space(.)) < 40)][1]
 
 - id: ficha_autores
   tipo: estructura
@@ -46,8 +47,14 @@ reglas:
     contexto: caratula
     campo: dc.contributor.author
     modo: lista
-    separador: \s*(?:,|;|\by\b|\be\b)\s*
-    xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]
+    etiqueta: autores
+    # La etiqueta literal no cubre «AUTORA:»; el prefijo sí (AUD-24).
+    quitar_prefijo: ^\s*autoras?\s*:?\s*
+    # AUD-24: todos los párrafos de autor tras «AUTORES:»/«AUTORA:», sin
+    # partir por la coma interna de «Apellidos, Nombres». Se saltan las
+    # líneas de ORCID y las instrucciones entre paréntesis de las plantillas,
+    # y se corta en «ASESOR(A):» o «Línea de investigación:».
+    xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'autor')][1] | //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'autor')][1]/following-sibling::w:p[not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'asesor')) and not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'linea')) and not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'orcid')) and not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'orcid.org')) and not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), '(')) and not(w:pPr/w:pStyle) and not(preceding-sibling::w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'asesor') or starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'linea') or w:pPr/w:pStyle])]
 
 - id: ficha_asesor
   tipo: estructura
@@ -63,7 +70,12 @@ reglas:
     campo: dc.contributor.advisor
     modo: texto
     quitar_prefijo: ^\s*asesor\(a\)\s*:?\s*|^\s*asesor(?:a)?\s*:?\s*
-    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')][1]
+    # AUD-25: la etiqueta «ASESOR(A):» suele ir en su propio párrafo y el
+    # nombre en el siguiente; si van juntos, la propia etiqueta trae el
+    # nombre. `primero_no_vacio` elige la primera pieza que, tras limpiar el
+    # prefijo, no quede vacía.
+    seleccion: primero_no_vacio
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'asesor')][1] | //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'asesor')][1]/following-sibling::w:p[normalize-space(.)][1]
 
 - id: ficha_escuela
   tipo: estructura
@@ -78,7 +90,7 @@ reglas:
     contexto: caratula
     campo: escuela
     modo: texto
-    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'escuela') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'programa')][1]
+    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'escuela') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜáéíóúñü', 'abcdefghijklmnopqrstuvwxyzaeiounuaeiounu'), 'programa')][1]
 
 - id: ficha_anio
   tipo: estructura
@@ -88,17 +100,20 @@ reglas:
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   ubicacion: Carátula, Ciudad y año (párr. 182)
   cita: '"Ciudad y país"'
-  # Se busca la línea "TRUJILLO - PERÚ, 2026" y se extrae el año con `patron`.
-  # El XPath excluye la línea "UNIVERSIDAD NACIONAL DE TRUJILLO" (contiene
-  # "trujillo"): se pide que la línea también traiga un año de 4 dígitos
-  # (quirk heredado del reglamento, handover issue #4).
+  # AUD-26: el título puede terminar en ", Trujillo 2024" y el año de
+  # portada (2026) vive en otro párrafo, a veces el que porta el `sectPr`.
+  # El filtro exige una línea de portada: el año suelto o con la ciudad
+  # delante («Trujillo - Perú, 2026»), nunca una frase larga como el título
+  # ni una referencia. Entre las que quedan se toma la última.
   extraccion:
     parte: document
-    contexto: caratula
+    contexto: caratula_ficha
     campo: dc.date.issued
     modo: texto
+    filtro: ^\s*(?:\S+\s+){0,4}(?:19|20)\d{2}\s*[.]?\s*$
+    seleccion: ultimo
     patron: \b(?:19|20)\d{2}\b
-    xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'trujillo') and translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü') != 'universidad nacional de trujillo'][1]
+    xpath: //w:body/w:p
 
 - id: ficha_resumen
   tipo: estructura
@@ -132,5 +147,6 @@ reglas:
     etiqueta: palabras clave
     separador: \s*[,;]\s*
     filtro: ^\s*palabras\s+clave
+    quitar_sufijo: \s*\.\s*$
     seccion:
       inicio: ^\s*resumen\s*$

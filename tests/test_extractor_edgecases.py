@@ -12,7 +12,7 @@ import zipfile
 
 import pytest
 
-from validator.extractor import extract
+from validator.extractor import NS, W, extract
 
 # Documento XML "mínimo y válido": una etiqueta vacía <w></w> (7 bytes).
 _DOC_MINIMO = b"<w></w>"
@@ -84,3 +84,36 @@ def test_documento_minimo_pasa_extraccion():
     assert doc.document is not None
     assert doc.headers
     assert doc.footer is not None
+
+
+def test_is_caratula_ficha():
+    """is_caratula_ficha detecta párrafos de la carátula (incluye cierre de sección)."""
+    from tests.docx_factory import compilar_docx, configuracion_base
+
+    path = compilar_docx(configuracion_base())
+    doc = extract(path)
+
+    paras = doc.document.xpath("//w:body/w:p", namespaces=NS)
+    assert paras, "el DOCX de fábrica debe tener al menos un párrafo"
+
+    # Al menos un párrafo de la primera sección debe ser carátula ficha.
+    assert any(doc.is_caratula_ficha(p) for p in paras)
+
+
+def test_is_caratula_ficha_incluye_cierre():
+    """is_caratula_ficha incluye el párrafo con w:pPr/w:sectPr (cierre de sección)."""
+    from tests.docx_factory import compilar_docx, configuracion_base
+
+    path = compilar_docx(configuracion_base())
+    doc = extract(path)
+
+    paras = doc.document.xpath("//w:body/w:p", namespaces=NS)
+    cierre = None
+    for p in paras:
+        pPr = p.find(W + "pPr")
+        if pPr is not None and pPr.find(W + "sectPr") is not None:
+            cierre = p
+            break
+
+    assert cierre is not None, "el DOCX de fábrica debe traer un cierre de sección"
+    assert doc.is_caratula_ficha(cierre) is True

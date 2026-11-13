@@ -642,15 +642,41 @@ class ReglaCompilada:
         for an in self.analizadores:
             for item in getattr(an, "ficha", []):
                 nodo = item.get("nodo")
+                valor = item.get("valor")
+                utilizable = self._valor_utilizable(valor)
                 capturado.append(
                     {
                         "campo": item.get("campo", ""),
-                        "valor": item.get("valor"),
-                        "pagina": extracted.pagina_de(nodo) if nodo is not None else None,
-                        "detectado": True,
+                        "valor": valor if utilizable else None,
+                        "pagina": (
+                            extracted.pagina_de(nodo) if utilizable and nodo is not None else None
+                        ),
+                        "detectado": utilizable,
                     }
                 )
         return capturado
+
+    @staticmethod
+    def _valor_utilizable(valor) -> bool:
+        """¿El valor capturado sirve para pre-llenar la ficha?
+
+        Una cadena vacía o solo espacios no sirve; una lista vacía tampoco
+        (AUD-24: sin autores no se publica `detectado=True` con `[]`). Para
+        un valor inservible el contrato exige `valor=None` y `pagina=None`.
+        """
+        if valor is None:
+            return False
+        if isinstance(valor, str):
+            return bool(valor.strip())
+        if isinstance(valor, (list, tuple)):
+            # Alineado con la API: una lista con solo cadenas vacías (`[""]`)
+            # no es un valor utilizable, aunque su longitud sea > 0. Si el
+            # motor publicara `detectado=True`, la API lo degradaría después
+            # y el contrato mentiría en el reporte del motor.
+            return any(isinstance(item, str) and item.strip() for item in valor)
+        if isinstance(valor, (dict, set)):
+            return len(valor) > 0
+        return True
 
 
 # Los dos estados en que la detección NO pudo clasificar el documento. Son

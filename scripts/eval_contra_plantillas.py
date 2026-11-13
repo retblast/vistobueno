@@ -19,6 +19,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from validator.engine import load_rules, validate_docx  # noqa: E402
 
 
+def _reglas_de(datos: dict) -> list[dict]:
+    """Lista de reglas de un YAML cargado, en cualquiera de los dos formatos.
+
+    `load_rules` devuelve `{"reglas": [...]}` para el DSL actual y
+    `{"rules": [...]}` para los YAML legacy. El script debe servir con
+    ambos (F-6 del plan de la semana 11); antes solo leía `rules` y
+    reventaba con `KeyError` al apuntarlo a `reglas_ficha.yaml`.
+    """
+    for clave in ("reglas", "rules"):
+        reglas = datos.get(clave)
+        if isinstance(reglas, list):
+            return reglas
+    raise ValueError("El YAML no trae una lista de reglas ('reglas' ni 'rules')")
+
+
+def _total_mecanizadas(datos: dict) -> int:
+    """Cuántas reglas del ruleset tienen mecanismo verificable.
+
+    En el DSL toda regla es verificable; en el formato legacy solo las que
+    declaran `mecanismo_verificable`.
+    """
+    reglas = _reglas_de(datos)
+    if "reglas" in datos:
+        return len(reglas)
+    return sum(1 for r in reglas if "mecanismo_verificable" in r)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("rules", help="Ruta al YAML de reglas")
@@ -26,7 +53,7 @@ def main():
     args = parser.parse_args()
 
     rules_data = load_rules(args.rules)
-    total_mecanizadas = sum(1 for r in rules_data["rules"] if "mecanismo_verificable" in r)
+    total_mecanizadas = _total_mecanizadas(rules_data)
 
     docs = sorted(Path(args.carpeta).glob("*.docx"))
     if not docs:

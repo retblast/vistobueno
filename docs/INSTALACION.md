@@ -75,19 +75,11 @@ instantáneas.
 nix run .#test -- tests/ -q
 ```
 
-Resultado esperado. El conteo depende de las carpetas locales `recursos/` y
-`frontend/dist`:
-
-| `recursos/` | `frontend/dist` | Resultado |
-|---|---|---|
-| sí | sí | `749 passed, 6 xfailed` |
-| sí | no | `748 passed, 1 skipped, 6 xfailed` |
-| no | sí | `746 passed, 3 skipped, 6 xfailed` |
-| no | no | `745 passed, 4 skipped, 6 xfailed` |
-
-Los `xfail` son criterios de aceptación abiertos de Int3 (AUD-24 a AUD-27).
-No son fallos de la instalación. Los `skipped` dependen de carpetas que no
-están versionadas.
+Resultado esperado: **la suite termina en verde**. El conteo exacto depende
+de las carpetas locales `recursos/` y `frontend/dist`; los tests que las
+necesitan se marcan como `skipped` cuando faltan, y eso **no es un fallo de
+la instalación**. Referencia medida en un clon sin esas carpetas:
+`857 passed, 4 skipped` (sin `xfail`).
 
 Levanta la API:
 

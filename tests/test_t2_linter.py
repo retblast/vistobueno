@@ -630,3 +630,44 @@ def test_secciones_del_linter_sincronizadas_con_el_compilador():
     from validator import compilador, dsl_check
 
     assert set(dsl_check._SECCIONES) == set(compilador.SECCIONES_ANALIZADOR)
+
+
+# ---------------------------------------------------------------------------
+# Revisión del PR #75: regex de `extraccion` y `seleccion`
+# ---------------------------------------------------------------------------
+
+
+def _regla_extraccion(**config) -> dict:
+    """Regla mínima de captura (`extraccion`) para probar el linter."""
+    return {
+        "id": "ficha_x",
+        "tipo": "estructura",
+        "severidad": "warning",
+        "descripcion": "captura de prueba",
+        "extraccion": {"campo": "dc.title", **config},
+    }
+
+
+@pytest.mark.parametrize("campo", ["quitar_prefijo", "quitar_sufijo"])
+def test_regex_de_extraccion_invalida_se_detecta(campo):
+    """Una regex rota en `extraccion` ya no falla solo en runtime."""
+    hallazgos = _hallazgos(_regla_extraccion(**{campo: "["}))
+    assert any(campo in h for h in hallazgos)
+
+
+@pytest.mark.parametrize("campo", ["quitar_prefijo", "quitar_sufijo"])
+def test_regex_de_extraccion_valida_no_produce_hallazgo(campo):
+    hallazgos = _hallazgos(_regla_extraccion(**{campo: r"^\s*asesor\s*:?\s*"}))
+    assert not hallazgos
+
+
+@pytest.mark.parametrize("seleccion", ["primero", "ultimo", "primero_no_vacio"])
+def test_seleccion_valida_no_produce_hallazgo(seleccion):
+    hallazgos = _hallazgos(_regla_extraccion(seleccion=seleccion))
+    assert not hallazgos
+
+
+def test_seleccion_invalida_se_detecta():
+    """Un typo en `seleccion` desactivaba la selección en silencio."""
+    hallazgos = _hallazgos(_regla_extraccion(seleccion="ultima"))
+    assert any("seleccion" in h and "ultima" in h for h in hallazgos)

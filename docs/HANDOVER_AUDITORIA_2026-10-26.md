@@ -266,18 +266,18 @@ dejarlo dicho en la documentación.
 ## 6. Contrato que Int1 exige (y sus tests)
 
 Int1 (**API**) escribe los tests; Int3 (**motor**) los hace pasar. Los tests
-con `xfail(strict=True)` marcan los criterios de aceptación: cuando el
-motor los cumpla, el `XPASS` estricto pone el CI en rojo hasta que se quite
-la marca.
+con `xfail(strict=True)` marcaron los criterios de aceptación mientras el
+motor no los cumplía; Int3 quitó la marca en el PR #75 al implementar
+AUD-24 a AUD-27.
 
 | Contrato | Dónde | Criterio |
 |----------|-------|----------|
 | Ficha utilizable | `tests/test_api_contract.py` (`TestContratoFichaUtilizable`) | todo `extraidos` con `detectado=True` trae un valor **no vacío** |
 | Año válido | `tests/test_api_contract.py` | `dc.date.issued` con `detectado=True` es un año (`\b(19\|20)\d{2}\b`) |
-| Autores completos | `tests/test_captura_ficha.py` (`xfail`) | `dc.contributor.author` trae **un autor por párrafo**, con el formato "Apellido, Nombre" (sin partir por la coma) |
-| Asesor presente | `tests/test_captura_ficha.py` (`xfail`) | `dc.contributor.advisor` con `detectado=True` trae texto |
-| Palabras clave limpias | `tests/test_captura_ficha.py` (`xfail`) | `dc.subject` sin puntuación final (AUD-27) |
-| Una constancia por autor | `tests/test_constancia.py` (`TestConstanciasConCapturaReal`, `xfail`) | 2 autores reales → 2 constancias + 2 filas, cada una con su matrícula |
+| Autores completos | `tests/test_captura_ficha.py` (cerrado, PR #75) | `dc.contributor.author` trae **un autor por párrafo**, con el formato "Apellido, Nombre" (sin partir por la coma) |
+| Asesor presente | `tests/test_captura_ficha.py` (cerrado, PR #75) | `dc.contributor.advisor` con `detectado=True` trae texto |
+| Palabras clave limpias | `tests/test_captura_ficha.py` (cerrado, PR #75) | `dc.subject` sin puntuación final (AUD-27) |
+| Una constancia por autor | `tests/test_constancia.py` (`TestConstanciasConCapturaReal`, cerrado en PR #75) | 2 autores reales → 2 constancias + 2 filas, cada una con su matrícula |
 | Paridad real | `tests/test_paridad_formatos.py` | sin aserciones vacías; caso "detectado pero incompleto" comparando `passed` con legacy |
 
 El DOCX de la carátula real (con placeholders) lo construye
@@ -498,6 +498,13 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 > `_sigpalabra` solo como respaldo para títulos de <4 caracteres). AUD-07
 > sigue la decisión del 2026-11-08: XPath amplio de «para optar» y warning en
 > la línea de 12 pt; `n_a_si_sin_nodos` solo para documentos sin esa línea.
+>
+> **Actualizado (2026-11-11, Int3)**: el **PR #75** (`semana11-motor-ficha`)
+> cierra AUD-24, AUD-25, AUD-26 y AUD-27. La captura se verificó contra la
+> tesis real y contra las 5 plantillas: dos autores completos, asesora,
+> año de portada 2026, abstract y palabras clave sin puntuación final. Los
+> `xfail` de `tests/test_captura_ficha.py` y `tests/test_constancia.py` se
+> retiraron; la suite queda en verde.
 
 | ID | Responsable | Estado | PR / commit |
 |----|-------------|--------|-------------|
@@ -523,10 +530,10 @@ Actualizar esta tabla al cerrar cada parte (y el bloque de aviso de
 | AUD-21 | Int1 | **cerrado** | PR #67 |
 | AUD-22 | Int1 | **cerrado** | PR #69 |
 | AUD-23 | Int1 | **cerrado: los archivos quedan sin trackear** (decisión 2026-10-28) | — |
-| AUD-24 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
-| AUD-25 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
-| AUD-26 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
-| AUD-27 | Int3 (criterio: Int1) | pendiente (Int3) — criterio de aceptación listo | PR #67 (test) |
+| AUD-24 | Int3 (criterio: Int1) | **cerrado** (autores completos; test sin `xfail`) | PR #75 |
+| AUD-25 | Int3 (criterio: Int1) | **cerrado** (asesor del párrafo siguiente; `detectado=false` si queda vacío) | PR #75 |
+| AUD-26 | Int3 (criterio: Int1) | **cerrado** (año de portada 2026, no el 2024 del título) | PR #75 |
+| AUD-27 | Int3 (criterio: Int1) | **cerrado** (palabras clave sin puntuación final) | PR #75 |
 | Nuevo: `palabras_clave_minimo` | Int3 | **decidido: se mantiene `error`** (intencional; las 5 plantillas fallan a propósito) | — |
 | Nuevo: plantillas no cuantitativas | Int3 | documentar | — |
 | DSpace REST | Int1 | **cerrado: deprecado** | PR #65 |

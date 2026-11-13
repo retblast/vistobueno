@@ -792,12 +792,12 @@ respuestas no cambia.
   `detectado=false`, `valor=null` y `pagina=null`. El operador lo
   teclea en la pantalla de ficha en vez de pre-llenar el formulario
   oficial de DSpace con un dato inservible.
-- El motor (Int3) sigue siendo quien captura: cuando corrija las reglas
-  de `reglas_ficha.yaml` (AUD-24 a AUD-27), el valor correcto viaja
-  con `detectado=true` sin tocar la API.
-- Criterios de aceptación de Int3 en `tests/test_captura_ficha.py`
-  (`xfail(strict=True)`) y en `tests/test_constancia.py`
-  (`TestConstanciasConCapturaReal`).
+- El motor (Int3) sigue siendo quien captura. AUD-24 a AUD-27 quedaron
+  cerrados en el PR #75: el valor correcto viaja con `detectado=true` sin
+  tocar la API.
+- Criterios de aceptación de Int3 en `tests/test_captura_ficha.py` y en
+  `tests/test_constancia.py` (`TestConstanciasConCapturaReal`); ya no
+  tienen `xfail`.
 
 ### v1.9.0 (2026-10-28 — auditoría de comportamiento: acceso local y límite)
 

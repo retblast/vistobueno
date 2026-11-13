@@ -10,9 +10,10 @@
 **Contrato vigente**: `docs/CONTRATO_API.md` (v1.12.0). La SPA envía el token
 compartido opcional (`VITE_API_TOKEN` → `X-VistoBueno-Token`) cuando está
 configurado; en loopback no hace falta.
-**Limitaciones conocidas del motor** (no de la UI): AUD-24 a AUD-27 siguen
-abiertas en `docs/HANDOVER_AUDITORIA_2026-10-26.md`. La pantalla permite
-corregir los campos a mano; el piloto debe registrar estos casos.
+**Limitaciones conocidas del motor** (no de la UI): AUD-24 a AUD-27
+quedaron cerrados en el PR #75 (autores, asesor, año de portada y palabras
+clave). La pantalla permite corregir los campos a mano por si el documento
+se aparta de la estructura esperada.
 **Contexto de producto**: `docs/PLAN_FICHA_DEPOSITO.md` (v0.2 congelado).
 
 ---
@@ -210,12 +211,14 @@ es el paso 4 del checklist del kit del operador
 
 ### 8.5 Limitaciones del motor que el operador verá
 
-Siguen abiertas y no son de la UI (AUD-24 a AUD-27 en
-`docs/HANDOVER_AUDITORIA_2026-10-26.md`):
+**AUD-24 a AUD-27 quedaron cerrados en el PR #75** (no eran de la UI):
 
-- `dc.title` llega con el prefijo «Título del trabajo de investigación:» —
-  el operador lo recorta en la pantalla (§6).
-- Los autores se pueden partir por la coma (AUD-24).
-- El asesor puede llegar vacío (AUD-25).
-- El año puede salir del título (AUD-26).
-- La última palabra clave conserva el punto final (AUD-27).
+- `dc.title` llega sin el prefijo «Título del trabajo de investigación:».
+- Los autores se capturan uno por párrafo, sin partir «Apellido, Nombre».
+- El asesor se toma del párrafo siguiente a la etiqueta o del mismo
+  párrafo si van juntos.
+- `dc.date.issued` es el año de portada (2026), no el del título.
+- Las palabras clave llegan sin puntuación final.
+
+El operador puede seguir corrigiendo cualquier campo a mano en la pantalla
+por si el documento se aparta de la estructura esperada.

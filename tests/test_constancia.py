@@ -844,15 +844,6 @@ class TestConstanciasConCapturaReal:
             "indice_autor": indice,
         }
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "AUD-24: la captura de autores parte 'Apellido, Nombre' por la "
-            "coma, así que las constancias salen con nombres truncados y no "
-            "hay constancia del segundo autor. Ver "
-            "docs/HANDOVER_AUDITORIA_2026-10-26.md §4 (AUD-24)."
-        ),
-    )
     def test_una_constancia_por_autor_real(self):
         from _caratula_real import capturar_ficha, crear_docx_caratula
 
@@ -867,9 +858,13 @@ class TestConstanciasConCapturaReal:
         assert primera.status_code == 200
         assert segunda.status_code == 200
 
-        # El nombre completo del autor viaja en la constancia.
-        assert "Br. Apellido, Nombre" in primera.headers["content-disposition"]
-        assert "Br. Apellido2, Nombre2" in segunda.headers["content-disposition"]
+        # El nombre completo del autor viaja en la constancia. El nombre del
+        # archivo se sanea (sin comas ni acentos); el contenido conserva el
+        # nombre tal como está en la carátula.
+        assert "Br Apellido Nombre" in primera.headers["content-disposition"]
+        assert "Br Apellido2 Nombre2" in segunda.headers["content-disposition"]
+        assert "Br. Apellido, Nombre" in _document_xml(primera.content)
+        assert "Br. Apellido2, Nombre2" in _document_xml(segunda.content)
 
         # Y cada constancia lleva la matrícula del autor de ese orden.
         assert "15185003-20" in _document_xml(primera.content)
