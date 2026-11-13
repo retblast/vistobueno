@@ -9,7 +9,20 @@ DOCX puro, sin lógica de mutaciones (ver `_mutations`).
 import tempfile
 import zipfile
 
-from _xml_constants import ANS, CONTENT_TYPES, PNS, RELS, RNS, WNS, WPN
+from _xml_constants import (
+    ANS,
+    CONTENT_TYPES,
+    DOCUMENT_RELS,
+    FOOTNOTES_CONTENT_TYPE,
+    FOOTNOTES_REL,
+    HEADER_RELS,
+    PNG_LOGO,
+    PNS,
+    RELS,
+    RNS,
+    WNS,
+    WPN,
+)
 
 ANEXOS_BASE = [
     "Matriz de consistencia",
@@ -559,17 +572,34 @@ def _sect_final(cfg: dict) -> str:
     )
 
 
+def _document_rels(con_notas: bool) -> str:
+    """Relaciones de `word/document.xml`, con notas al pie si existen."""
+    if not con_notas:
+        return DOCUMENT_RELS
+    return DOCUMENT_RELS.replace("</Relationships>", f"{FOOTNOTES_REL}</Relationships>")
+
+
+def _content_types(con_notas: bool) -> str:
+    """`[Content_Types].xml` con el Override de notas solo si la parte existe."""
+    if not con_notas:
+        return CONTENT_TYPES
+    return CONTENT_TYPES.replace("</Types>", f"{FOOTNOTES_CONTENT_TYPE}</Types>")
+
+
 def compilar_docx(cfg: dict) -> str:
     """Compila la configuración a un DOCX temporal y devuelve la ruta."""
     with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as f:
         path = f.name
+    notas = cfg.get("notas_pie_ids", [])
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("[Content_Types].xml", CONTENT_TYPES)
+        z.writestr("[Content_Types].xml", _content_types(bool(notas)))
         z.writestr("_rels/.rels", RELS)
         z.writestr("word/document.xml", _document_xml(cfg))
+        z.writestr("word/_rels/document.xml.rels", _document_rels(bool(notas)))
         z.writestr("word/header1.xml", _header_xml(cfg))
+        z.writestr("word/_rels/header1.xml.rels", HEADER_RELS)
         z.writestr("word/footer1.xml", _footer_xml(cfg["footer_jc"]))
-        notas = cfg.get("notas_pie_ids", [])
+        z.writestr("word/media/logo.png", PNG_LOGO)
         if notas:
             z.writestr("word/footnotes.xml", _footnotes_xml(notas))
     return path

@@ -567,7 +567,7 @@ de comprobar en el navegador real. retblast implementa solo la parte de Int1.
 | VA-14 | Int3 | pendiente | M6: «Base de datos» |
 | VA-15 | Int3 | pendiente | M7: alcance de la regla del logo |
 | VA-16 | Int3 | pendiente | M8: ORCID |
-| VA-17 | Int1 + Int3 | pendiente | B6: ejemplos; M11: factory |
+| VA-17 | Int1 + Int3 | M11 corregido (PR 12.1, `85690c5`): factory OPC; B6 pendiente | B6: ejemplos; M11: factory |
 | VA-18 | Int1 + Int3 | pendiente | B7 + M10: conteos |
 | VA-19 | Int1 + Int2 | pendiente | B1 + F4: límite y reintento |
 | VA-20 | Int1 | pendiente | B3 y puerta Angular de Int1: antes del piloto |
