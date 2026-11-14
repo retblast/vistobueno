@@ -7,6 +7,23 @@ necesarios (document.xml, footer1.xml, header1.xml) más el contexto
 headings, párrafos vacíos y captions de tabla. Ver
 unt_format_rules_schema.yaml para la convención completa de
 mecanismo_verificable.
+
+Partes OPC mínimas que admite el extractor:
+
+- ``word/document.xml`` — **obligatoria**. Su raíz debe ser
+  ``w:document`` en el namespace WordprocessingML y debe contener
+  ``w:body``. Si el XML está truncado, la raíz es ajena o falta el
+  cuerpo, se lanza ``InvalidDocumentError``.
+- ``word/header*.xml`` y ``word/footer*.xml`` — opcionales. Se leen
+  todas las partes que existan y cuyo XML sea válido.
+- ``word/footnotes.xml`` — opcional; si existe y no está vacía, se
+  parsea.
+
+El extractor localiza las partes **por nombre**, no por las relaciones
+de ``_rels/.rels`` ni por ``[Content_Types].xml``; esos archivos no se
+validan aquí (la integridad del paquete se cubre en los tests del
+factory). Un ZIP válido sin ``word/document.xml`` sigue lanzando
+``KeyError``, que la API traduce a 422.
 """
 
 import re
@@ -23,6 +40,63 @@ NS = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
 }
+
+
+class InvalidDocumentError(ValueError):
+    """El DOCX es un ZIP válido pero no contiene un documento Word procesable.
+
+    Se lanza cuando ``word/document.xml`` tiene XML mal formado, cuando su
+    raíz no es ``w:document`` (namespace ausente o ajeno) o cuando falta
+    ``w:body``. También cuando una parte opcional presente (encabezado, pie
+    o notas al pie) tiene XML mal formado. La API la traduce a 422 (B5); no
+    debe usarse para defectos del servidor ni para paquetes que superan el
+    límite de descompresión (esos siguen siendo ``zipfile.BadZipFile``).
+    """
+
+
+def _parsear_parte(datos: bytes, nombre: str) -> etree._Element:
+    """Parsea una parte XML con un parser sin entidades externas.
+
+    ``resolve_entities=False`` evita que un DOCX hostil use entidades para
+    leer archivos locales (XXE); los DOCX legítimos no dependen de DTD ni
+    de entidades. Cualquier XML mal formado se convierte en
+    ``InvalidDocumentError`` para que la API responda 422 en vez de dejar
+    escapar una excepción de lxml.
+
+    Args:
+        datos: Bytes descomprimidos de la parte.
+        nombre: Nombre de la parte, para el mensaje de error.
+
+    Returns:
+        La raíz XML parseada.
+
+    Raises:
+        InvalidDocumentError: Si el XML está truncado o mal formado.
+    """
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
+    try:
+        return etree.fromstring(datos, parser=parser)
+    except etree.XMLSyntaxError as e:
+        raise InvalidDocumentError(f"XML inválido en '{nombre}': {e}") from e
+
+
+def _validar_documento(document: etree._Element) -> None:
+    """Exige la raíz WordprocessingML y el cuerpo del documento.
+
+    Args:
+        document: Raíz de ``word/document.xml``.
+
+    Raises:
+        InvalidDocumentError: Si la raíz no es ``w:document`` (incluye el
+            caso de namespace ausente o ajeno) o si falta ``w:body``.
+    """
+    if document.tag != W + "document":
+        raise InvalidDocumentError(
+            "la raíz de 'word/document.xml' no es WordprocessingML "
+            f"(se encontró {document.tag!r}); se esperaba 'w:document'"
+        )
+    if document.find(W + "body") is None:
+        raise InvalidDocumentError("'word/document.xml' no contiene 'w:body'")
 
 
 # Cota de tamaño DESCOMPRIMIDO por parte del paquete OPC (defensa zip bomb,
@@ -436,24 +510,30 @@ def extract(docx_path: str) -> ExtractedDocx:
     Raises:
         zipfile.BadZipFile: Si el archivo no es un ZIP válido o una parte
             supera el límite de descompresión (posible zip bomb).
+        InvalidDocumentError: Si ``word/document.xml`` (o una parte
+            opcional presente) tiene XML mal formado, si la raíz no es
+            ``w:document`` o si falta ``w:body``.
         KeyError: Si falta document.xml u otra parte esencial del DOCX.
     """
     with zipfile.ZipFile(docx_path) as z:
         names = z.namelist()
-        document = etree.fromstring(_leer_parte(z, "word/document.xml"))
+        document = _parsear_parte(_leer_parte(z, "word/document.xml"), "word/document.xml")
+        _validar_documento(document)
         headers = [
-            etree.fromstring(_leer_parte(z, n))
+            _parsear_parte(_leer_parte(z, n), n)
             for n in sorted(x for x in names if x.startswith("word/header") and x.endswith(".xml"))
         ]
         footers = [
-            etree.fromstring(_leer_parte(z, n))
+            _parsear_parte(_leer_parte(z, n), n)
             for n in sorted(x for x in names if x.startswith("word/footer") and x.endswith(".xml"))
         ]
         footnotes_xml = (
             _leer_parte(z, "word/footnotes.xml") if "word/footnotes.xml" in names else None
         )
         footnotes = (
-            etree.fromstring(footnotes_xml) if footnotes_xml and len(footnotes_xml) > 0 else None
+            _parsear_parte(footnotes_xml, "word/footnotes.xml")
+            if footnotes_xml and len(footnotes_xml) > 0
+            else None
         )
 
     return ExtractedDocx(
