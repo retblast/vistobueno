@@ -553,7 +553,7 @@ de comprobar en el navegador real. retblast implementa solo la parte de Int1.
 |----|-------------|--------|-------------------------|
 | VA-01 | Int3 | pendiente | M1: todos los runs |
 | VA-02 | Int3 | pendiente | M1: formato efectivo |
-| VA-03 | Int3 | pendiente | M2: A4 en secciones |
+| VA-03 | Int3 | M2 corregido (PR #101, `5a7c6bf`): todas las secciones | M2: A4 en secciones |
 | VA-04 | Int3 | pendiente | M3: paginación |
 | VA-05 | Int3 | pendiente | M4: declaraciones múltiples |
 | VA-06 | Int3 | pendiente | M5: límites del Resumen |

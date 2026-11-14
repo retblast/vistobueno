@@ -1,5 +1,5 @@
 id,fuente_localizador,requisito,estado,regla_o_componente,evidencia,accion_int3_salvo_politica_deposito
-REQ-01,p125,Papel A4,PARCIAL,papel_tamano,VA-03: solo primer valor,Comprobar todas las secciones.
+REQ-01,p125,Papel A4,PARCIAL,papel_tamano,"M2: todas las secciones y orientación normalizada; límite: valor OOXML exacto","Probar portada/cuerpo/anexos y A4 horizontal; decidir tolerancia para conversiones que redondeen el papel."
 REQ-02,p127,Times New Roman en todo el texto aplicable,PARCIAL,fuente_principal,VA-01/02: runs y estilos,Resolver formato efectivo por run.
 REQ-03,p127,Cuerpo de 12 pt,PARCIAL,tamano_cuerpo,VA-01/02,Comprobar todos los runs y estilos sin exenciones arbitrarias.
 REQ-04,p129,Interlineado 1.5,PARCIAL,interlineado,VA-02,Resolver propiedad heredada y valores omitidos.

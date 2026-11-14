@@ -93,8 +93,11 @@ def test_una_regla_eq_que_falla_nombra_al_culpable():
         assert r is not None, "la regla papel_tamano no se evaluó"
         assert not r.passed, "el papel Letter debe fallar la regla"
         assert "0 incumplen" not in r.found, r.found
-        assert "1 incumplen" in r.found, r.found
+        # M2: se revisan todas las secciones, no solo la primera; el factory
+        # declara dos (portada y cuerpo) y ambas quedan en Letter.
+        assert "2 incumplen" in r.found, r.found
         assert "#1=" in r.found, r.found
+        assert "#2=" in r.found, r.found
         assert "21.59 cm" in r.found, r.found
         assert "esperado=21.00 cm" in r.found, r.found
     finally:

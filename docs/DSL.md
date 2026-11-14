@@ -118,6 +118,15 @@ atributo_xml:
   Se usa p. ej. en `sangria_parrafo` (esperado 720 twips, tolerancia 12) para
   aceptar los 708/709 twips (~1.25 cm) de las plantillas oficiales. Si el
   valor o el esperado no son numéricos, se compara por igualdad exacta.
+- En `w:pgSz` (tamaño de papel), `@w:w` compara el **lado corto** y `@w:h`
+  el **lado largo**, sin importar la orientación: un A4 horizontal
+  (`16838 x 11906`) cumple igual que uno vertical, con o sin
+  `w:orient="landscape"`. `papel_tamano` valida **todas** las secciones
+  (carátula y anexos incluidos) con `all_eq`; la sección culpable se
+  identifica por su posición `#N` en el detalle. Límite: se compara el
+  valor OOXML exacto, así que una conversión que redondee el papel
+  (p. ej. `11910 x 16840`) sigue fallando hasta que se decida una
+  tolerancia.
 - `contexto: caratula` restringe la consulta a los párrafos de la carátula:
   los `w:p` de nivel superior anteriores al primer `w:pPr/w:sectPr` del cuerpo
   (el salto que cierra la portada). Si el documento no declara ese salto, se

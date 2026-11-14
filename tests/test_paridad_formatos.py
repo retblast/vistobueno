@@ -359,6 +359,11 @@ def _verificar_paridad(docx_path: str) -> dict:
         "margen_inferior",
         "margen_derecho",
         "margen_izquierdo",
+        # M2 (VA-03): el DSL valida TODAS las secciones (`(//w:sectPr)/w:pgSz`
+        # con `all_eq`); el legacy solo la primera (`//w:sectPr[1]` con `eq`).
+        # El veredicto coincide en estos fixtures (todas las secciones tienen
+        # el mismo papel), pero el `found` del DSL cuenta más valores.
+        "papel_tamano",
     }
     # Desde el paso 4 el DSL hace algo que el motor legacy no puede: condicionar
     # una regla a la clave que publica otra (`aplicar_si`). Una estructura que

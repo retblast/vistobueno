@@ -130,11 +130,43 @@ class AnalizadorXML(Analizador):
         "@w:left": "@w:bottom",
     }
 
+    # El papel A4 se compara por sus lados físico (21 x 29.7 cm), no por la
+    # orientación: en landscape Word guarda `w:w=16838` y `w:h=11906`. Se
+    # normaliza con el lado corto y el largo, sin depender de `w:orient`
+    # (los conversores desde PDF suelen omitirlo).
+    _ATRIBUTOS_PAPEL = ("@w:w", "@w:h")
+
     def _valor_margen(self, extracted, node, atributo, key):
         """Valor de `atributo` normalizado para la orientación de la sección."""
         if atributo in self._ROTACION_MARGEN and extracted.es_seccion_landscape(node):
             key = _resolve_attr_key(self._ROTACION_MARGEN[atributo])
         return node.get(key)
+
+    def _valor_atributo(self, extracted, node, atributo, key):
+        """Valor leído con la normalización que corresponda al nodo."""
+        if node.tag == W + "pgSz":
+            return self._valor_papel(node, atributo, key)
+        return self._valor_margen(extracted, node, atributo, key)
+
+    def _valor_papel(self, node, atributo, key):
+        """Lado corto/largo de `w:pgSz`, sin importar la orientación.
+
+        `@w:w` compara siempre el lado corto (11906 twips) y `@w:h` el lado
+        largo (16838). Así una sección A4 horizontal legítima pasa igual que
+        una vertical, y una sección con papel Letter sigue fallando en
+        cualquier orientación.
+        """
+        if atributo not in self._ATRIBUTOS_PAPEL or node.tag != W + "pgSz":
+            return node.get(key)
+        ancho = node.get(W + "w")
+        alto = node.get(W + "h")
+        if ancho is None or alto is None:
+            return node.get(key)
+        try:
+            corto, largo = sorted((int(ancho), int(alto)))
+        except ValueError:
+            return node.get(key)
+        return str(corto if atributo == "@w:w" else largo)
 
     def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
         parte = self.config.get("parte", "document")
@@ -178,7 +210,8 @@ class AnalizadorXML(Analizador):
         # ser los conformes y esconden al culpable — handover issue #7 /
         # AUD-03).
         pares = [
-            (i, n, self._valor_margen(extracted, n, atributo, key)) for i, n in enumerate(nodes, 1)
+            (i, n, self._valor_atributo(extracted, n, atributo, key))
+            for i, n in enumerate(nodes, 1)
         ]
         vals = [v for _, _, v in pares if v is not None]
         self.valor = vals[0] if vals else None

@@ -135,18 +135,27 @@ reglas:
     idéntico en párr. 443-444, 593-594 para otros tipos)
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   cita: '"Tamaño A4/papel (210x297 cm)"'
+  # M2 (VA-03): se validan TODAS las secciones, no solo la primera. El
+  # alcance incluye carátula y anexos: A4 es el tamaño físico del papel y no
+  # depende del contenido de la sección. La orientación se normaliza (lado
+  # corto 11906 / lado largo 16838), así que una sección A4 horizontal
+  # legítima pasa y una Letter falla en cualquier orientación. La sección
+  # culpable se identifica por su posición (#N) en el detalle.
+  # Límite: se compara el valor OOXML exacto; una conversión que redondee el
+  # papel (p. ej. 11910 x 16840) sigue fallando y requiere una decisión
+  # aparte sobre tolerancia.
   atributo_xml:
   - parte: document
     contexto: todos
-    xpath: //w:sectPr[1]/w:pgSz
+    xpath: (//w:sectPr)/w:pgSz
     atributo: '@w:w'
-    comparacion: eq
+    comparacion: all_eq
     esperado: '11906'
   - parte: document
     contexto: todos
-    xpath: //w:sectPr[1]/w:pgSz
+    xpath: (//w:sectPr)/w:pgSz
     atributo: '@w:h'
-    comparacion: eq
+    comparacion: all_eq
     esperado: '16838'
 - id: fuente_principal
   tipo: atributo_xml
