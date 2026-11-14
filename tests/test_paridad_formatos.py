@@ -360,6 +360,30 @@ def _verificar_paridad(docx_path: str) -> dict:
         "margen_derecho",
         "margen_izquierdo",
     }
+    # M1 (formato efectivo): estas reglas migraron de `atributo_xml` (solo
+    # formato directo) a `formato_efectivo`. El veredicto se conserva en los
+    # fixtures, pero el `found` ahora nombra la propiedad resuelta
+    # (`w:sz/@w:val`) en vez de solo el atributo (`@w:val`), y una propiedad
+    # ausente se reporta como `(ausente)` en lugar de omitirse. La paridad
+    # observable que se exige aquí es el resultado binario.
+    divergen_por_formato_efectivo = {
+        "fuente_principal",
+        "tamano_cuerpo",
+        "interlineado",
+        "alineacion_cuerpo",
+        "alineacion_caratula_todos_elementos",
+        "caratula_universidad_tamano",
+        "caratula_facultad_escuela_tamano",
+        "caratula_titulo_trabajo_tamano",
+        "caratula_optar_grado_tamano",
+        "caratula_autores_tamano",
+        "caratula_universidad_negrita_mayusculas",
+        "caratula_facultad_negrita_mayusculas",
+        "caratula_titulo_negrita_mixta",
+        "caratula_autores_mayusculas_sin_negrita",
+        "caratula_asesor_negrita",
+        "caratula_ciudad_pais_negrita",
+    }
     # Desde el paso 4 el DSL hace algo que el motor legacy no puede: condicionar
     # una regla a la clave que publica otra (`aplicar_si`). Una estructura que
     # no le corresponde al tipo detectado NO SE EVALÚA, y una regla no aplicable
@@ -400,7 +424,7 @@ def _verificar_paridad(docx_path: str) -> dict:
                     f"{rid}: el DSL la marca no aplicable pero el legacy la evaluó "
                     f"y pasó (legacy={legacy_res.passed})"
                 )
-        elif rid in solo_passed:
+        elif rid in solo_passed or rid in divergen_por_formato_efectivo:
             if legacy_res.passed != dsl_res.passed:
                 diffs.append(
                     f"{rid}: legacy(passed={legacy_res.passed}) != dsl(passed={dsl_res.passed})"

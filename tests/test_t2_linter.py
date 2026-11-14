@@ -245,6 +245,36 @@ def test_xpath_con_sintaxis_invalida_se_detecta():
     assert any("sintaxis" in h for h in hallazgos)
 
 
+def _regla_formato(**extra) -> dict:
+    regla = {
+        "id": "r1",
+        "tipo": "formato_efectivo",
+        "severidad": "error",
+        "descripcion": "formato efectivo",
+        "formato_efectivo": {
+            "parte": "document",
+            "parrafo_xpath": "//w:body//w:p",
+            "propiedad": "w:sz/@w:val",
+            "comparacion": "all_eq",
+            "esperado": "24",
+        },
+    }
+    regla["formato_efectivo"].update(extra)
+    return regla
+
+
+def test_parrafo_xpath_invalido_en_formato_efectivo_se_detecta():
+    """El XPath de selección también se valida al cargar (M1)."""
+    hallazgos = _hallazgos(_regla_formato(parrafo_xpath="//wp:p"))
+    assert any("formato_efectivo" in h and "XPath inválido" in h for h in hallazgos), hallazgos
+
+
+def test_propiedad_de_formato_invalida_se_detecta():
+    """Una propiedad que el resolvedor no entiende falla al cargar, no en runtime."""
+    hallazgos = _hallazgos(_regla_formato(propiedad="rFonts"))
+    assert any("propiedad" in h and "inválida" in h for h in hallazgos), hallazgos
+
+
 # ---------------------------------------------------------------------------
 # 3. Severidad inventada
 # ---------------------------------------------------------------------------

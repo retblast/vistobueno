@@ -47,7 +47,7 @@
       "severidad": "error",
       "mensaje": "La fuente del cuerpo del texto debe ser Times New Roman",
       "esperado": "Times New Roman",
-      "encontrado": "@w:ascii: 3 valores evaluados, 3 incumplen: #1=Arial (pág. 4), #2=Arial (pág. 4), #3=Arial (pág. 4); esperado=Times New Roman",
+      "encontrado": "w:rFonts/@w:ascii: 3 valores evaluados, 3 incumplen: #1=Arial (pág. 4), #2=Arial (pág. 4), #3=Arial (pág. 4); esperado=Times New Roman",
       "ubicacion": "Sección \"Formato general\" (párr. 126-127); página 4",
       "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
       "cita": "\"Times New Roman: 12 puntos\"",
@@ -59,7 +59,7 @@
       "severidad": "error",
       "mensaje": "El tamaño de letra del cuerpo del texto debe ser 12 puntos",
       "esperado": "12pt",
-      "encontrado": "@w:val: 3 valores evaluados, 3 incumplen: #1=15 pt (pág. 4), #2=15 pt (pág. 4), #3=15 pt (pág. 4); esperado=12 pt",
+      "encontrado": "w:sz/@w:val: 3 valores evaluados, 3 incumplen: #1=15 pt (pág. 4), #2=15 pt (pág. 4), #3=15 pt (pág. 4); esperado=12 pt",
       "ubicacion": "Sección \"Formato general\" (párr. 126-127); página 4",
       "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
       "cita": "\"Times New Roman: 12 puntos\"",
@@ -143,7 +143,7 @@
       "severidad": "error",
       "mensaje": "El interlineado del cuerpo del texto debe ser 1.5 (1.5 líneas)",
       "esperado": "1.5 (ONE_POINT_FIVE)",
-      "encontrado": "@w:line: 3 valores evaluados, 3 incumplen: #1=300 (pág. 4), #2=300 (pág. 4), #3=300 (pág. 4); esperado=360",
+      "encontrado": "w:spacing/@w:line: 3 valores evaluados, 3 incumplen: #1=300 (pág. 4), #2=300 (pág. 4), #3=300 (pág. 4); esperado=360",
       "ubicacion": "Sección \"Formato general\" (párr. 128-129); página 4",
       "fuente": "MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx",
       "cita": "\"Interlineado: 1.5 puntos\"",
@@ -609,15 +609,15 @@
   "como_preguntar_a_una_ia": [
     {
       "rule_id": "fuente_principal",
-      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: La fuente del cuerpo del texto debe ser Times New Roman\n- Valor esperado según el reglamento: Times New Roman\n- Lo que encontró el validador: @w:ascii: 3 valores evaluados, 3 incumplen: #1=Arial (pág. 4), #2=Arial (pág. 4), #3=Arial (pág. 4); esperado=Times New Roman\n- Cita del reglamento: \"Times New Roman: 12 puntos\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: La fuente del cuerpo del texto debe ser Times New Roman\n- Valor esperado según el reglamento: Times New Roman\n- Lo que encontró el validador: w:rFonts/@w:ascii: 3 valores evaluados, 3 incumplen: #1=Arial (pág. 4), #2=Arial (pág. 4), #3=Arial (pág. 4); esperado=Times New Roman\n- Cita del reglamento: \"Times New Roman: 12 puntos\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
     },
     {
       "rule_id": "tamano_cuerpo",
-      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El tamaño de letra del cuerpo del texto debe ser 12 puntos\n- Valor esperado según el reglamento: 12pt\n- Lo que encontró el validador: @w:val: 3 valores evaluados, 3 incumplen: #1=15 pt (pág. 4), #2=15 pt (pág. 4), #3=15 pt (pág. 4); esperado=12 pt\n- Cita del reglamento: \"Times New Roman: 12 puntos\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El tamaño de letra del cuerpo del texto debe ser 12 puntos\n- Valor esperado según el reglamento: 12pt\n- Lo que encontró el validador: w:sz/@w:val: 3 valores evaluados, 3 incumplen: #1=15 pt (pág. 4), #2=15 pt (pág. 4), #3=15 pt (pág. 4); esperado=12 pt\n- Cita del reglamento: \"Times New Roman: 12 puntos\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
     },
     {
       "rule_id": "interlineado",
-      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El interlineado del cuerpo del texto debe ser 1.5 (1.5 líneas)\n- Valor esperado según el reglamento: 1.5 (ONE_POINT_FIVE)\n- Lo que encontró el validador: @w:line: 3 valores evaluados, 3 incumplen: #1=300 (pág. 4), #2=300 (pág. 4), #3=300 (pág. 4); esperado=360\n- Cita del reglamento: \"Interlineado: 1.5 puntos\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
+      "prompt": "Tengo un documento de tesis en Word (Universidad Nacional de Trujillo). Detecté un problema de formato:\n\n- Regla incumplida: El interlineado del cuerpo del texto debe ser 1.5 (1.5 líneas)\n- Valor esperado según el reglamento: 1.5 (ONE_POINT_FIVE)\n- Lo que encontró el validador: w:spacing/@w:line: 3 valores evaluados, 3 incumplen: #1=300 (pág. 4), #2=300 (pág. 4), #3=300 (pág. 4); esperado=360\n- Cita del reglamento: \"Interlineado: 1.5 puntos\"\n\n¿Puedes darme instrucciones paso a paso para corregir esto en Microsoft Word, sin afectar el resto del formato del documento?"
     },
     {
       "rule_id": "margen_izquierdo",

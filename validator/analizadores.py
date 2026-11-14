@@ -34,11 +34,18 @@ from .detalle import (
     evaluar_atributo,
 )
 from .dsl_check import DSLValidationError
-from .extractor import NS, ExtractedDocx, W, text_of
+from .extractor import NS, CicloEstilosError, ExtractedDocx, W, text_of
 from .tokenizer import PARRAFO, TITULO, es_heading, seccion, solo, tokenizar
 
 # Prefijos de namespace para resolver names en atributos (ej. "@w:val").
 PREFIX_NS = NS
+
+AUSENTE = "(ausente)"
+"""Centinela de una propiedad de formato que no aparece en ninguna capa.
+
+No se omite del muestreo: una propiedad ausente no cumple lo esperado (M1 /
+VA-02). Los toggles OOXML (`w:b`) no usan el centinela porque Word los
+considera apagados por defecto y el resolvedor devuelve `"0"`."""
 
 
 def _resolve_attr_key(atributo: str) -> str:
@@ -83,7 +90,7 @@ class Analizador(ABC):
         self.config = config or {}
         # Nodo objetivo (párrafo/subnodo) que determinó la última ejecución.
         # Permite que el motor enriquezca `location` con "página N" (ítem 1).
-        self.ultimo_nodo = None
+        self.ultimo_nodo: object | None = None
         # Valor legible por maquina de la ultima ejecucion, cuando el
         # analizador produce uno. `analizar()` devuelve texto pensado para
         # personas, asi que no sirve para decidir condiciones `aplicar_si`.
@@ -199,6 +206,112 @@ class AnalizadorXML(Analizador):
             if culpables:
                 self.ultimo_nodo = culpables[0]
         detalle = detalle_xml_atributo(self.config, vals, incumplimientos, esperado, tolerancia)
+        return ok, detalle
+
+
+class AnalizadorFormato(Analizador):
+    """Resuelve el formato efectivo de los runs o párrafos sujetos a la regla.
+
+    La sección `formato_efectivo` selecciona primero los párrafos con
+    `parrafo_xpath` (respetando `parte`/`contexto`) y después resuelve, para
+    cada sujeto, el valor efectivo de `propiedad` con
+    `ExtractedDocx.formato_efectivo`: formato directo → estilo de carácter →
+    cadena `basedOn` del estilo de párrafo → `docDefaults` (M1 / VA-01,
+    VA-02).
+
+    - `sujeto: run` (por defecto) evalúa **todos los runs con texto** de cada
+      párrafo, incluidos los que viven dentro de un hipervínculo. Un run sin
+      texto no aporta un valor y no se usa para eximir al párrafo.
+    - `sujeto: parrafo` evalúa el párrafo (propiedades de `w:pPr`, como
+      `w:jc` o `w:spacing`).
+
+    Una propiedad que no aparece en ninguna capa se compara como
+    `AUSENTE`, de modo que cuenta como incumplimiento. La comparación
+    recomendada es `all_eq`: `eq` solo miraría el primer sujeto y repetiría
+    el defecto de VA-01.
+    """
+
+    def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
+        parte = self.config.get("parte", "document")
+        contexto = self.config.get("contexto", "todos")
+        sujeto = self.config.get("sujeto", "run")
+        parrafo_xpath = self.config.get("parrafo_xpath")
+        propiedad = self.config.get("propiedad")
+        self.no_aplica = False
+
+        if not parrafo_xpath or not isinstance(parrafo_xpath, str):
+            raise ConfigurationError("formato_efectivo: falta 'parrafo_xpath'")
+        if not propiedad or not isinstance(propiedad, str):
+            raise ConfigurationError("formato_efectivo: falta 'propiedad'")
+        if sujeto not in ("run", "parrafo"):
+            raise ConfigurationError(
+                f"formato_efectivo: 'sujeto' debe ser 'run' o 'parrafo' (se recibió {sujeto!r})"
+            )
+
+        try:
+            parrafos = extracted.xpath(parte, parrafo_xpath, contexto)
+        except ValueError:
+            if self.config.get("n_a_si_ausente"):
+                self.no_aplica = True
+                return True, f"no aplica (parte '{parte}' ausente)"
+            raise
+
+        if not parrafos:
+            if self.config.get("n_a_si_sin_nodos"):
+                self.no_aplica = True
+                return True, "no aplica (sin nodos)"
+            return False, f"sin valores que comparar: {parrafo_xpath}"
+
+        sujetos = list(parrafos)
+        if sujeto == "run":
+            sujetos = []
+            for parrafo in parrafos:
+                for run in parrafo.xpath(".//w:r", namespaces=NS):
+                    if any((t.text or "").strip() for t in run.iter(W + "t")):
+                        sujetos.append(run)
+            if not sujetos:
+                # El párrafo existe pero no tiene texto: no hay formato que
+                # demostrar. No se da por bueno (sería eximir en silencio).
+                return False, "sin runs con texto que evaluar"
+
+        valores: list[tuple[int, object, int | None, object]] = []
+        for pos, nodo in enumerate(sujetos, 1):
+            try:
+                valor = extracted.formato_efectivo(nodo, propiedad)
+            except CicloEstilosError as e:
+                # Un ciclo impide conocer el formato efectivo: se reporta
+                # como incumplimiento en vez de tumbar la validación.
+                self.ultimo_nodo = nodo
+                return False, f"{propiedad}: {e}"
+            valores.append(
+                (pos, AUSENTE if valor is None else valor, extracted.pagina_de(nodo), nodo)
+            )
+
+        con_pagina = [(pos, valor, pagina) for pos, valor, pagina, _ in valores]
+        ok, incumplimientos = evaluar_atributo(self.config, con_pagina)
+        if incumplimientos:
+            posiciones = {pos for pos, _, _ in incumplimientos}
+            culpables = [n for pos, _, _, n in valores if pos in posiciones]
+            if culpables:
+                self.ultimo_nodo = culpables[0]
+
+        esperado = self.config.get("esperado")
+        tolerancia = self.config.get("tolerancia")
+        # Config sintética para el formateador compartido: `xpath` decide la
+        # unidad (w:sz → puntos, w:ind → cm) y `atributo` es la etiqueta.
+        detalle_config = {
+            "xpath": propiedad.split("/@", 1)[0],
+            "atributo": propiedad,
+            "esperado": esperado,
+            "tolerancia": tolerancia,
+        }
+        detalle = detalle_xml_atributo(
+            detalle_config,
+            [valor for _, valor, _, _ in valores],
+            incumplimientos,
+            esperado,
+            tolerancia,
+        )
         return ok, detalle
 
 

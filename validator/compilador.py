@@ -10,6 +10,7 @@ declara como **lista**, cada elemento es una comprobación distinta que
 también debe cumplirse):
 
     atributo_xml / presencia_xml -> AnalizadorXML
+    formato_efectivo            -> AnalizadorFormato (formato heredado, M1)
     patron_texto                -> AnalizadorRegex
     lista_texto                 -> AnalizadorLista
     imagen                      -> AnalizadorImagen
@@ -43,6 +44,7 @@ from .analizadores import (
     AnalizadorCantidadPatron,
     AnalizadorConteoNodos,
     AnalizadorExtraccion,
+    AnalizadorFormato,
     AnalizadorHipervinculo,
     AnalizadorImagen,
     AnalizadorLista,
@@ -65,6 +67,7 @@ from .tokenizer import TITULO, solo, tokenizar
 SECCIONES_ANALIZADOR = (
     "atributo_xml",
     "presencia_xml",
+    "formato_efectivo",
     "patron_texto",
     "lista_texto",
     "imagen",
@@ -425,6 +428,7 @@ class AutomataPila(Analizador):
 _FABRICAS: dict[str, Callable[[dict], Analizador]] = {
     "atributo_xml": AnalizadorXML,
     "presencia_xml": AnalizadorXML,
+    "formato_efectivo": AnalizadorFormato,
     "patron_texto": AnalizadorRegex,
     "lista_texto": AnalizadorLista,
     "imagen": AnalizadorImagen,

@@ -410,7 +410,7 @@ def test_aud07_linea_bachiller_se_evalua():
     assert not regla.passed
     assert regla.aplicable
     assert regla.found == (
-        "@w:val: 1 valores evaluados, 1 incumplen: #1=12 pt (pág. 1); esperado=13 pt"
+        "w:sz/@w:val: 1 valores evaluados, 1 incumplen: #1=12 pt (pág. 1); esperado=13 pt"
     )
 
 
@@ -434,7 +434,7 @@ def test_aud07_otras_titulaciones_tambien_se_evaluan():
     assert not regla.passed
     assert regla.aplicable
     assert regla.found == (
-        "@w:val: 1 valores evaluados, 1 incumplen: #1=12 pt (pág. 1); esperado=13 pt"
+        "w:sz/@w:val: 1 valores evaluados, 1 incumplen: #1=12 pt (pág. 1); esperado=13 pt"
     )
 
 

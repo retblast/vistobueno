@@ -63,8 +63,8 @@ están pendientes de integración y verificación final. NM-08 registra una pol�
 
 | ID | Prioridad | Problema | Tarea / dueño | Estado |
 |---|---|---|---|---|
-| VA-01 | P1 | Solo se revisa el primer run | M1 / Int3 | Pendiente |
-| VA-02 | P1 | Formato heredado y propiedades omitidas | M1 / Int3 | Pendiente |
+| VA-01 | P1 | Solo se revisa el primer run | M1 / Int3 | M1 corregido (PR #100, `2635879`): todos los runs con texto, incluidos hipervínculos |
+| VA-02 | P1 | Formato heredado y propiedades omitidas | M1 / Int3 | M1 corregido (PR #100, `2635879`): formato efectivo con `styles.xml`, `basedOn` y `docDefaults`; límites declarados |
 | VA-03 | P1 | Papel incorrecto en secciones posteriores | M2 / Int3 | Pendiente |
 | VA-04 | P2 | Paginación incorrecta | M3 / Int3 | Pendiente |
 | VA-05 | P2 | Dos tipos declarados: gana el primero | M4 / Int3 | Pendiente |
@@ -73,13 +73,13 @@ están pendientes de integración y verificación final. NM-08 registra una pol�
 | VA-08 | P1 | Permanecen filas de autores/DNI anteriores | B4 / Int1 | Pendiente |
 | VA-09 | P1 | Ficha y depósito sin identidad de trámite | B2 + F2 / Int1, Int2 | Pendiente |
 | VA-10 | P1 | Resguardo identificado solo por filename | F1 / Int2 | Pendiente |
-| VA-11 | P2 | DOCX malformado devuelve 500 | M1a + B5 / Int3, Int1 | Pendiente |
+| VA-11 | P2 | DOCX malformado devuelve 500 | M1a + B5 / Int3, Int1 | M1a corregido (PR 12.2, `3d3e24c`): el extractor valida XML, raíz y cuerpo con `InvalidDocumentError`; B5 de Int1 pendiente |
 | VA-12 | P2 | Markdown activo en el PDF | M9 / Int3 | Pendiente |
 | VA-13 | P1 | Autores, asesor, año y palabras clave mal capturados | M0 / Int3 | PR #75 abierto |
 | VA-14 | P2 | «Base de datos» acordado, pero no aplicado | M6 / Int3 | Pendiente |
 | VA-15 | P2 | Se anuncia tamaño de logo sin medirlo | M7 / Int3 | Pendiente |
 | VA-16 | P2 | ORCID sin comprobación por persona/destino | M8 / Int3 | Pendiente |
-| VA-17 | P1 | Ejemplos DOCX dañados; guardia incompleta | B6 / Int1; M11 / Int3 | Pendiente |
+| VA-17 | P1 | Ejemplos DOCX dañados; guardia incompleta | B6 / Int1; M11 / Int3 | M11 corregido (PR 12.1, `85690c5`): factory OPC y regresión; B6 de Int1 regenera `docs/ejemplos/` |
 | VA-18 | P2 | Total presentado como reglas evaluadas | B7 + M10 / Int1, Int3 | Pendiente |
 | VA-19 | P1 | Un archivo real bloquea la siguiente validación | B1 + F4 / Int1, Int2 | Pendiente |
 | VA-20 | P1 | Éxito de relleno sin comprobar aceptación de Angular | B3 / Int1 | Pendiente |

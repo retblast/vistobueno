@@ -39,6 +39,7 @@ from .models import Severity
 _SECCIONES = (
     "atributo_xml",
     "presencia_xml",
+    "formato_efectivo",
     "patron_texto",
     "lista_texto",
     "imagen",
@@ -595,6 +596,72 @@ def _error_de_xpath(xpath: str) -> str | None:
     return None
 
 
+_PROPIEDAD_FORMATO = re.compile(
+    r"^[A-Za-z_][\w.-]*:[A-Za-z_][\w.-]*(?:/@[A-Za-z_][\w.-]*:[A-Za-z_][\w.-]*)?$"
+)
+
+
+def _lint_formato(config: dict, hallazgos: list[str], rule_id: str) -> None:
+    """Valida la sección `formato_efectivo` (M1).
+
+    Un `parrafo_xpath` vacío seleccionaría todo el documento, y una
+    `propiedad` con formato inválido no la puede resolver el extractor: ambos
+    son errores de configuración que deben fallar al cargar, no contra la
+    tesis del estudiante.
+    """
+    parrafo_xpath = config.get("parrafo_xpath")
+    if not isinstance(parrafo_xpath, str) or not parrafo_xpath.strip():
+        hallazgos.append(
+            f"[{rule_id}] formato_efectivo: 'parrafo_xpath' debe ser un XPath no vacío"
+        )
+    else:
+        error = _error_de_xpath(parrafo_xpath)
+        if error:
+            hallazgos.append(
+                f"[{rule_id}] formato_efectivo: XPath inválido '{parrafo_xpath}': {error}"
+            )
+
+    propiedad = config.get("propiedad")
+    if not isinstance(propiedad, str) or not propiedad.strip():
+        hallazgos.append(
+            f"[{rule_id}] formato_efectivo: 'propiedad' debe ser un texto no vacío "
+            "(p. ej. 'w:rFonts/@w:ascii' o 'w:b')"
+        )
+    elif not _PROPIEDAD_FORMATO.match(propiedad):
+        hallazgos.append(
+            f"[{rule_id}] formato_efectivo: 'propiedad' inválida {propiedad!r} "
+            "(formato esperado: 'w:elemento' o 'w:elemento/@w:atributo')"
+        )
+    else:
+        prefijos = {parte.split(":", 1)[0] for parte in propiedad.split("/@")}
+        desconocidos = sorted(p for p in prefijos if p not in NS)
+        if desconocidos:
+            hallazgos.append(
+                f"[{rule_id}] formato_efectivo: prefijo(s) de namespace desconocido(s) "
+                f"en 'propiedad': {desconocidos}"
+            )
+
+    sujeto = config.get("sujeto", "run")
+    if sujeto not in ("run", "parrafo"):
+        hallazgos.append(
+            f"[{rule_id}] formato_efectivo: 'sujeto' debe ser 'run' o 'parrafo' "
+            f"(se recibió {sujeto!r})"
+        )
+
+    comp = config.get("comparacion", "all_eq")
+    if comp not in ("eq", "all_eq", "contains"):
+        hallazgos.append(
+            f"[{rule_id}] formato_efectivo: comparación '{comp}' no soportada "
+            "(válidas: eq, all_eq, contains)"
+        )
+    if comp in ("eq", "all_eq", "contains") and config.get("esperado") is None:
+        hallazgos.append(f"[{rule_id}] formato_efectivo: 'comparacion: {comp}' requiere 'esperado'")
+
+    for clave in ("n_a_si_sin_nodos", "n_a_si_ausente"):
+        if clave in config and not isinstance(config.get(clave), bool):
+            hallazgos.append(f"[{rule_id}] formato_efectivo: '{clave}' debe ser booleano")
+
+
 def _lint_xpath(config: dict, hallazgos: list[str], rule_id: str, seccion: str) -> None:
     """Valida que los XPath de la sección sean evaluables.
 
@@ -612,6 +679,9 @@ def _lint_xpath(config: dict, hallazgos: list[str], rule_id: str, seccion: str) 
     xpaths = config.get("xpaths")
     if isinstance(xpaths, list):
         valores.extend(x for x in xpaths if isinstance(x, str))
+    parrafo_xpath = config.get("parrafo_xpath")
+    if isinstance(parrafo_xpath, str):
+        valores.append(parrafo_xpath)
     for valor in valores:
         error = _error_de_xpath(valor)
         if error:
@@ -711,6 +781,8 @@ def linter(rules_data: dict) -> list[str]:
                 _escanear_regex(c, hallazgos, rule_id, seccion)
                 if seccion in ("atributo_xml", "presencia_xml"):
                     _lint_xml(c, hallazgos, rule_id, seccion)
+                elif seccion == "formato_efectivo":
+                    _lint_formato(c, hallazgos, rule_id)
                 elif seccion == "automata_secuencia":
                     _lint_automata_secuencia(c, hallazgos, rule_id)
                 elif seccion == "automata_pila":
