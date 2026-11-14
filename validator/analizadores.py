@@ -34,7 +34,14 @@ from .detalle import (
     evaluar_atributo,
 )
 from .dsl_check import DSLValidationError
-from .extractor import NS, ExtractedDocx, W, text_of
+from .extractor import (
+    NS,
+    PAGINA_DESCONOCIDA,
+    PAGINA_ESTIMADA,
+    ExtractedDocx,
+    W,
+    text_of,
+)
 from .tokenizer import PARRAFO, TITULO, es_heading, seccion, solo, tokenizar
 
 # Prefijos de namespace para resolver names en atributos (ej. "@w:val").
@@ -435,11 +442,12 @@ class AnalizadorListaObligatoria(Analizador):
 class AnalizadorPaginacion(Analizador):
     """Verifica que los párrafos objetivo estén en páginas físicas distintas.
 
-    Sección DSL `paginacion` (F2 ítem 1). La paginación real se calcula en
-    el extractor contando los saltos que Word persiste en el XML
-    (`w:lastRenderedPageBreak` y `w:br w:type="page"`). Cada párrafo objetivo
-    (p. ej., un índice de contenidos/tablas/figuras) debe caer en una página
-    física distinta para que la regla pase.
+    Sección DSL `paginacion` (F2 ítem 1). La paginación se calcula en el
+    extractor procesando, en orden de documento, los saltos explícitos
+    (`w:br w:type="page"`, `w:pageBreakBefore`, `w:sectPr` no continuo) y la
+    caché de render de Word (`w:lastRenderedPageBreak`). Cada párrafo
+    objetivo (p. ej., un índice de contenidos/tablas/figuras) debe caer en
+    una página física distinta para que la regla pase.
 
     Uso:
         paginacion:
@@ -454,6 +462,11 @@ class AnalizadorPaginacion(Analizador):
     localiza, o falta el índice de tablas), la regla pasa como n/a y no
     produce un falso positivo: solo juzga la paginación de las secciones
     que existen. La sección de "presencia" la cubren otras reglas.
+
+    M3/VA-04: si la página de algún objetivo es desconocida (el XML no trae
+    marcadores ni caché de render), la regla pasa como n/a en vez de
+    inventar una página y fallar por `paginas_repetidas`. Si la página solo
+    está estimada (caché de render de Word), el detalle lo declara.
     """
 
     def __init__(self, config: dict):
@@ -471,6 +484,7 @@ class AnalizadorPaginacion(Analizador):
 
         ubicaciones = []
         sin_coincidencia = []
+        no_verificables = []
         for xpath in xpaths:
             nodos = extracted.xpath("document", xpath, "todos")
             if not nodos:
@@ -481,7 +495,10 @@ class AnalizadorPaginacion(Analizador):
             pagina = extracted.pagina_de(para)
             if pagina is None:
                 return False, f"pagina_no_disponible={xpath}"
-            ubicaciones.append((pagina, para))
+            certeza = extracted.certeza_pagina_de(para)
+            if certeza == PAGINA_DESCONOCIDA:
+                no_verificables.append(xpath)
+            ubicaciones.append((pagina, certeza, para))
 
         # No todas las secciones objetivo son identificables (p. ej. la
         # plantilla usa un "Índice" genérico dentro de sdtContent, o falta el
@@ -491,12 +508,26 @@ class AnalizadorPaginacion(Analizador):
         if sin_coincidencia:
             return True, "indices_no_verificables (n/a)"
 
-        paginas = [p for p, _ in ubicaciones]
+        # Sin marcadores no se puede afirmar ni la separación ni la
+        # repetición: inventar "página 1" para todos producía un
+        # `paginas_repetidas` falso (M3/VA-04).
+        if no_verificables:
+            return True, (
+                "paginas_no_verificables (n/a): el documento no trae "
+                "marcadores de salto ni caché de render"
+            )
+
+        paginas = [p for p, _, _ in ubicaciones]
         ok = len(set(paginas)) == len(paginas)
-        detalle = "; ".join(f"{i + 1}: página {p}" for i, (p, _) in enumerate(ubicaciones))
+        estimadas = any(certeza == PAGINA_ESTIMADA for _, certeza, _ in ubicaciones)
+        etiqueta = " (estimadas)" if estimadas else ""
+        detalle = "; ".join(
+            f"{i + 1}: página {p}" + (" (estimada)" if c == PAGINA_ESTIMADA else "")
+            for i, (p, c, _) in enumerate(ubicaciones)
+        )
         if ok:
-            return True, f"paginas_distintas={paginas}"
-        return False, f"paginas_repetidas={paginas}; {detalle}"
+            return True, f"paginas_distintas={paginas}{etiqueta}"
+        return False, f"paginas_repetidas={paginas}{etiqueta}; {detalle}"
 
 
 class AnalizadorHipervinculo(Analizador):

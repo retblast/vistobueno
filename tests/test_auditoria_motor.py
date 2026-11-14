@@ -253,8 +253,9 @@ def test_aud03_culpables_primero_y_pagina_del_nodo_infractor():
     assert r.found == (
         "@w:val: 3 valores evaluados, 1 incumplen: #2=15 pt (pág. 2); esperado=12 pt"
     )
-    # El primer nodo (A) está en la página 1; el culpable (B) en la 2.
-    assert r.location == "Cuerpo; página 2"
+    # El primer nodo (A) está en la página 1; el culpable (B) en la 2. La
+    # página viene de la caché de render de Word: se declara estimada (M3).
+    assert r.location == "Cuerpo; página 2 (estimada)"
 
 
 def test_aud03_valores_en_puntos_sin_repr_crudo():

@@ -336,11 +336,23 @@ hipervinculo_texto:
 Usado por la regla *caratula_orcid* (el código ORCID debe ser un
 hipervínculo de 16 dígitos, normalizado a minúsculas y entre paréntesis).
 
-### 12. `paginacion` → `AnalizadorPaginacion` (F2 ítem 1)
+### 12. `paginacion` → `AnalizadorPaginacion` (F2 ítem 1, M3/VA-04)
 
-Correlaciona los párrafos con su **página física** (mapa construido a
-partir de `w:lastRenderedPageBreak` y `w:br w:type="page"`) y compara las
-páginas de los nodos que matchean cada XPath:
+Correlaciona los párrafos con su **página física** y compara las páginas de
+los nodos que matchean cada XPath. El mapa se construye procesando los
+saltos en orden de documento:
+
+- `w:br w:type="page"`: salto explícito (estructural).
+- `w:pPr/w:pageBreakBefore`: el **propio párrafo** arranca en página nueva;
+  `w:val="0"`, `false` u `off` lo desactivan.
+- `w:pPr/w:sectPr` con tipo distinto de `continuous`/`nextColumn`: la
+  sección siguiente empieza en otra página.
+- `w:lastRenderedPageBreak`: caché del render de Word.
+
+Varios saltos dentro del mismo párrafo cuentan todos. Un párrafo que cruza
+página conserva la página donde empieza. Cada página lleva un grado de
+certeza: **comprobada** (salto estructural), **estimada** (caché de render)
+o **desconocida** (sin marcadores).
 
 ```yaml
 paginacion:
@@ -354,9 +366,16 @@ paginacion:
 - `paginas_distintas`: los títulos deben quedar en páginas separadas
   (`paginas_repetidas` si hay dos en la misma; `no_encontrado` si algún
   XPath no coincide).
+- Si la página de algún objetivo es **desconocida** (el DOCX no trae
+  marcadores ni caché de render), la regla pasa como n/a con
+  `paginas_no_verificables`: no se inventa una página para fallar por
+  `paginas_repetidas`. Si la página solo está **estimada** (caché de render
+  de Word), el detalle declara `(estimadas)`.
 - A efectos del *enriquecimiento de `ubicacion`*, el analizador expone el
   último nodo analizado (`ultimo_nodo`); cuando una regla FALLA con página
-  conocida, el compilador anexa `; página N` a la ubicación.
+  conocida, el compilador anexa `; página N` (o `; página N (estimada)` si
+  la página viene de la caché de render). Si la página es desconocida, el
+  sufijo se omite.
 - Los párrafos de `header*`/`footer*` **no** están en el mapa de página
   → nunca reciben el sufijo.
 

@@ -365,7 +365,9 @@ _MUTACIONES = {
     "anexos_minimos_cualitativo": _mut_anexos_cualitativo,
     "caratula_orcid": lambda c: c["portada"].pop("orcid"),
     "proyecto_caratula_texto": _mut_proyecto_caratula,
-    "indice_paginas_separadas": lambda c: c.update(indices_paginas_separadas=False),
+    "indice_paginas_separadas": lambda c: c.update(
+        indices_paginas_separadas=False, marcador_render_final=True
+    ),
     "encabezado_membrete": lambda c: c.update(header_logo=False),
     "encabezado_formato": lambda c: c.update(header_fuente="Arial"),
     "notas_al_pie_consistencia": lambda c: c.update(notas_pie_ids=[1, 2, 4]),

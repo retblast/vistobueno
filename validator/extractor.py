@@ -24,6 +24,14 @@ NS = {
     "pic": "http://schemas.openxmlformats.org/drawingml/2006/picture",
 }
 
+# Grado de certeza de la página asignada a un párrafo (M3/VA-04). No toda
+# página se puede afirmar con la misma fuerza: un salto explícito del autor
+# es un hecho estructural, mientras que `w:lastRenderedPageBreak` es una
+# caché del render de Word y la ausencia de marcadores no prueba nada.
+PAGINA_COMPROBADA = "comprobada"
+PAGINA_ESTIMADA = "estimada"
+PAGINA_DESCONOCIDA = "desconocida"
+
 
 # Cota de tamaño DESCOMPRIMIDO por parte del paquete OPC (defensa zip bomb,
 # revisión 2026-10-13, hallazgo R2): la API limita la subida a 10 MB
@@ -241,15 +249,82 @@ def _caratula_paras(doc) -> set:
     return set(paras[:limite])
 
 
-def _paginacion_para(document) -> dict[int, int]:
-    """Calcula el mapa de paginación real (párrafo -> página física).
+@dataclass(frozen=True)
+class PaginaFisica:
+    """Página asignada a un párrafo y el grado de certeza de esa asignación."""
 
-    Word persiste en el XML tres marcadores fiables de saltos de página:
-    ``w:lastRenderedPageBreak`` (insertado al guardar un documento renderizado),
-    ``w:br w:type="page"`` (salto explícito) y la propiedad de párrafo
-    ``w:pPr/w:pageBreakBefore`` (el párrafo arranca en página nueva).
-    Recorremos los párrafos en orden de documento y correlacionamos cada uno
-    con su número físico de página sin necesidad de renderizar el documento.
+    numero: int
+    certeza: str
+
+
+def _apagado(el) -> bool:
+    """¿El booleano OOXML está desactivado de forma explícita?
+
+    `w:pageBreakBefore w:val="0"` (o `false`/`off`) NO crea un salto. Antes
+    se trataba cualquier presencia del nodo como un salto (M3/VA-04).
+    """
+    val = el.get(W + "val")
+    return val is not None and val.strip().lower() in {"0", "false", "off"}
+
+
+def _salta_pagina_por_seccion(sect) -> bool:
+    """¿Este `w:sectPr` obliga a que la sección siguiente empiece en otra página?
+
+    `w:type` vale `nextPage` por defecto. `continuous` y `nextColumn` no
+    cambian de página. `evenPage`/`oddPage` sí, aunque pueden dejar una
+    página en blanco: el mapa los cuenta como un salto (límite documentado).
+    """
+    tipo = sect.find(W + "type")
+    valor = (tipo.get(W + "val") if tipo is not None else None) or "nextPage"
+    return valor.strip().lower() not in {"continuous", "nextcolumn"}
+
+
+def _parrafo_tiene_contenido(p) -> bool:
+    """¿El párrafo puede consumir espacio de la página?
+
+    Un párrafo vacío (solo marcadores de salto o espacios) no aleja al
+    siguiente del inicio de página. Se excluye `w:br w:type="page"` porque
+    es el salto, no contenido; los demás `w:br` (línea nueva) sí ocupan
+    espacio.
+    """
+    for el in p.iter():
+        if el.tag == W + "t":
+            if (el.text or "").strip():
+                return True
+        elif el.tag in (W + "drawing", W + "pict", W + "object", W + "sym", W + "tab"):
+            return True
+        elif el.tag == W + "br" and el.get(W + "type") != "page":
+            return True
+    return False
+
+
+def _paginacion_para(document) -> dict:
+    """Calcula el mapa de paginación (párrafo -> `PaginaFisica`).
+
+    Word persiste en el XML cuatro señales de salto de página:
+
+    - ``w:br w:type="page"``: salto explícito del autor (estructural).
+    - ``w:pPr/w:pageBreakBefore``: el párrafo arranca en página nueva
+      (estructural); ``w:val="0"`` lo desactiva.
+    - ``w:pPr/w:sectPr`` con tipo distinto de ``continuous``/``nextColumn``:
+      la sección siguiente empieza en otra página (estructural).
+    - ``w:lastRenderedPageBreak``: caché del render de Word (estimada).
+
+    Se recorren los párrafos en orden de documento y se procesan los saltos
+    en el orden en que aparecen. Un párrafo con `pageBreakBefore` pertenece
+    a la página nueva; los saltos internos (`w:br`, `lastRenderedPageBreak`)
+    se cuentan todos y avanzan la página del contenido siguiente. Un párrafo
+    puede cruzar una página: se le asigna la página donde empieza.
+
+    Cada asignación lleva su grado de certeza:
+
+    - ``comprobada``: el párrafo empieza en un salto estructural (o es el
+      inicio del documento). El número absoluto supone que los saltos
+      anteriores también están marcados; el límite está documentado.
+    - ``estimada``: la página se deduce de la caché de render de Word
+      (`lastRenderedPageBreak`), que puede estar desactualizada.
+    - ``desconocida``: no hay marcador; el texto pudo fluir a otra página
+      sin que el XML lo registre.
 
     La página 1 es la carátula (aunque el manual indique que no se enumera
     visualmente, se cuenta para el correlativo del resto del documento).
@@ -259,16 +334,55 @@ def _paginacion_para(document) -> dict[int, int]:
     # referencia fuerte, lo que rompería las consultas posteriores.
     paginacion: dict = {}
     pagina = 1
+    # El primer párrafo empieza en la página 1: no hay ambigüedad.
+    inicio_comprobado = True
+    # Si el documento trae la caché de render, Word ya insertó los cortes
+    # naturales: ausencia de marcador significa "misma página" (estimada).
+    tiene_render = next(document.iter(W + "lastRenderedPageBreak"), None) is not None
 
     for p in document.xpath("//w:body//w:p", namespaces=NS):
-        tiene_salto = (
-            p.find(f".//{W}lastRenderedPageBreak", namespaces=NS) is not None
-            or p.find(f".//{W}br[@w:type='page']", namespaces=NS) is not None
-            or p.find(f"{W}pPr/{W}pageBreakBefore", namespaces=NS) is not None
-        )
-        paginacion[p] = pagina
-        if tiene_salto:
+        ppr = p.find(W + "pPr")
+        pbb = ppr.find(W + "pageBreakBefore") if ppr is not None else None
+        if pbb is not None and not _apagado(pbb):
+            # `pageBreakBefore` afecta al PROPIO párrafo (M3/VA-04).
             pagina += 1
+            inicio_comprobado = True
+
+        if inicio_comprobado:
+            certeza = PAGINA_COMPROBADA
+        elif tiene_render:
+            certeza = PAGINA_ESTIMADA
+        else:
+            certeza = PAGINA_DESCONOCIDA
+        paginacion[p] = PaginaFisica(pagina, certeza)
+
+        saltos = 0
+        saltos_estructurales = 0
+        for el in p.iter():
+            if el.tag == W + "lastRenderedPageBreak":
+                saltos += 1
+            elif el.tag == W + "br" and el.get(W + "type") == "page":
+                saltos += 1
+                saltos_estructurales += 1
+
+        sect = ppr.find(W + "sectPr") if ppr is not None else None
+        if sect is not None and _salta_pagina_por_seccion(sect):
+            saltos += 1
+            saltos_estructurales += 1
+
+        if saltos:
+            # Varios saltos en el mismo párrafo cuentan todos: el contenido
+            # siguiente puede quedar varias páginas más adelante.
+            pagina += saltos
+            # El siguiente párrafo empieza en página nueva. Solo es
+            # comprobada si todos los saltos fueron estructurales; si alguno
+            # vino de la caché de Word, la certeza baja a estimada.
+            inicio_comprobado = saltos_estructurales == saltos
+        elif not _parrafo_tiene_contenido(p):
+            # Párrafo vacío: el siguiente sigue en el inicio de página.
+            pass
+        else:
+            inicio_comprobado = False
 
     return paginacion
 
@@ -297,8 +411,9 @@ class ExtractedDocx:
     # Caché de consultas XPath (F4): clave (parte, contexto, xpath). Evita
     # re-ejecutar la misma consulta por cada analizador de la regla.
     _cache: dict = field(default_factory=dict, repr=False)
-    # Paginación real (ítem 1 de la Fase 2): párrafo -> número físico de
-    # página, calculada a partir de los saltos que Word persiste en el XML.
+    # Paginación física (ítem 1 de la Fase 2, corregida en M3/VA-04):
+    # párrafo -> `PaginaFisica` (número + grado de certeza), calculada a
+    # partir de los saltos que Word persiste en el XML.
     _paginacion: dict = field(default_factory=dict, repr=False)
 
     @property
@@ -356,14 +471,41 @@ class ExtractedDocx:
         except ValueError:
             return False
 
-    def pagina_de(self, node) -> int | None:
-        """Número físico de página de un párrafo (None si no es un párrafo
-        del cuerpo del documento). Es la forma de "devolver también el
-        número de página real" pedida en el ítem 1 de la Fase 2."""
+    def _pagina_de(self, node) -> PaginaFisica | None:
+        """Información de página del párrafo que contiene `node`."""
         if node is None:
             return None
         p = _para_ancestor(node)
         return self._paginacion.get(p)
+
+    def pagina_de(self, node) -> int | None:
+        """Número físico de página de un párrafo (None si no es un párrafo
+        del cuerpo del documento). Es la forma de "devolver también el
+        número de página real" pedida en el ítem 1 de la Fase 2.
+
+        El número es la mejor estimación disponible; para saber si está
+        comprobado o solo estimado, usar `certeza_pagina_de()`.
+        """
+        info = self._pagina_de(node)
+        return info.numero if info is not None else None
+
+    def certeza_pagina_de(self, node) -> str | None:
+        """Grado de certeza de la página de un párrafo (M3/VA-04).
+
+        Devuelve ``PAGINA_COMPROBADA``, ``PAGINA_ESTIMADA`` o
+        ``PAGINA_DESCONOCIDA``; ``None`` si el nodo no es un párrafo del
+        cuerpo. La distinción evita afirmar una página cuando el XML no la
+        respalda (sin marcadores o solo con la caché de render de Word).
+        """
+        info = self._pagina_de(node)
+        return info.certeza if info is not None else None
+
+    def pagina_confirmada_de(self, node) -> bool | None:
+        """¿La página del párrafo está respaldada por un salto estructural?"""
+        certeza = self.certeza_pagina_de(node)
+        if certeza is None:
+            return None
+        return certeza == PAGINA_COMPROBADA
 
     def part(self, name: str) -> etree._Element | None:
         return {

@@ -489,6 +489,12 @@ def _document_xml(cfg: dict) -> str:
     # insertó tras el heading "INTRODUCCIÓN". Los párrafos que siguen al
     # marcador no son cuerpo (anexos finales y notas), solo cierran el doc.
     paras.append(_sect_marker(cfg))
+    # Caché de render al final: la usan las mutaciones que necesitan que el
+    # documento se comporte como uno ya guardado por Word (M3/VA-04). Sin
+    # este marcador, la ausencia de saltos deja las páginas como
+    # desconocidas y la regla de paginación pasa como n/a.
+    if cfg.get("marcador_render_final"):
+        paras.append(_page_break_para())
     nota_pie = _notas_pie_para(cfg)
     if nota_pie:
         paras.append(nota_pie)

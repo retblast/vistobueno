@@ -27,7 +27,7 @@ REQ-25,RCU-220 pp2-3,Catálogo de áreas y líneas de investigación,PARCIAL,car
 REQ-26,p182,Ciudad y país 12 pt; negrita; centrados; mixtas,PARCIAL,caratula_ciudad_pais_negrita,Selectores no demuestran cada propiedad,Agregar casos por propiedad y bloque.
 REQ-27,p183 y plantillas,Año de carátula: año en curso frente a año de sustentación,CONFLICTO,captura dc.date.issued,Fuente y plantilla usan conceptos distintos; VA-13,Ratificar significado; separar validación y captura.
 REQ-28,p188-189,Jurado con nombres; grados; cargos; espacio de firma,REVISION_HUMANA,estructura_tinv_*,Un título no acredita personas ni firmas,Lista de revisión; no afirmar autenticidad.
-REQ-29,p193,"Índices de contenidos, tablas y figuras separados",PARCIAL,indice_subdivisiones / indice_paginas_separadas,VA-04 y detección por palabras,Verificar bloques reales y separación; limitar afirmación de página.
+REQ-29,p193,"Índices de contenidos, tablas y figuras separados",PARCIAL,indice_subdivisiones / indice_paginas_separadas,"VA-04 corregido (M3): saltos en orden y con certeza; detección por palabras pendiente","Verificar bloques reales (M12); la separación ya no afirma páginas sin marcador."
 REQ-30,p194-197,Índices ordenados; páginas y nombres corresponden al contenido,PARCIAL,indice_apunta_secciones / indice_numeracion_jerarquica,Controles textuales no equivalen a render final,Probar variantes reales y campo TOC actualizado.
 REQ-31,p201,Resumen de 159 a 220 palabras,INCORRECTO,resumen_longitud,VA-06: solo mínimo,"Probar 158,159,220,221; definir tokenización."
 REQ-32,p201,Entre 3 y 5 palabras clave,INCORRECTO,palabras_clave_minimo,VA-07: solo mínimo y Resumen,Comprobar ambos límites y ambos idiomas según alcance aprobado.

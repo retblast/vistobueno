@@ -57,7 +57,13 @@ from .analizadores import (
 )
 from .automata import DFA, PDA, GramaticaEstructura, Transicion, TransicionPDA
 from .dsl_check import linter_o_alzar
-from .extractor import NS, ExtractedDocx, text_of
+from .extractor import (
+    NS,
+    PAGINA_DESCONOCIDA,
+    PAGINA_ESTIMADA,
+    ExtractedDocx,
+    text_of,
+)
 from .models import RuleResult, Severity
 from .tokenizer import TITULO, solo, tokenizar
 
@@ -587,6 +593,7 @@ class ReglaCompilada:
     def ejecutar(self, extracted: ExtractedDocx) -> RuleResult:
         fallos: list[str] = []
         pagina: int | None = None
+        certeza_pagina: str | None = None
         detalles: list[tuple[Analizador, str]] = []
         for an in self.analizadores:
             try:
@@ -600,6 +607,7 @@ class ReglaCompilada:
                 # se usa el nodo objetivo del primer analizador que falló.
                 if pagina is None and getattr(an, "ultimo_nodo", None) is not None:
                     pagina = extracted.pagina_de(an.ultimo_nodo)
+                    certeza_pagina = extracted.certeza_pagina_de(an.ultimo_nodo)
 
         # Una regla cuyos analizadores declararon "no aplica" no se evaluó:
         # debe salir con `aplicable=False` y `found="no aplica a este
@@ -613,8 +621,14 @@ class ReglaCompilada:
             esperados = "; ".join(map(str, esperados))
 
         ubicacion = self.rule.get("ubicacion") or ""
-        if fallos and pagina is not None and ubicacion:
-            ubicacion = f"{ubicacion}; página {pagina}"
+        # M3/VA-04: no se inventa precisión. Si la página es desconocida
+        # (sin marcadores), se omite el sufijo; si solo está estimada por la
+        # caché de render de Word, se declara como tal.
+        if fallos and pagina is not None and ubicacion and certeza_pagina != PAGINA_DESCONOCIDA:
+            sufijo = f"página {pagina}"
+            if certeza_pagina == PAGINA_ESTIMADA:
+                sufijo += " (estimada)"
+            ubicacion = f"{ubicacion}; {sufijo}"
 
         return RuleResult(
             rule_id=self.rule["id"],

@@ -1,14 +1,19 @@
-"""Tests de la paginación física real (F2 ítem 1).
+"""Tests de la paginación física real (F2 ítem 1, corregida en M3/VA-04).
 
 Cubre:
-- `_paginacion_para`: mapa párrafo -> página a partir de
-  `w:lastRenderedPageBreak`, `w:br w:type="page"` y
-  `w:pPr/w:pageBreakBefore`.
-- `ExtractedDocx.pagina_de`: página de un párrafo (None si no es párrafo).
+- `_paginacion_para`: mapa párrafo -> página procesando en orden los saltos
+  explícitos (`w:br w:type="page"`, `w:pageBreakBefore`, `w:sectPr` no
+  continuo) y la caché de render (`w:lastRenderedPageBreak`). `pageBreakBefore`
+  afecta al propio párrafo, `w:val="0"` no crea salto y varios saltos en un
+  mismo párrafo cuentan todos.
+- `ExtractedDocx.pagina_de`, `certeza_pagina_de` y `pagina_confirmada_de`:
+  la página puede ser comprobada (salto estructural), estimada (caché de
+  render de Word) o desconocida (sin marcadores).
 - `AnalizadorPaginacion` (`paginacion` / `paginas_distintas`): pasa solo si
   los objetivos caen en páginas físicas distintas; falla con
-  `paginas_repetidas`. Si alguna sección objetivo no es identificable pasa
-  como n/a (la regla solo juzga paginación, no presencia).
+  `paginas_repetidas`. Si alguna sección objetivo no es identificable, o si
+  la página es desconocida, pasa como n/a (la regla solo juzga paginación,
+  no presencia ni inventa páginas).
 - Regla `indice_paginas_separadas` end-to-end contra `reglas_unt.yaml`
   (documento base separado / mutación agrupada / índice renombrado).
 - Linter y compilador DSL aceptan la sección `paginacion`.
@@ -159,15 +164,143 @@ def test_pagina_de_no_para_es_none():
 
 
 def test_mapa_de_salto_con_page_break_before():
-    # w:pageBreakBefore (propiedad de w:pPr): el párrafo arranca en página
-    # nueva y mueve el conteo hacia adelante (nit de la revisión PR #28).
+    # w:pageBreakBefore (propiedad de w:pPr) afecta al PROPIO párrafo: el
+    # párrafo que lo declara arranca en página nueva (M3/VA-04). Antes se le
+    # asignaba la página anterior y el salto se cobraba recién en el
+    # siguiente.
     path = _make_docx([_para("A"), _p_break_before("SECCION"), _para("B")])
     try:
         ext = extract(path)
     finally:
         Path(path).unlink(missing_ok=True)
     paras = ext.document.xpath("//w:body//w:p", namespaces=NS)
-    assert [ext.pagina_de(p) for p in paras] == [1, 1, 2]
+    assert [ext.pagina_de(p) for p in paras] == [1, 2, 2]
+
+
+# ---------------------------------------------------------------------------
+# M3/VA-04: orden y valor de los saltos
+# ---------------------------------------------------------------------------
+
+
+def _paginas(paras: list) -> list[int | None]:
+    path = _make_docx(paras)
+    try:
+        ext = extract(path)
+    finally:
+        Path(path).unlink(missing_ok=True)
+    return [ext.pagina_de(p) for p in ext.document.xpath("//w:body//w:p", namespaces=NS)]
+
+
+def test_break_before_afecta_al_propio_parrafo():
+    # Aceptación M3: [1,2] con break-before en el segundo párrafo.
+    assert _paginas([_para("A"), _p_break_before("B")]) == [1, 2]
+
+
+def test_break_before_desactivado_no_crea_salto():
+    # Aceptación M3: w:val="0" desactiva el salto; ambos quedan en página 1.
+    paras = [
+        _para("A"),
+        '<w:p><w:pPr><w:pageBreakBefore w:val="0"/></w:pPr>'
+        '<w:r><w:t xml:space="preserve">B</w:t></w:r></w:p>',
+    ]
+    assert _paginas(paras) == [1, 1]
+
+
+def test_break_before_off_tampoco_crea_salto():
+    paras = [
+        _para("A"),
+        '<w:p><w:pPr><w:pageBreakBefore w:val="off"/></w:pPr>'
+        '<w:r><w:t xml:space="preserve">B</w:t></w:r></w:p>',
+    ]
+    assert _paginas(paras) == [1, 1]
+
+
+def test_dos_saltos_en_el_mismo_parrafo():
+    # Aceptación M3: [1,3] con dos saltos en el primero. Un párrafo puede
+    # contener varios w:br y todos avanzan la página.
+    paras = [
+        '<w:p><w:r><w:br w:type="page"/><w:br w:type="page"/></w:r></w:p>',
+        _para("B"),
+    ]
+    assert _paginas(paras) == [1, 3]
+
+
+def test_salto_de_seccion_next_page_avanza_la_pagina():
+    # w:sectPr en pPr cierra la sección; nextPage (el valor por defecto)
+    # hace que la sección siguiente empiece en otra página.
+    paras = [
+        _para("INDICE DE CONTENIDOS"),
+        '<w:p><w:pPr><w:sectPr><w:type w:val="nextPage"/></w:sectPr></w:pPr>'
+        '<w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>',
+        _para("INDICE DE TABLAS"),
+    ]
+    assert _paginas(paras) == [1, 1, 2]
+
+
+def test_salto_de_seccion_continuo_no_avanza_la_pagina():
+    paras = [
+        _para("INDICE DE CONTENIDOS"),
+        '<w:p><w:pPr><w:sectPr><w:type w:val="continuous"/></w:sectPr></w:pPr>'
+        '<w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>',
+        _para("INDICE DE TABLAS"),
+    ]
+    assert _paginas(paras) == [1, 1, 1]
+
+
+def test_parrafo_que_cruza_pagina_conserva_la_pagina_de_inicio():
+    # Un párrafo con texto, un salto y más texto cruza la página: se le
+    # asigna la página donde empieza y el siguiente párrafo pasa a la nueva.
+    paras = [
+        '<w:p><w:r><w:t xml:space="preserve">Antes</w:t></w:r>'
+        "<w:r><w:lastRenderedPageBreak/></w:r>"
+        '<w:r><w:t xml:space="preserve">Después</w:t></w:r></w:p>',
+        _para("Siguiente"),
+    ]
+    assert _paginas(paras) == [1, 2]
+
+
+def test_sin_marcadores_la_pagina_es_desconocida():
+    # Sin marcadores no se puede afirmar la página: la certeza lo declara
+    # en vez de inventar "página 1" para todo.
+    path = _make_docx([_para("A"), _para("B"), _para("C")])
+    try:
+        ext = extract(path)
+        paras = ext.document.xpath("//w:body//w:p", namespaces=NS)
+        certezas = [ext.certeza_pagina_de(p) for p in paras]
+        confirmadas = [ext.pagina_confirmada_de(p) for p in paras]
+    finally:
+        Path(path).unlink(missing_ok=True)
+    # El primero empieza el documento (página 1 comprobada); el resto pudo
+    # haber fluido a otra página sin marcador.
+    assert certezas[0] == "comprobada"
+    assert certezas[1:] == ["desconocida", "desconocida"]
+    assert confirmadas == [True, False, False]
+
+
+def test_salto_explicito_es_comprobado_y_render_es_estimado():
+    path = _make_docx([_para("A"), _p_br_page(), _para("B"), _p_break(), _para("C")])
+    try:
+        ext = extract(path)
+        paras = ext.document.xpath("//w:body//w:p", namespaces=NS)
+        certezas = [ext.certeza_pagina_de(p) for p in paras]
+    finally:
+        Path(path).unlink(missing_ok=True)
+    # B empieza tras un w:br explícito (comprobada); C tras un
+    # lastRenderedPageBreak (estimada).
+    assert certezas[0] == "comprobada"
+    assert certezas[2] == "comprobada"
+    assert certezas[4] == "estimada"
+
+
+def test_certeza_de_nodo_que_no_es_parrafo_es_none():
+    path = _make_docx([_para("A")])
+    try:
+        ext = extract(path)
+        assert ext.certeza_pagina_de(None) is None
+        assert ext.certeza_pagina_de(ext.document) is None
+        assert ext.pagina_confirmada_de(None) is None
+    finally:
+        Path(path).unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +371,54 @@ def test_paginas_repetidas_falla():
     )
     assert not r.passed
     assert "paginas_repetidas" in r.found
+
+
+def test_sin_marcadores_no_se_inventa_paginas_repetidas():
+    """Sin saltos ni caché de render la regla pasa como n/a (M3/VA-04).
+
+    Antes todos los párrafos recibían la página 1 y la regla fallaba con
+    `paginas_repetidas` aunque el XML no probara nada.
+    """
+    an, extracted = _analizador_paginas(
+        [
+            _para("INDICE DE CONTENIDOS"),
+            _para("INDICE DE TABLAS"),
+            _para("INDICE DE FIGURAS"),
+        ]
+    )
+    ok, detalle = an.analizar(extracted)
+    assert ok
+    assert "paginas_no_verificables" in detalle
+    assert "n/a" in detalle
+
+    r = _validar_una(
+        [
+            _para("INDICE DE CONTENIDOS"),
+            _para("INDICE DE TABLAS"),
+            _para("INDICE DE FIGURAS"),
+        ],
+        _XPATHS_INDICES,
+    )
+    assert r.passed
+    assert "paginas_repetidas" not in r.found
+
+
+def test_paginas_estimadas_se_declaran_en_el_detalle():
+    """Con caché de render la comparación es posible, pero se declara."""
+    an, extracted = _analizador_paginas(
+        [
+            _p_break(),
+            _para("INDICE DE CONTENIDOS"),
+            _p_break(),
+            _para("INDICE DE TABLAS"),
+            _p_break(),
+            _para("INDICE DE FIGURAS"),
+        ]
+    )
+    ok, detalle = an.analizar(extracted)
+    assert ok
+    assert "estimadas" in detalle
+    assert "paginas_distintas" in detalle
 
 
 def test_paginas_distintas_solo_con_page_break_before():
@@ -359,12 +540,13 @@ def _resultado_dsl(cfg, rule_id):
 def test_regla_fallida_enriquece_location_con_pagina():
     # sangria_parrafo falla (firstLine=0); su primera línea del cuerpo cae en
     # la página 4 del DOCX sintético (3 saltos previos: contenido, tablas y
-    # figuras). El motor debe anexar "página 4" a `location` (ítem 1).
+    # figuras). La página viene de la caché de render de Word, así que el
+    # sufijo la declara estimada (M3/VA-04).
     cfg = aplicar_mutacion("sangria_parrafo", configuracion_base())
     r = _resultado_dsl(cfg, "sangria_parrafo")
     assert not r.passed
     assert r.location is not None
-    assert r.location == 'Sección "Formato general" (párr. 141); página 4'
+    assert r.location == 'Sección "Formato general" (párr. 141); página 4 (estimada)'
 
 
 def test_regla_cumplida_no_altera_location():
@@ -372,3 +554,33 @@ def test_regla_cumplida_no_altera_location():
     r = _resultado_dsl(configuracion_base(), "sangria_parrafo")
     assert r.passed
     assert r.location == 'Sección "Formato general" (párr. 141)'
+
+
+def test_pagina_desconocida_no_se_anexa_a_la_location():
+    """Sin marcadores no se inventa una página en la ubicación (M3/VA-04)."""
+    regla = {
+        "id": "ubicacion_sin_pagina",
+        "tipo": "atributo_xml",
+        "descripcion": "Atributo de prueba",
+        "valor_esperado": "otro",
+        "severidad": "error",
+        "ubicacion": "Cuerpo",
+        "fuente": "MANUAL.docx",
+        "cita": '"cita"',
+        "atributo_xml": {
+            "parte": "document",
+            "contexto": "todos",
+            # Segundo párrafo: no arranca página ni hay marcadores.
+            "xpath": "//w:body/w:p[2]/w:r/w:t",
+            "atributo": "@xml:space",
+            "comparacion": "eq",
+            "esperado": "default",
+        },
+    }
+    path = _make_docx([_para("A"), _para("B")])
+    try:
+        r = validate_docx(path, {"reglas": [regla]})[0]
+    finally:
+        Path(path).unlink(missing_ok=True)
+    assert not r.passed
+    assert r.location == "Cuerpo"
