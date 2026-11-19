@@ -79,7 +79,7 @@ Resultado esperado: **la suite termina en verde**. El conteo exacto depende
 de las carpetas locales `recursos/` y `frontend/dist`; los tests que las
 necesitan se marcan como `skipped` cuando faltan, y eso **no es un fallo de
 la instalación**. Referencia medida en un clon sin esas carpetas:
-`983 passed, 9 skipped` (sin `xfail`).
+`1020 passed, 9 skipped` (sin `xfail`).
 
 Levanta la API:
 
@@ -199,7 +199,7 @@ nix run .#test -- tests/ -q
 ```
 
 Esperado: la suite en verde. En un clon limpio sin `recursos/` ni
-`frontend/dist`: `983 passed, 9 skipped` (sin `xfail`); ver §2.3.
+`frontend/dist`: `1020 passed, 9 skipped` (sin `xfail`); ver §2.3.
 
 ### 3.5 Levantar la API y la SPA
 
@@ -401,7 +401,7 @@ Usa esta lista para el hito de instalación de la actividad 4.
 - [ ] `cd frontend && npm ci && npm run build && npm test` → build y tests
       en verde. Esto deja `frontend/dist`, que la suite usa.
 - [ ] `nix run .#test -- tests/ -q` → verde. Referencia en un clon sin
-      `recursos/` ni `frontend/dist`: `983 passed, 9 skipped` (sin `xfail`);
+      `recursos/` ni `frontend/dist`: `1020 passed, 9 skipped` (sin `xfail`);
       con esas carpetas los `skipped` se reducen (ver §2.3).
 - [ ] `nix run .#serve -- validator.api:app` → `/docs` responde `200` en
       `127.0.0.1:8000`.

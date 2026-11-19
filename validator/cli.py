@@ -71,10 +71,12 @@ def main():
         _escribir_bytes(reporte_a_pdf(reporte), args.salida)
         return
 
+    resumen = reporte["resumen"]
     print(f"Semáforo: {reporte['semaforo'].upper()}")
-    print(f"Total reglas evaluadas: {reporte['resumen']['total']}")
-    print(f"  Errores fallidos:  {reporte['resumen']['fallidos_error']}")
-    print(f"  Warnings fallidos: {reporte['resumen']['fallidos_warning']}")
+    print(f"Reglas evaluadas: {resumen['total_evaluadas']} de {resumen['total']}")
+    print(f"No aplicables: {resumen['reglas_no_aplicables']}")
+    print(f"Errores fallidos: {resumen['fallidos_error']}")
+    print(f"Warnings fallidos: {resumen['fallidos_warning']}")
     print()
     for r in reporte["resultados"]:
         estado = "OK  " if r["passed"] else f"FAIL[{r['severity']}]"

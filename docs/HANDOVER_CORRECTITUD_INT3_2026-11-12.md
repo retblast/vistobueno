@@ -225,6 +225,16 @@ a archivos sensibles ni hacer peticiones reales para demostrarlo.
 Usar `total_evaluadas` bajo «evaluadas». Mostrar omitidas aparte.
 **Aceptación:** 50 totales, 42 evaluadas no se presentan como 50 evaluadas.
 
+- **Estado 2026-11-18:** corregido en `d83ffde`. El modo texto del CLI y el
+  resumen Markdown publican «Reglas evaluadas: N de TOTAL» y una línea
+  aparte con las no aplicables; el exportador sigue aceptando reportes
+  antiguos sin `total_evaluadas`. Evidencia: `1020 passed, 9 skipped` en
+  clon limpio (`1027 passed, 2 skipped` con `recursos/`); regresiones
+  `test_cli_texto_distingue_evaluadas_de_no_aplicables`,
+  `test_markdown_no_presenta_las_omitidas_como_evaluadas` y
+  `test_markdown_acepta_reportes_antiguos_sin_total_evaluadas`; ruff, ruff
+  format y mypy limpios.
+
 ### M11. Reparar el paquete OPC del factory — VA-17
 
 **Archivos de Int3:** `tests/_xml_constants.py`, `tests/_docx_builder.py`,

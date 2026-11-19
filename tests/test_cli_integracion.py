@@ -98,3 +98,12 @@ def test_cli_severity_filtra_resultados(docx, monkeypatch, capsys):
     assert code is None
     reporte = _json_reporte(captured)
     assert all(r["severity"] == "error" for r in reporte["resultados"])
+
+
+def test_cli_texto_distingue_evaluadas_de_no_aplicables(docx, monkeypatch, capsys):
+    """VA-18: el modo texto no presenta las 50 reglas como evaluadas."""
+    code, captured = _correr([docx, str(YAML)], monkeypatch, capsys)
+    assert code is None
+    assert "Reglas evaluadas: 44 de 50" in captured.out
+    assert "No aplicables: 6" in captured.out
+    assert "Total reglas evaluadas: 50" not in captured.out

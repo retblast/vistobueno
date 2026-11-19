@@ -45,7 +45,13 @@ REPORTE: dict[str, Any] = {
             "cita": '"Margen superior 2,5 cm"',
         },
     ],
-    "resumen": {"total": 42, "fallidos_error": 1, "fallidos_warning": 0},
+    "resumen": {
+        "total": 42,
+        "total_evaluadas": 40,
+        "reglas_no_aplicables": 2,
+        "fallidos_error": 1,
+        "fallidos_warning": 0,
+    },
     "como_preguntar_a_una_ia": [
         {"rule_id": "margen_superior", "prompt": "¿Cómo corrijo el margen superior?"}
     ],
@@ -56,11 +62,30 @@ def test_markdown_contiene_semaforo_resumen_y_tabla():
     md = reporte_a_markdown(REPORTE)
     assert "# Reporte de validación" in md
     assert "ROJO" in md
-    assert "Total de reglas evaluadas: **42**" in md
+    assert "Reglas evaluadas: **40** de **42**" in md
+    assert "No aplicables: **2**" in md
     assert "`papel_tamano`" in md
     assert "`margen_superior`" in md
     assert "✅ cumple" in md
     assert "❌ **falla**" in md
+
+
+def test_markdown_no_presenta_las_omitidas_como_evaluadas():
+    """VA-18: las reglas que no se miraron no cuentan como evaluadas."""
+    md = reporte_a_markdown(REPORTE)
+    assert "Total de reglas evaluadas: **42**" not in md
+
+
+def test_markdown_acepta_reportes_antiguos_sin_total_evaluadas():
+    """VA-18: los reportes guardados antes del cambio siguen exportándose."""
+    reporte = {
+        **REPORTE,
+        "resumen": {"total": 42, "fallidos_error": 1, "fallidos_warning": 0},
+    }
+    md = reporte_a_markdown(reporte)
+    assert "Reglas evaluadas: **42** de **42**" in md
+    assert "No aplicables: **0**" in md
+    assert "Total de reglas evaluadas" not in md
 
 
 def test_markdown_detalla_reglas_fallidas():

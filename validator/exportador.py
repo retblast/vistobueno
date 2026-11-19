@@ -88,6 +88,8 @@ def reporte_a_markdown(reporte: dict) -> str:
     """Convierte el dict del reporte a texto Markdown."""
     semaforo = reporte["semaforo"]
     resumen = reporte["resumen"]
+    evaluadas = resumen.get("total_evaluadas", resumen["total"])
+    no_aplicables = resumen.get("reglas_no_aplicables", 0)
     lineas: list[str] = [
         "# Reporte de validación de formato — UNT FECyC",
         "",
@@ -95,7 +97,8 @@ def reporte_a_markdown(reporte: dict) -> str:
         "",
         "## Resumen",
         "",
-        f"- Total de reglas evaluadas: **{resumen['total']}**",
+        f"- Reglas evaluadas: **{evaluadas}** de **{resumen['total']}**",
+        f"- No aplicables: **{no_aplicables}**",
         f"- Fallidas (error): **{resumen['fallidos_error']}**",
         f"- Fallidas (warning): **{resumen['fallidos_warning']}**",
         "",
