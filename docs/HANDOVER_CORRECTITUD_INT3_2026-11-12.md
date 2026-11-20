@@ -296,3 +296,29 @@ En cada PR: agregar regresiones antes del arreglo, sincronizar mutaciones,
 verificar documentos reales aplicables y actualizar matriz REQ con prueba y
 límite. Si una decisión falta, registrar el requisito como pendiente; no elegir
 un estándar por intuición ni convertirlo en «cumple». No tocar API o SPA.
+
+### Nota de estado (2026-11-20): lo que queda tras M12g
+
+Esta nota solo registra el estado; no implementa ni cierra ninguna tarea.
+
+- **Integración pendiente:** los PR #118 (M12b), #119 (documentación de
+  cierre), #120 (M12e) y #121 (M12g) están verdes y `MERGEABLE`, sin reviews.
+  Retblast los fusiona en `retblast/vistobueno`; no se fusionan desde esta
+  rama. Si #120 se integra antes que #121, revisar posibles conflictos en
+  `reglas_unt.yaml` y en los documentos compartidos.
+- **Motor que requiere ratificación:** M12c/NM-03 (tipos soportados; no activar
+  las cinco estructuras de `reglas_unt_pendientes.yaml` sin plantillas reales),
+  M12d/NM-04 (mínimo de palabras del título por tipo y vigencia del máximo de
+  autores) y M12f/NM-06 (contradicciones de anexos REQ-51 a REQ-55). Son los
+  únicos NM del bloque M12 sin implementar; no se cierran por intuición.
+- **Cierre documental:** actualizar estados globales, bloques de aviso,
+  cronología y bitácora de la Semana 12 después de las fusiones. `AGENTS.md`
+  solo se edita con autorización explícita del usuario. La regeneración de
+  ejemplos de B6 corresponde a Int1.
+- **Verificación con fuentes reales:** M12g etiqueta la procedencia de las
+  referencias, pero no certifica que el resto de las citas literales existan
+  en el manual; para comprobarlo hacen falta el DOCX del manual y copias
+  autorizadas, sin datos personales.
+- **Fuera del bloque M12:** siguen abiertos VA-10, VA-11 (B5), VA-17 (B6),
+  VA-19, la verificación en navegador de VA-20 y VA-21, y el seguimiento de
+  NM-08 en el piloto.
