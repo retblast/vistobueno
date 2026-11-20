@@ -142,6 +142,39 @@ a 5 errores; el caso queda fijado con
 La copia verde con PII no está disponible en este clon, así que el cierre
 final queda condicionado a repetir la medición con esa copia.
 
+### 2.3 Verificación M12b (NM-02) sobre el factory — 2026-11-19
+
+Mismo procedimiento que en 2.2: se parte de `compilar_docx(configuracion_base())`
+y se cambia un solo nodo por caso. No hay documento real con PII en este clon,
+así que esta es una medición sintética; el alcance queda declarado en la matriz
+REQ-16/REQ-23.
+
+| Caso | Antes | Con M12b |
+|---|---|---|
+| `missing_school` (borrar ESCUELA, dejar FACULTAD) | verde | rojo: `caratula_facultad_escuela_tamano` |
+| `advisor_36pt` (nombre a 36 pt, etiqueta a 12 pt) | verde | rojo: `caratula_autores_tamano` |
+| ESCUELA a 10 pt, sin negrita o en minúsculas | verde | rojo: `caratula_facultad_escuela_tamano` / `caratula_facultad_negrita_mayusculas` |
+| Nombre del asesor TODO en mayúsculas | verde | rojo: `caratula_asesor_negrita` |
+| FACULTAD y ESCUELA con `w:jc=left` | rojo | rojo: `alineacion_caratula_todos_elementos` (sin cambio) |
+
+Los casos correctos siguen en verde, incluido el formato heredado de
+`styles.xml` y el texto repartido en varios runs. Evidencia: 16 regresiones en
+`tests/test_m12b_caratula_bloques.py`; ruff, ruff format y mypy limpios.
+Las reglas existentes se ampliaron (50 siguen siendo 50), sin mutaciones nuevas.
+
+**Ajuste tras la revisión del PR #118 (2026-11-20):** el patrón de
+mayúsculas/minúsculas del asesor se aplica al párrafo del nombre cuando la
+etiqueta (`ASESORA:`) no trae texto tras los dos puntos; si etiqueta y nombre
+comparten párrafo se conserva el selector original. La negrita sigue midiéndose
+en el párrafo de la etiqueta, que es el comportamiento verificado por el
+encargado con la tesis aprobada. La regresión nueva es
+`test_nombre_del_asesor_en_parrafo_separado` (18 regresiones en total).
+Verificación local, sin copiar documentos reales al repositorio: la tesis
+aprobada queda con 0 errores y la no aprobada sigue en rojo por
+`tamano_cuerpo`, `interlineado`, `alineacion_cuerpo` y
+`estructura_tinv_cuantitativo`. Las 5 plantillas oficiales quedan con 2 errores
+la de Educación Inicial y 4 las otras, sin `caratula_asesor_negrita` espurio.
+
 ---
 
 ## 3. Estructura real de la carátula
@@ -690,7 +723,7 @@ No se cerraron defectos con esta documentación. Los detalles están en M12 de I
 | ID | Responsable | Estado | Trabajo |
 |---|---|---|---|
 | NM-01 | Int3 | **cerrado** (PR #114 fusionado, `448df55`; corrección `e18b381`): 6 veredictos corregidos con 15 regresiones en `tests/test_m12a_numeracion.py`; continuidad exacta declarada como límite sin render | M12a: numeración y pies |
-| NM-02 | Int3 | pendiente | M12b: bloques de carátula |
+| NM-02 | Int3 | **corregido en código** (PR #118, abierto; pendiente de fusión): escuela obligatoria aunque esté la facultad, 12 pt en todo el párrafo del asesor y patrón de mayúsculas/minúsculas aplicado al párrafo del nombre cuando va tras la etiqueta; 18 regresiones en `tests/test_m12b_caratula_bloques.py` | M12b: bloques de carátula |
 | NM-03 | Int3; Int2 comunica límites | pendiente | M12c y F3: esquemas y alcance |
 | NM-04 | Int3 + decisión del encargado | pendiente | M12d: título y autores |
 | NM-05 | Int3 | pendiente | M12e: referencias por ámbito |

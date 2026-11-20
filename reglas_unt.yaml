@@ -223,24 +223,47 @@ reglas:
     esperado: '36'
 - id: caratula_facultad_escuela_tamano
   tipo: formato_efectivo
-  descripcion: Tamaño de letra de Facultad y Escuela Profesional en carátula
-  valor_esperado: 13pt
+  # M12b/NM-02: el manual pide AMBOS bloques. Antes el `[1]` del XPath
+  # caía siempre en FACULTAD, así que borrar ESCUELA PROFESIONAL y dejar
+  # FACULTAD seguía en verde. Ahora se exige la presencia de cada bloque y
+  # se mide el tamaño de los dos, sin `[1]`.
+  descripcion: Facultad (o Programa) y Escuela Profesional presentes y a 13 pt en carátula
+  valor_esperado: 13pt en ambos bloques
   severidad: error
   ubicacion: Carátula, especificaciones (párr. 175)
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   cita: '"Facultad y Escuela Profesional: Centrado, con negrita y con mayúsculas (tamaño de letra, 13
     puntos)."'
+  presencia_xml:
+    - parte: document
+      contexto: caratula
+      xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'programa'))]
+      comparacion: exists
+    - parte: document
+      contexto: caratula
+      xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'escuela')]
+      comparacion: exists
   formato_efectivo:
-    parte: document
-    contexto: caratula
-    sujeto: run
-    parrafo_xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'programa') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'escuela'))][1]
-    propiedad: w:sz/@w:val
-    comparacion: all_eq
-    esperado: '26'
+    - parte: document
+      contexto: caratula
+      sujeto: run
+      parrafo_xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'programa'))]
+      propiedad: w:sz/@w:val
+      comparacion: all_eq
+      esperado: '26'
+    - parte: document
+      contexto: caratula
+      sujeto: run
+      parrafo_xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'escuela')]
+      propiedad: w:sz/@w:val
+      comparacion: all_eq
+      esperado: '26'
 # Título del trabajo (handover issue #4): el XPath buscaba el placeholder
 # "título del trabajo" de las plantillas, que una tesis real no contiene
 # (→ 0 nodos). Ahora se localiza el título como el primer párrafo no vacío
@@ -313,13 +336,24 @@ reglas:
   # carátula migraron a `formato_efectivo` en M1; su selector de párrafos se
   # conserva (decisión §8 del handover).
   formato_efectivo:
-    parte: document
-    contexto: caratula
-    sujeto: run
-    parrafo_xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')) and not(preceding-sibling::w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')])]
-    propiedad: w:sz/@w:val
-    comparacion: all_eq
-    esperado: '24'
+    - parte: document
+      contexto: caratula
+      sujeto: run
+      parrafo_xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')) and not(preceding-sibling::w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')])]
+      propiedad: w:sz/@w:val
+      comparacion: all_eq
+      esperado: '24'
+    # M12b/NM-02: el bloque de autores terminaba antes de ASESOR(A), así
+    # que 36 pt en el nombre del asesor pasaban aunque la etiqueta estuviera
+    # a 12 pt. Se mide también todo ese párrafo, no solo su primer run.
+    - parte: document
+      contexto: caratula
+      sujeto: run
+      parrafo_xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'asesor')]
+      propiedad: w:sz/@w:val
+      comparacion: all_eq
+      esperado: '24'
 - id: caratula_logotipo_tamano
   tipo: imagen
   descripcion: Tamaño del logotipo de la Universidad en carátula
@@ -655,34 +689,49 @@ reglas:
     coincidencia: todos
 - id: caratula_facultad_negrita_mayusculas
   tipo: formato_efectivo
-  descripcion: 'Facultad y Escuela en carátula: negrita y mayúsculas'
-  valor_esperado: negrita + MAYÚSCULAS
+  # M12b/NM-02: antes el `[1]` evaluaba solo FACULTAD; ahora se comprueban
+  # los dos bloques que pide el manual, con todos sus runs con texto.
+  descripcion: 'Facultad (o Programa) y Escuela en carátula: negrita y mayúsculas'
+  valor_esperado: negrita + MAYÚSCULAS en ambos bloques
   severidad: error
   ubicacion: Carátula, especificaciones (párr. 175)
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   cita: '"Facultad y Escuela Profesional: Centrado, con negrita y con mayúsculas (tamaño de letra, 13
     puntos)."'
   formato_efectivo:
-    parte: document
-    contexto: caratula
-    sujeto: run
-    parrafo_xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'programa') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'escuela'))][1]
-    propiedad: w:b
-    comparacion: all_eq
-    esperado: '1'
+    - parte: document
+      contexto: caratula
+      sujeto: run
+      parrafo_xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'programa'))]
+      propiedad: w:b
+      comparacion: all_eq
+      esperado: '1'
+    - parte: document
+      contexto: caratula
+      sujeto: run
+      parrafo_xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'escuela')]
+      propiedad: w:b
+      comparacion: all_eq
+      esperado: '1'
   patron_texto:
-    parte: document
-    contexto: caratula
-    xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'programa') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'escuela'))][1]//w:t
-    patron: ^[A-ZÁÉÍÓÚÑ0-9 .,-]+$
-    comparacion: fullmatch
-    coincidencia: todos
+    - parte: document
+      contexto: caratula
+      xpath: //w:body/w:p[(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'facultad') or contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'programa'))]//w:t
+      patron: ^[A-ZÁÉÍÓÚÑ0-9 .,-]+$
+      comparacion: fullmatch
+      coincidencia: todos
+    - parte: document
+      contexto: caratula
+      xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
+        'escuela')]//w:t
+      patron: ^[A-ZÁÉÍÓÚÑ0-9 .,-]+$
+      comparacion: fullmatch
+      coincidencia: todos
 - id: caratula_titulo_negrita_mixta
   tipo: formato_efectivo
   descripcion: 'El título del trabajo en carátula: negrita con mayúsculas y minúsculas (no todo mayúsculas)'
@@ -738,8 +787,14 @@ reglas:
     coincidencia: todos
 - id: caratula_asesor_negrita
   tipo: formato_efectivo
-  descripcion: 'El asesor en carátula: con negrita'
-  valor_esperado: negrita
+  # M12b/NM-02: el manual pide el nombre con mayúsculas y minúsculas. La
+  # etiqueta "Asesor(a):" tiene minúsculas propias, así que un `.*[a-z].*`
+  # simple daría verde aunque el nombre estuviera TODO en mayúsculas. La
+  # alternancia acepta tanto la etiqueta y el nombre en el mismo w:t como
+  # el nombre partido en varios runs: basta que el texto del nombre (tras
+  # los dos puntos, o sin ellos si ya se separó) tenga alguna minúscula.
+  descripcion: 'El asesor en carátula: con negrita y el nombre con mayúsculas y minúsculas'
+  valor_esperado: negrita + Mayúsculas y minúsculas
   severidad: error
   ubicacion: Carátula, especificaciones (párr. 180)
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
@@ -754,6 +809,20 @@ reglas:
     propiedad: w:b
     comparacion: all_eq
     esperado: '1'
+  patron_texto:
+    parte: document
+    contexto: caratula
+    # M12b/NM-02: en la tesis aprobada `ASESORA:` va en un párrafo y el
+    # nombre en el siguiente. Si la etiqueta no tiene texto tras los dos
+    # puntos, el patrón debe evaluar el párrafo del nombre; si comparten
+    # párrafo, se conserva el selector original.
+    xpath: >-
+      //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')][1]//w:t
+      |
+      //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')][1][string-length(substring-after(normalize-space(.), ':')) = 0]/following-sibling::w:p[1]//w:t
+    patron: '^(?:[^:]*:[^:]*[a-záéíóúñ].*|[^:]*[a-záéíóúñ][^:]*)$'
+    comparacion: fullmatch
+    coincidencia: alguno
 - id: caratula_ciudad_pais_negrita
   tipo: formato_efectivo
   descripcion: 'Ciudad y país en carátula: centrado, con negrita, mayúsculas y minúsculas'

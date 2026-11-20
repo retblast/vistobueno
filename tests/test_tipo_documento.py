@@ -459,6 +459,11 @@ class TestSinCambioDeComportamiento:
         "TECNOLOGIA EDUCATIVA-ADMINISTRACION Y GERENCIA EDUCATIVA-PLANTILLA.docx",
         "TECNOLOGIA EDUCATIVA-INFORMATICA EDUCATIVA-PLANTILLA.docx",
     ]
+    ERRORES_BASE = {"palabras_clave_minimo", "caratula_titulo_negrita_mixta"}
+    ERRORES_NM_02 = ERRORES_BASE | {
+        "caratula_facultad_escuela_tamano",
+        "caratula_facultad_negrita_mayusculas",
+    }
 
     @classmethod
     def _ruta_plantilla(cls, nombre: str | None = None):
@@ -515,11 +520,14 @@ class TestSinCambioDeComportamiento:
 
     @pytest.mark.parametrize("nombre", PLANTILLAS)
     def test_plantillas_oficiales_resultado_orientativo(self, nombre):
-        """Fija el resultado de las 5 plantillas (revisión del PR #100).
+        """Fija el resultado de las 5 plantillas (revisión del PR #100 y NM-02).
 
         Son documentos de instrucción con texto de relleno: el título va en
         rojo y mezcla negrita, así que `caratula_titulo_negrita_mixta` las
-        marca a propósito. La evaluación es orientativa; no es un bug.
+        marca a propósito. NM-02 añade los dos bloques de FACULTAD/ESCUELA en
+        4 de las 5; el patrón del asesor ya no suma un error espurio porque
+        evalúa el párrafo del nombre. La evaluación es orientativa; no es un
+        bug.
         """
         base = self._ruta_plantilla(nombre)
         if not base.exists():
@@ -527,8 +535,9 @@ class TestSinCambioDeComportamiento:
         res = validate_docx(str(base), load_rules(str(RUTA_REGLAS)))
         errores = {r.rule_id for r in res if not r.passed and r.severity.value == "error"}
         warnings = [r for r in res if not r.passed and r.severity.value == "warning"]
-        assert errores == {"palabras_clave_minimo", "caratula_titulo_negrita_mixta"}
-        assert len(warnings) == 8, [r.rule_id for r in warnings]
+        esperados = self.ERRORES_BASE if nombre == self.PLANTILLAS[0] else self.ERRORES_NM_02
+        assert errores == esperados, sorted(errores)
+        assert len(warnings) == 9, [r.rule_id for r in warnings]
         assert build_report(res)["semaforo"] == "rojo"
 
 

@@ -92,7 +92,7 @@ están pendientes de integración y verificación final. NM-08 registra una pol�
 | VA-20 | P1 | Éxito de relleno sin comprobar aceptación de Angular | B3 / Int1 | Parcial — rama `api-flujo-deposito-confirmado` (US-02): los valores escritos se releen y las filas se concilian con los controles del widget. Falta la puerta de Angular: el laboratorio no se ejecutó |
 | VA-21 | P1 | Autofill y restauración del navegador pueden recuperar datos ajenos | B8 + F5 / Int1, Int2 | Parcial — B8: rellenar, enviar y archivar son estados distintos y el archivo exige atestación del operador (US-08). B3: plazo de recuperación tras 5 fallos (US-11 cerrado). Falta F5 (Int2) y la verificación en navegador real |
 | NM-01 | P1 | Paginación normativa incorrecta | M12a / Int3 | Cerrado — PR #114 fusionado (`448df55`; corrección `e18b381`): seis veredictos corregidos y 15 regresiones en `tests/test_m12a_numeracion.py`; límite declarado: la continuidad exacta exige renderizar |
-| NM-02 | P1 | Carátula acepta escuela ausente y asesor 36 pt | M12b / Int3 | Pendiente |
+| NM-02 | P1 | Carátula acepta escuela ausente y asesor 36 pt | M12b / Int3 | Corregido en código — PR #118 (abierto, pendiente de fusión): 18 regresiones en `tests/test_m12b_caratula_bloques.py`; `missing_school` y `advisor_36pt` pasan a rojo y el patrón del asesor evalúa el párrafo del nombre cuando va tras la etiqueta |
 | NM-03 | P1 | Esquemas y alcance sin correspondencia demostrada | M12c / Int3; F3 / Int2 | Pendiente |
 | NM-04 | P2 | Longitud de título y orden de autores | M12d / Int3 | Pendiente de decisiones y reglas |
 | NM-05 | P2 | Conteo y mínimos de referencias por ámbito | M12e / Int3 | Pendiente |
