@@ -1,4 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import {
+  hashDeArchivo,
+  leerRetryAfter,
+  mensajeEspera,
+  textoEsperaHasta,
+  TIMEOUT_VALIDACION_MINUTOS,
+} from '../upload'
 
 // Estructura base: pantalla de carga con drag & drop.
 // Replica el mockup mockups/carga.html pero con interactividad real:
@@ -9,10 +16,15 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 // Constantes y validación de archivo a nivel de módulo (sin dependencia de
 // estado): así handleFiles puede ser useCallback([]) sin violar exhaustive-deps.
 const MAX_BYTES = 10 * 1024 * 1024 // 10 MB, igual que el backend
-// Sin respuesta a los 30 s se aborta la petición y se avisa (fetch no tiene
-// timeout por defecto: sin esto el spinner quedaría girando para siempre si
-// el backend cuelga). Coherente con el `curl -m` del script E2E.
-const TIMEOUT_VALIDACION_MS = 30000
+// Sin respuesta a los 2 minutos se aborta la petición y se avisa (fetch no
+// tiene timeout por defecto: sin esto el spinner quedaría girando para siempre
+// si el backend cuelga). Con una tesis real la validación tarda más de 30 s
+// y el navegador cortaba la petición aunque el servidor siguiera trabajando:
+// el timeout del navegador NO cancela el trabajo del servidor, solo deja de
+// esperarlo (el operador puede reintentar y el backend responde lo que tenga).
+const TIMEOUT_VALIDACION_MS = TIMEOUT_VALIDACION_MINUTOS * 60 * 1000
+// Intervalo de refresco de la cuenta regresiva del 429 (1 s).
+const INTERVALO_ESPERA_MS = 1000
 const acceptedTypes = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 ]
@@ -69,6 +81,12 @@ function Upload({ onValidated, apiUrl }) {
   const [notificar, setNotificar] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  // Espera activa por límite de peticiones (HTTP 429 con `Retry-After`).
+  // { restante: segundos, momentoHasta: epoch ms }. Mientras exista, el
+  // botón «Validar documento» queda deshabilitado: el reintento es siempre
+  // manual y nunca antes de la hora que indique el servidor.
+  const [espera, setEspera] = useState(null)
+  const [reintentoDisponible, setReintentoDisponible] = useState(false)
   const [dragActivo, setDragActivo] = useState(false)
   const inputRef = useRef(null)
   const zonaRef = useRef(null)
@@ -76,6 +94,34 @@ function Upload({ onValidated, apiUrl }) {
   // Guard síncrono de validación en curso: `loading` (estado) llega tarde para
   // un doble clic en el mismo tick y no cubre el drop sobre la zona.
   const cargandoRef = useRef(false)
+  // Momento límite de la espera por 429 (epoch ms). Vive en un ref para que
+  // el intervalo de la cuenta regresiva no se reinicie en cada segundo.
+  const esperaRef = useRef(null)
+  // Identidad del archivo por contenido (hash SHA-256): viaja al reporte
+  // para que el resguardo de la ficha no se confunda entre dos archivos con
+  // el mismo nombre.
+  const identidadRef = useRef(null)
+
+  // Cuenta regresiva del 429: cada segundo descuenta lo que falta. Cuando
+  // llega a cero, la espera se cierra y se avisa que ya se puede reintentar
+  // (el reintento lo decide el operador: no hay reintento automático).
+  const esperaActiva = Boolean(espera)
+  useEffect(() => {
+    if (!esperaActiva) return undefined
+    const timer = setInterval(() => {
+      const actual = esperaRef.current
+      if (!actual) return
+      const restante = Math.max(0, Math.ceil((actual.momentoHasta - Date.now()) / 1000))
+      if (restante === 0) {
+        esperaRef.current = null
+        setEspera(null)
+        setReintentoDisponible(true)
+      } else {
+        setEspera({ ...actual, restante })
+      }
+    }, INTERVALO_ESPERA_MS)
+    return () => clearInterval(timer)
+  }, [esperaActiva])
 
   // Al volver del reporte ("Validar otro archivo") Upload se remonta de cero:
   // devuelve el foco a la dropzone (no lo pierde en <body>). En la carga inicial
@@ -120,6 +166,14 @@ function Upload({ onValidated, apiUrl }) {
       } else {
         setError(null)
         setFile(files[0])
+        // Identidad del documento por contenido (hash). Se calcula en
+        // segundo plano: si el navegador no lo permite, se usa nombre+tamaño.
+        identidadRef.current = { nombre: files[0].name, tamano: files[0].size, hash: '' }
+        hashDeArchivo(files[0]).then((hash) => {
+          if (identidadRef.current?.nombre === files[0].name) {
+            identidadRef.current = { ...identidadRef.current, hash }
+          }
+        })
       }
     }
     if (inputRef.current) inputRef.current.value = ''
@@ -169,11 +223,14 @@ function Upload({ onValidated, apiUrl }) {
   const fallbackSinBackend = async (motivo) => {
     if (import.meta.env.DEV) {
       const { MOCK_REPORT } = await import('../mocks')
-      onValidated({
-        ...MOCK_REPORT,
-        __mock: true,
-        __mockMotivo: `${motivo} Este es un reporte de ejemplo; el resultado real podría diferir.`,
-      })
+      onValidated(
+        {
+          ...MOCK_REPORT,
+          __mock: true,
+          __mockMotivo: `${motivo} Este es un reporte de ejemplo; el resultado real podría diferir.`,
+        },
+        identidadRef.current
+      )
       return
     }
     setError({
@@ -185,9 +242,11 @@ function Upload({ onValidated, apiUrl }) {
 
   const validate = async () => {
     if (!file || cargandoRef.current) return
+    if (esperaRef.current) return
     cargandoRef.current = true
     setLoading(true)
     setError(null)
+    setReintentoDisponible(false)
     // Igual que el backend: el correo viaja sin espacios extremos.
     const correoLimpio = (correo || '').trim()
     try {
@@ -211,9 +270,14 @@ function Upload({ onValidated, apiUrl }) {
         if (e?.name === 'AbortError') {
           // superó el timeout: el servidor puede estar vivo pero colgado.
           // NO cae al mock (sería mentira decir "no se pudo conectar").
+          // Abortar la espera del navegador NO cancela el trabajo del
+          // servidor: solo deja de esperarlo.
           setError({
             titulo: 'El servidor tardó demasiado.',
-            texto: 'La validación superó los 30 segundos sin respuesta. Intente nuevamente o consulte al administrador.',
+            texto:
+              `La validación superó los ${TIMEOUT_VALIDACION_MINUTOS} minutos sin respuesta. ` +
+              'El servidor puede seguir trabajando: esperar en el navegador no cancela la validación. ' +
+              'Intente nuevamente o consulte al administrador.',
             tipo: 'servidor',
           })
           return
@@ -228,7 +292,7 @@ function Upload({ onValidated, apiUrl }) {
       if (res.ok) {
         try {
           const data = await res.json()
-          onValidated(data)
+          onValidated(data, identidadRef.current)
         } catch {
           await fallbackSinBackend('El servidor devolvió una respuesta inválida.')
         }
@@ -247,6 +311,36 @@ function Upload({ onValidated, apiUrl }) {
         }
       } catch {
         detail = null
+      }
+
+      // 429: el servidor limitó las validaciones seguidas y dice CUÁNTO
+      // falta con la cabecera `Retry-After` (en segundos). La espera real
+      // puede ser de varios minutos, así que se muestra cuánto falta y a qué
+      // hora se puede reintentar; el botón queda deshabilitado hasta entonces
+      // y el reintento es siempre manual. El archivo y el correo ya
+      // seleccionados se conservan.
+      if (res.status === 429) {
+        const retryAfter = leerRetryAfter(res)
+        if (retryAfter !== null) {
+          const info = mensajeEspera(retryAfter)
+          esperaRef.current = { restante: info.restante, momentoHasta: info.momentoHasta }
+          setEspera({ restante: info.restante, momentoHasta: info.momentoHasta })
+          setReintentoDisponible(false)
+          setError({
+            titulo: 'El servidor pidió esperar antes de reintentar (HTTP 429).',
+            texto: detail ?? 'El servidor limitó las validaciones seguidas.',
+            tipo: 'servidor',
+          })
+        } else {
+          // Sin `Retry-After` no se inventa ningún plazo: se muestra lo que
+          // diga el servidor y el reintento queda disponible de inmediato.
+          setError({
+            titulo: 'El servidor pidió esperar antes de reintentar (HTTP 429).',
+            texto: detail ?? 'El servidor limitó las validaciones seguidas. Intente nuevamente.',
+            tipo: 'servidor',
+          })
+        }
+        return
       }
 
       if (detail) {
@@ -294,7 +388,9 @@ function Upload({ onValidated, apiUrl }) {
     ? 'Seleccione un archivo .docx para habilitar la validación.'
     : correo && correoError
       ? 'Corrija el correo del estudiante o déjelo vacío.'
-      : null
+      : espera
+        ? 'Espere a que termine la cuenta para volver a validar.'
+        : null
 
   // Enter-to-submit: el card es un <form>, así Enter en el correo (o en
   // cualquier campo) dispara el envío implícito del navegador, que este
@@ -480,7 +576,7 @@ function Upload({ onValidated, apiUrl }) {
           <button
             type="submit"
             className="btn-validar"
-            disabled={loading || !file || !!(correo && correoError)}
+            disabled={loading || !file || !!(correo && correoError) || Boolean(espera)}
             aria-describedby={ayudaValidar ? 'validar-ayuda' : undefined}
           >
             {loading ? (
@@ -501,6 +597,16 @@ function Upload({ onValidated, apiUrl }) {
               <button type="button" className="aviso-cerrar" onClick={cerrarError} aria-label="Cerrar aviso">✕</button>
             </div>
             <span className="ejemplos">{error.texto}</span>
+          </div>
+        )}
+        {espera && (
+          <div className="aviso warn" role="status" aria-live="polite">
+            <span className="ejemplos">{textoEsperaHasta(espera.momentoHasta)}</span>
+          </div>
+        )}
+        {reintentoDisponible && !espera && (
+          <div className="aviso ok" role="status">
+            <span className="ejemplos">Ya puede reintentar la validación con el mismo archivo.</span>
           </div>
         )}
       </form>
