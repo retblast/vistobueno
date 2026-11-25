@@ -60,16 +60,22 @@ function DarkModeToggle() {
 
 function App() {
   const [reportData, setReportData] = useState(null)
+  // Identidad del archivo validado (nombre, tamaño y hash del contenido):
+  // la ficha de depósito la usa para que el resguardo del navegador no se
+  // confunda entre dos documentos con el mismo nombre.
+  const [identidadArchivo, setIdentidadArchivo] = useState(null)
   // Vista actual: 'carga' (subir archivo), 'reporte' o 'ficha' (semana 8).
   const [vista, setVista] = useState('carga')
   const volverACarga = () => {
     setReportData(null)
+    setIdentidadArchivo(null)
     setVista('carga')
   }
   const currentView = vista === 'ficha' && reportData ? (
     <FichaDeposito
       data={reportData}
       apiUrl={API_BASE_URL}
+      archivo={identidadArchivo}
       onBack={() => setVista('reporte')}
     />
   ) : reportData ? (
@@ -79,7 +85,14 @@ function App() {
       onIrAFicha={() => setVista('ficha')}
     />
   ) : (
-    <Upload onValidated={(data) => { setReportData(data); setVista('reporte') }} apiUrl={API_BASE_URL} />
+    <Upload
+      onValidated={(data, archivo) => {
+        setReportData(data)
+        setIdentidadArchivo(archivo ?? null)
+        setVista('reporte')
+      }}
+      apiUrl={API_BASE_URL}
+    />
   )
 
   return (
