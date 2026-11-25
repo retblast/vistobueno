@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CAMPOS_EXTRAIDOS,
   CAMPOS_MANUALES,
+  ESTADO_PAPELEO,
   autoresDe,
+  borrarResguardo,
   construirCuerpoConstancia,
   construirCuerpoFilaRegistro,
   debeMostrarFicha,
@@ -11,10 +13,17 @@ import {
   faltantesDe,
   formatearTimestamp,
   generarFilaRegistro,
+  guardarNombreResponsable,
+  guardarResguardo,
+  identidadDeArchivo,
   listaDe,
+  mensajeDeDescarte,
   planDeDescargas,
   publicarFicha,
+  consultarPapeleo,
+  leerResguardo,
   sondearDeposito,
+  subirPlantillaPapeleo,
   tituloCoincide,
   tituloDe,
   valorDe,
@@ -22,53 +31,23 @@ import {
 
 // Frecuencia del sondeo del buzón (handover S8 §2.3: ~3 s).
 const INTERVALO_SONDEO_MS = 3000
-// Clave del resguardo en localStorage: la ficha editada no debe perderse si el
-// operador recarga la página a mitad del trámite.
-const CLAVE_RESGUARDO = 'vb-ficha-deposito'
 
-const cargarResguardo = (clave) => {
-  try {
-    const crudo = window.localStorage.getItem(CLAVE_RESGUARDO)
-    if (!crudo) return null
-    const guardado = JSON.parse(crudo)
-    return guardado?.clave === clave ? guardado.ficha : null
-  } catch {
-    return null
-  }
-}
-
-const guardarResguardo = (clave, ficha) => {
-  try {
-    window.localStorage.setItem(CLAVE_RESGUARDO, JSON.stringify({ clave, ficha }))
-  } catch {
-    // Sin localStorage (modo privado, cuota llena): la ficha sigue en memoria.
-  }
-}
-
-const borrarResguardo = () => {
-  try {
-    window.localStorage.removeItem(CLAVE_RESGUARDO)
-  } catch {
-    // sin localStorage no hay resguardo que borrar
-  }
-}
-
-function FichaDeposito({ data, apiUrl, onBack }) {
+function FichaDeposito({ data, apiUrl, onBack, archivo }) {
   // Token compartido del buzón (opcional): el backend lo exige solo si está
   // definido (VISTOBUENO_API_TOKEN). En el loopback no hace falta, así que
   // sin VITE_API_TOKEN la SPA sigue hablando sin header.
   const tokenBuzon = import.meta.env.VITE_API_TOKEN || ''
   const fichaInicial = data?.ficha_deposito
-  // La clave del resguardo incluye el archivo: dos tesis no comparten ficha.
-  const clave = useMemo(
-    () => String(data?.metadatos?.archivo_nombre ?? 'ficha'),
-    [data]
-  )
-  const [ficha, setFicha] = useState(() => {
-    const guardada = cargarResguardo(clave)
-    return guardada ?? fichaInicial
-  })
-  const [recuperada, setRecuperada] = useState(() => Boolean(cargarResguardo(clave)))
+  // Identidad del documento por CONTENIDO (hash): dos archivos con el mismo
+  // nombre no pueden compartir el resguardo de la ficha (F1).
+  const identidad = useMemo(() => identidadDeArchivo(archivo), [archivo])
+  // Resguardo: versión, identidad y caducidad se verifican al restaurar
+  // (F5). Un resguardo de otra versión, de otro documento o caducado no se
+  // restaura y el operador recibe el motivo.
+  const [resguardoInicial] = useState(() => leerResguardo(window.localStorage, identidad))
+  const [ficha, setFicha] = useState(() => resguardoInicial.ficha ?? fichaInicial)
+  const [recuperada, setRecuperada] = useState(() => Boolean(resguardoInicial.ficha))
+  const [descarte, setDescarte] = useState(() => resguardoInicial.motivo ?? null)
   const [fase, setFase] = useState('edicion') // edicion | esperando | recibido | listo
   const [error, setError] = useState(null)
   const [aviso, setAviso] = useState(null)
@@ -80,6 +59,14 @@ function FichaDeposito({ data, apiUrl, onBack }) {
   const [copiado, setCopiado] = useState(false)
   const [tramiteId, setTramiteId] = useState('')
   const [venceEn, setVenceEn] = useState('')
+  // Configuración de papeleo: nombre del responsable (columna FIRMA) y
+  // plantilla oficial Modelo B que usa la API para las constancias.
+  const [papeleo, setPapeleo] = useState(null)
+  const [nombreResponsable, setNombreResponsable] = useState('')
+  const [papeleoError, setPapeleoError] = useState(null)
+  const [papeleoAviso, setPapeleoAviso] = useState(null)
+  const [ocupadoPapeleo, setOcupadoPapeleo] = useState(false)
+  const plantillaRef = useRef(null)
   const timerRef = useRef(null)
   // Reporte ya rechazado por el operador (handle + timestamp). El buzón es
   // "última gana": sin esta marca la app volvería a mostrar el mismo reporte
@@ -103,14 +90,16 @@ function FichaDeposito({ data, apiUrl, onBack }) {
   // Resguardo de la ficha editada en cada cambio.
   useEffect(() => {
     if (!ficha) return
-    guardarResguardo(clave, ficha)
-  }, [clave, ficha])
+    guardarResguardo(window.localStorage, identidad, ficha)
+  }, [identidad, ficha])
 
   const editar = useCallback((campo, valor) => {
     setFicha((actual) => establecerValor(actual, campo, valor))
     // Al tomar la-edición el aviso de «ficha recuperada» ya no aporta nada.
     setRecuperada(false)
+    setDescarte(null)
   }, [])
+
 
   // Sondeo del buzón mientras el panel de espera está abierto.
   useEffect(() => {
@@ -276,8 +265,67 @@ function FichaDeposito({ data, apiUrl, onBack }) {
   // ficha terminó y no conviene dejar datos personales (DNI, matrícula) en el
   // navegador más tiempo del necesario.
   const volverAlReporte = () => {
-    borrarResguardo()
+    borrarResguardo(window.localStorage)
     onBack()
+  }
+
+  // ── Configuración de papeleo ───────────────────────────────────────
+  // Estado inicial: el servidor informa si el nombre del responsable y la
+  // plantilla Modelo B ya están configurados. Si falta alguno o la carga
+  // falla, se dice exactamente qué corregir (antes de que la constancia
+  // devuelva un 500).
+  useEffect(() => {
+    let vivo = true
+    const consultar = async () => {
+      try {
+        const estado = await consultarPapeleo(apiUrl, tokenBuzon)
+        if (!vivo) return
+        setPapeleo(estado)
+        if (estado.nombre) setNombreResponsable(estado.nombre)
+      } catch (e) {
+        if (!vivo) return
+        setPapeleo({ estado: ESTADO_PAPELEO.desconocido, problemas: [] })
+        setPapeleoError(e.message)
+      }
+    }
+    consultar()
+    return () => {
+      vivo = false
+    }
+  }, [apiUrl, tokenBuzon])
+
+  const guardarNombre = async () => {
+    if (ocupadoPapeleo) return
+    setOcupadoPapeleo(true)
+    setPapeleoError(null)
+    setPapeleoAviso(null)
+    try {
+      const estado = await guardarNombreResponsable(apiUrl, nombreResponsable.trim(), tokenBuzon)
+      setPapeleo(estado)
+      setPapeleoAviso('Se guardó el nombre del responsable.')
+    } catch (e) {
+      setPapeleoError(e.message)
+    } finally {
+      setOcupadoPapeleo(false)
+    }
+  }
+
+  const cargarPlantilla = async (evento) => {
+    const archivo = evento.target.files?.[0]
+    if (!archivo || ocupadoPapeleo) return
+    setOcupadoPapeleo(true)
+    setPapeleoError(null)
+    setPapeleoAviso(null)
+    try {
+      const estado = await subirPlantillaPapeleo(apiUrl, archivo, tokenBuzon)
+      setPapeleo(estado)
+      setPapeleoAviso(`Se cargó la plantilla «${archivo.name}».`)
+    } catch (e) {
+      setPapeleoError(`La plantilla no se pudo cargar: ${e.message}`)
+    } finally {
+      setOcupadoPapeleo(false)
+      if (plantillaRef.current) plantillaRef.current.value = ''
+    }
   }
 
   if (!debeMostrarFicha(data)) {
@@ -313,6 +361,11 @@ function FichaDeposito({ data, apiUrl, onBack }) {
             <span className="ejemplos">Se recuperó la ficha guardada en este navegador.</span>
           </div>
         )}
+        {descarte && (
+          <div className="aviso warn" role="status">
+            <span className="ejemplos">{mensajeDeDescarte(descarte)}</span>
+          </div>
+        )}
         {aviso && (
           <div className="aviso ok" role="status">
             <span className="ejemplos">{aviso}</span>
@@ -331,11 +384,18 @@ function FichaDeposito({ data, apiUrl, onBack }) {
         <h3 className="subtitulo">Datos extraídos del documento</h3>
         <p className="intro">El motor detectó estos valores: corríjolos si hace falta.</p>
         <div className="ficha-campos">
-          {CAMPOS_EXTRAIDOS.map(({ campo, etiqueta, tipo }) => {
+          {CAMPOS_EXTRAIDOS.map(({ campo, etiqueta, tipo, aviso, avisoSinDetectar }) => {
             const valor = valorDe(ficha, campo)
-            const detectado = ficha?.extraidos?.find((c) => c.campo === campo)?.detectado
+            const entrada = ficha?.extraidos?.find((c) => c.campo === campo)
+            const detectado = entrada?.detectado
             const id = `extraido-${campo}`
             const texto = Array.isArray(valor) ? valor.join('\n') : (valor ?? '')
+            // Aviso de revisión (ORCID del asesor): el valor viene del
+            // documento, así que el operador tiene que verificarlo.
+            const sinDetectar = !entrada || detectado === false
+            const mensajeCampo = aviso
+              ? (sinDetectar ? (avisoSinDetectar ?? aviso) : aviso)
+              : null
             return (
               <div className="campo-ficha" key={campo}>
                 <label htmlFor={id}>
@@ -367,6 +427,9 @@ function FichaDeposito({ data, apiUrl, onBack }) {
                     onChange={(e) => editar(campo, e.target.value)}
                     disabled={fase === 'esperando'}
                   />
+                )}
+                {mensajeCampo && (
+                  <p className="campo-ayuda">{mensajeCampo}</p>
                 )}
               </div>
             )
@@ -429,6 +492,81 @@ function FichaDeposito({ data, apiUrl, onBack }) {
           <div className="aviso warn" role="status">
             <div className="aviso-fila"><strong>Faltan datos para preparar el depósito.</strong></div>
             <span className="ejemplos">{faltantes.join(' ')}</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Configuración de papeleo ─────────────────────── */}
+      <div className="card">
+        <h3 className="subtitulo">Configuración de papeleo</h3>
+        <p className="intro">
+          El nombre del responsable se usa en la columna FIRMA del registro y la plantilla oficial
+          Modelo B la usa el servidor para generar las constancias. Configurelos aquí: si falta
+          alguno, la generación de constancias falla.
+        </p>
+        <div className="ficha-campos">
+          <div className="campo-ficha">
+            <label htmlFor="papeleo-nombre">Nombre del responsable</label>
+            <input
+              id="papeleo-nombre"
+              type="text"
+              value={nombreResponsable}
+              onChange={(e) => setNombreResponsable(e.target.value)}
+              disabled={ocupadoPapeleo || fase === 'esperando'}
+            />
+            <p className="campo-ayuda">Aparece en la columna FIRMA del registro de la biblioteca.</p>
+            <div className="acciones-form">
+              <button
+                type="button"
+                className="btn-descarga"
+                onClick={guardarNombre}
+                disabled={ocupadoPapeleo || fase === 'esperando' || !nombreResponsable.trim()}
+              >
+                Guardar nombre
+              </button>
+            </div>
+          </div>
+          <div className="campo-ficha">
+            <label htmlFor="papeleo-plantilla">Plantilla oficial Modelo B (.docx)</label>
+            <input
+              id="papeleo-plantilla"
+              type="file"
+              accept=".docx"
+              ref={plantillaRef}
+              onChange={cargarPlantilla}
+              disabled={ocupadoPapeleo || fase === 'esperando'}
+            />
+            <p className="campo-ayuda">
+              Se envía al servidor, que la usa para generar la constancia de cada estudiante.
+            </p>
+          </div>
+        </div>
+        {papeleoAviso && (
+          <div className="aviso ok" role="status">
+            <span className="ejemplos">{papeleoAviso}</span>
+          </div>
+        )}
+        {papeleoError && (
+          <div className="aviso error" role="alert">
+            <span className="ejemplos">{papeleoError}</span>
+          </div>
+        )}
+        {papeleo?.estado === ESTADO_PAPELEO.listo && (
+          <div className="aviso ok" role="status">
+            <span className="ejemplos">
+              Configuración completa: el nombre del responsable y la plantilla ya están en el servidor.
+            </span>
+          </div>
+        )}
+        {papeleo?.estado === ESTADO_PAPELEO.incompleto && (
+          <div className="aviso warn" role="status">
+            <div className="aviso-fila"><strong>Falta configuración de papeleo.</strong></div>
+            <span className="ejemplos">{papeleo.problemas.join(' ')}</span>
+          </div>
+        )}
+        {papeleo?.estado === ESTADO_PAPELEO.noSoportado && (
+          <div className="aviso warn" role="status">
+            <span className="ejemplos">{papeleo.detalle}</span>
           </div>
         )}
       </div>

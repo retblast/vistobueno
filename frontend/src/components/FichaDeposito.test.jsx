@@ -11,6 +11,13 @@
 // real (buzón de una ranura, 404 mientras no hay depósito, 204 al
 // publicar, papeleo al final). Cada paso del checklist de la Actividad 15
 // queda cubierto y reproducible en CI.
+//
+// Se fusionaron ambos conjuntos de pruebas:
+// - master: flujo completo de la Actividad 15 (publicar, esperar, aceptar,
+//   rechazar, descarga de constancia y fila del registro, resguardo local).
+// - rama frontend/timeout-429-orcid-papeleo: ORCID del asesor como campo
+//   extraído, configuración de papeleo y resguardo versionado por contenido
+//   con caducidad (F1/F5).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
@@ -53,6 +60,50 @@ const REPORTE_VERDE = {
   ficha_deposito: FICHA,
 }
 
+// Ficha para pruebas de ORCID del asesor y resguardo (rama).
+const FICHA_ORCID = {
+  extraidos: [
+    { campo: 'dc.title', valor: 'La motivación en la universidad', pagina: 1, detectado: true },
+    { campo: 'dc.contributor.author', valor: ['Ana Pérez'], pagina: 1, detectado: true },
+    {
+      campo: 'renati.advisor.orcid',
+      valor: '0000-0002-1825-0097',
+      pagina: 1,
+      detectado: true,
+    },
+  ],
+  manuales: [
+    { campo: 'matricula', valor: ['20201234'] },
+    { campo: 'renati.author.dni', valor: ['70112233'] },
+  ],
+}
+
+const DATA_ORCID = {
+  semaforo: 'verde',
+  ficha_deposito: FICHA_ORCID,
+  metadatos: { archivo_nombre: 'tesis.docx', archivo_tamano_bytes: 1024 },
+}
+
+const ARCHIVO = { nombre: 'tesis.docx', tamano: 1024, hash: 'hash-abc' }
+
+const respuestaPapeleo = (cuerpo) => ({
+  ok: true,
+  status: 200,
+  headers: { get: () => null },
+  json: async () => cuerpo,
+})
+
+const renderFichaOrcid = (props = {}) =>
+  render(
+    <FichaDeposito
+      data={DATA_ORCID}
+      apiUrl=""
+      archivo={ARCHIVO}
+      onBack={() => {}}
+      {...props}
+    />
+  )
+
 // Instala una API simulada. `deposito` controla lo que responde el buzón:
 // null = todavía no hay depósito (404), objeto = reporte del userscript.
 // `tramites` enumera las identidades que devuelve cada publicación.
@@ -63,10 +114,21 @@ function instalarApi({
 } = {}) {
   const llamadas = []
   let publicaciones = 0
-  const responder = async (res) => res
   globalThis.fetch = vi.fn(async (url, opciones = {}) => {
     llamadas.push({ url, opciones })
     const ruta = String(url)
+
+    if (ruta.includes('/papeleo-config')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({
+          nombre_responsable: 'Lic. Biblioteca FECyC',
+          plantilla_configurada: true,
+        }),
+      }
+    }
 
     if (ruta.includes('/ficha-pendiente')) {
       const indice = Math.min(publicaciones, tramites.length - 1)
@@ -121,14 +183,14 @@ function instalarApi({
         headers: new Headers(),
       }
     }
-    return responder({ ok: true, status: 200, json: async () => ({}), headers: new Headers() })
+    return { ok: true, status: 200, json: async () => ({}), headers: new Headers() }
   })
   return llamadas
 }
 
 // Los campos del operador alineados por autor (matrícula y DNI del autor)
 // son un input por autor: la etiqueta del input es el nombre del autor y el
-// id lleva el índice. Selocalizan por id, no por etiqueta.
+// id lleva el índice. Se localizan por id, no por etiqueta.
 const campoPorAutor = (container, campo, indice = 0) =>
   container.querySelector(`[id="${campo}-${indice}"]`)
 
@@ -150,7 +212,6 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-    window.localStorage.clear()
   })
 
   it('no muestra la ficha cuando el semáforo es rojo', () => {
@@ -159,6 +220,7 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
       <FichaDeposito
         data={{ ...REPORTE_VERDE, semaforo: 'rojo', ficha_deposito: null }}
         apiUrl=""
+        archivo={ARCHIVO}
         onBack={() => {}}
       />
     )
@@ -168,7 +230,7 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
 
   it('muestra los datos extraídos y los del operador', () => {
     instalarApi()
-    render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />)
 
     expect(screen.getByRole('heading', { name: /Ficha de depósito/i })).toBeTruthy()
     expect((screen.getByLabelText(/^Título$/i)).value).toBe(
@@ -180,7 +242,7 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
 
   it('bloquea «Preparar depósito» mientras falten matrícula o DNI', async () => {
     instalarApi()
-    render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />)
 
     const boton = screen.getByRole('button', { name: /Preparar depósito/i })
     expect(boton).toBeDisabled()
@@ -191,7 +253,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
 
   it('publica la ficha editada en el buzón y abre el panel de espera', async () => {
     const llamadas = instalarApi()
-    const { container } = render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    const { container } = render(
+      <FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />
+    )
 
     // Editar un valor extraído (paso 3 del checklist).
     fireEvent.change(screen.getByLabelText(/^Título$/i), {
@@ -227,7 +291,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     instalarApi({
       deposito: { handle: HANDLE, titulo: 'Estrategias ludicas para la motricidad', timestamp: TIMESTAMP },
     })
-    const { container } = render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    const { container } = render(
+      <FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />
+    )
 
     completarDatosOperador(container)
 
@@ -236,7 +302,7 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: /Preparar depósito/i }))
 
-    // El panel de espera deja el posto al reporte del userscript.
+    // El panel de espera deja el puesto al reporte del userscript.
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Aceptar depósito/i })).toBeTruthy()
     )
@@ -245,7 +311,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     fireEvent.click(screen.getByRole('button', { name: /Aceptar depósito/i }))
 
     await waitFor(() => expect(screen.getByText(/Papeleo/i)).toBeTruthy())
-    expect(screen.getByRole('button', { name: /Constancia de Ana Maria Perez Garcia/i })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: /Constancia de Ana Maria Perez Garcia/i })
+    ).toBeTruthy()
     expect(screen.getByRole('button', { name: /Fila del registro \(\.tsv\)/i })).toBeTruthy()
   })
 
@@ -253,7 +321,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     instalarApi({
       deposito: { handle: HANDLE, titulo: 'Un titulo completamente distinto', timestamp: TIMESTAMP },
     })
-    const { container } = render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    const { container } = render(
+      <FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />
+    )
 
     completarDatosOperador(container)
 
@@ -278,7 +348,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
         timestamp: TIMESTAMP,
       },
     })
-    const { container } = render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    const { container } = render(
+      <FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />
+    )
 
     completarDatosOperador(container)
     await waitFor(() =>
@@ -302,7 +374,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
         timestamp: TIMESTAMP,
       },
     })
-    const { container } = render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    const { container } = render(
+      <FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />
+    )
 
     completarDatosOperador(container)
     await waitFor(() =>
@@ -329,7 +403,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     const llamadas = instalarApi({
       deposito: { handle: HANDLE, titulo: 'Estrategias ludicas para la motricidad', timestamp: TIMESTAMP },
     })
-    const { container } = render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={() => {}} />)
+    const { container } = render(
+      <FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={() => {}} />
+    )
 
     completarDatosOperador(container)
 
@@ -343,7 +419,9 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     fireEvent.click(screen.getByRole('button', { name: /Aceptar depósito/i }))
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Constancia de Ana Maria Perez Garcia/i })).toBeTruthy()
+      expect(
+        screen.getByRole('button', { name: /Constancia de Ana Maria Perez Garcia/i })
+      ).toBeTruthy()
     )
     fireEvent.click(screen.getByRole('button', { name: /Constancia de Ana Maria Perez Garcia/i }))
 
@@ -366,7 +444,7 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
   it('resguarda la ficha editada y la borra al volver al reporte', async () => {
     const onBack = vi.fn()
     instalarApi()
-    render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" onBack={onBack} />)
+    render(<FichaDeposito data={REPORTE_VERDE} apiUrl="" archivo={ARCHIVO} onBack={onBack} />)
 
     fireEvent.change(screen.getByLabelText(/^Título$/i), {
       target: { value: 'Titulo con datos del operador' },
@@ -379,5 +457,197 @@ describe('FichaDeposito — flujo de la Actividad 15', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Volver al reporte/i })[0])
     expect(onBack).toHaveBeenCalled()
     expect(window.localStorage.getItem('vb-ficha-deposito')).toBeNull()
+  })
+})
+
+describe('FichaDeposito — ORCID del asesor', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      respuestaPapeleo({ nombre_responsable: 'Lic. Biblioteca FECyC', plantilla_configurada: true })
+    )
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('muestra el ORCID precargado con el aviso de que se detectó en el documento', async () => {
+    renderFichaOrcid()
+    const campo = screen.getByLabelText(/ORCID del asesor/i)
+    expect(campo).toHaveValue('0000-0002-1825-0097')
+    expect(screen.getByText(/verifique que sea el ORCID del asesor y no el de un autor/i)).toBeInTheDocument()
+    // El ORCID no es un dato que escribe el operador: no aparece entre los
+    // campos manuales.
+    expect(screen.queryByLabelText(/ORCID del asesor/i, { selector: '#manual-renati.advisor.orcid' })).toBeNull()
+  })
+
+  it('si no se detectó un ORCID válido, avisa y pide escribirlo a mano', async () => {
+    const data = {
+      ...DATA_ORCID,
+      ficha_deposito: {
+        extraidos: FICHA_ORCID.extraidos.map((c) =>
+          c.campo === 'renati.advisor.orcid' ? { ...c, valor: null, detectado: false } : c
+        ),
+        manuales: FICHA_ORCID.manuales,
+      },
+    }
+    renderFichaOrcid({ data })
+    expect(screen.getByText(/no se detect[óo] un ORCID válido/i)).toBeInTheDocument()
+    expect(screen.getByText(/escr[ií]balo a mano/i)).toBeInTheDocument()
+  })
+
+  it('el ORCID no bloquea «Preparar depósito»', async () => {
+    renderFichaOrcid()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Preparar depósito/i })).not.toBeDisabled()
+    )
+  })
+})
+
+describe('FichaDeposito — configuración de papeleo', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('con nombre y plantilla configurados, avisa que la configuración está completa', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      respuestaPapeleo({ nombre_responsable: 'Lic. Biblioteca FECyC', plantilla_configurada: true })
+    )
+    renderFichaOrcid()
+    await waitFor(() =>
+      expect(screen.getByText(/Configuración completa/i)).toBeInTheDocument()
+    )
+    expect(screen.getByLabelText(/Nombre del responsable/i)).toHaveValue('Lic. Biblioteca FECyC')
+  })
+
+  it('si falta algo, dice exactamente qué corregir', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      respuestaPapeleo({ nombre_responsable: '', plantilla_configurada: false })
+    )
+    renderFichaOrcid()
+    await waitFor(() => expect(screen.getByText(/Falta configuración de papeleo/i)).toBeInTheDocument())
+    expect(screen.getByText(/Falta el nombre del responsable/i)).toBeInTheDocument()
+    expect(screen.getByText(/Falta la plantilla oficial Modelo B/i)).toBeInTheDocument()
+  })
+
+  it('si el servidor no expone el endpoint, la pantalla lo dice y no se rompe', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+      json: async () => ({ detail: 'No encontrado' }),
+    })
+    renderFichaOrcid()
+    await waitFor(() =>
+      expect(screen.getByText(/todavía no expone la configuración de papeleo/i)).toBeInTheDocument()
+    )
+    expect(screen.getByRole('button', { name: /Preparar depósito/i })).toBeInTheDocument()
+  })
+
+  it('el nombre del responsable se guarda en el servidor', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        respuestaPapeleo({ nombre_responsable: '', plantilla_configurada: false })
+      )
+      .mockResolvedValueOnce(
+        respuestaPapeleo({ nombre_responsable: 'Lic. Biblioteca FECyC', plantilla_configurada: false })
+      )
+    globalThis.fetch = fetchMock
+    renderFichaOrcid()
+    await waitFor(() => expect(screen.getByLabelText(/Nombre del responsable/i)).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText(/Nombre del responsable/i), {
+      target: { value: 'Lic. Biblioteca FECyC' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Guardar nombre/i }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    const [, opciones] = fetchMock.mock.calls[1]
+    expect(opciones.method).toBe('POST')
+    expect(JSON.parse(opciones.body)).toEqual({ nombre_responsable: 'Lic. Biblioteca FECyC' })
+  })
+})
+
+describe('FichaDeposito — resguardo local (F1/F5)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      respuestaPapeleo({ nombre_responsable: 'Lic. Biblioteca FECyC', plantilla_configurada: true })
+    )
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('un resguardo de la versión anterior no se restaura y se explica por qué', async () => {
+    window.localStorage.setItem(
+      'vb-ficha-deposito',
+      JSON.stringify({ clave: 'tesis.docx', ficha: { extraidos: [], manuales: [] } })
+    )
+    renderFichaOrcid()
+    await waitFor(() =>
+      expect(screen.getByText(/versión anterior de la pantalla no se restauró/i)).toBeInTheDocument()
+    )
+    // La ficha del servidor sigue en pantalla (no se pierde el trabajo).
+    expect(screen.getByLabelText(/ORCID del asesor/i)).toHaveValue('0000-0002-1825-0097')
+  })
+
+  it('un resguardo de otro documento se descarta', async () => {
+    window.localStorage.setItem(
+      'vb-ficha-deposito',
+      JSON.stringify({
+        version: 2,
+        identidad: 'hash:otro-documento',
+        creado: Date.now(),
+        ficha: { extraidos: [{ campo: 'matricula', valor: ['99999999'] }], manuales: [] },
+      })
+    )
+    renderFichaOrcid()
+    await waitFor(() =>
+      expect(screen.getByText(/pertenecía a otro documento/i)).toBeInTheDocument()
+    )
+  })
+
+  it('un resguardo caducado se descarta', async () => {
+    window.localStorage.setItem(
+      'vb-ficha-deposito',
+      JSON.stringify({
+        version: 2,
+        identidad: 'hash:hash-abc',
+        creado: Date.now() - 60 * 60 * 1000 - 1000,
+        ficha: { extraidos: [], manuales: [] },
+      })
+    )
+    renderFichaOrcid()
+    await waitFor(() => expect(screen.getByText(/había caducado/i)).toBeInTheDocument())
+  })
+
+  it('el resguardo vigente del mismo documento sí se restaura', async () => {
+    window.localStorage.setItem(
+      'vb-ficha-deposito',
+      JSON.stringify({
+        version: 2,
+        identidad: 'hash:hash-abc',
+        creado: Date.now(),
+        ficha: {
+          extraidos: [
+            { campo: 'renati.advisor.orcid', valor: '0000-0000-1111-2222', detectado: true },
+          ],
+          manuales: [],
+        },
+      })
+    )
+    renderFichaOrcid()
+    await waitFor(() =>
+      expect(screen.getByText(/Se recuperó la ficha guardada en este navegador/i)).toBeInTheDocument()
+    )
+    expect(screen.getByLabelText(/ORCID del asesor/i)).toHaveValue('0000-0000-1111-2222')
   })
 })

@@ -35,13 +35,21 @@ export const CAMPOS_EXTRAIDOS = [
   { campo: CAMPO_ANIO, etiqueta: 'Año de emisión', tipo: 'texto' },
   { campo: CAMPO_ESCUELA, etiqueta: 'Escuela', tipo: 'texto' },
   { campo: CAMPO_JURADO, etiqueta: 'Jurado', tipo: 'texto' },
+  {
+    campo: CAMPO_ORCID_ASESOR,
+    etiqueta: 'ORCID del asesor',
+    tipo: 'texto',
+    aviso:
+      'Detectado en la carátula del documento: verifique que sea el ORCID del asesor y no el de un autor.',
+    avisoSinDetectar:
+      'No se detectó un ORCID válido en el documento: escríbalo a mano.',
+  },
 ]
 
 export const CAMPOS_MANUALES = [
   { campo: CAMPO_MATRICULA, etiqueta: 'Matrícula', tipo: 'lista-autor' },
   { campo: CAMPO_DNI_AUTOR, etiqueta: 'DNI del autor', tipo: 'lista-autor' },
   { campo: CAMPO_DNI_ASESOR, etiqueta: 'DNI del asesor', tipo: 'texto' },
-  { campo: CAMPO_ORCID_ASESOR, etiqueta: 'ORCID del asesor', tipo: 'texto' },
 ]
 
 // Normaliza para comparar: minúsculas, sin acentos y sin espacios dobles.
@@ -61,20 +69,40 @@ export const valorDe = (ficha, campo) => {
   return encontrado?.valor ?? null
 }
 
+// Sección del catálogo a la que pertenece un campo ('extraidos' o
+// 'manuales'). Null si el campo no está en el catálogo.
+export const seccionDeCampo = (campo) => {
+  if (CAMPOS_EXTRAIDOS.some((f) => f.campo === campo)) return 'extraidos'
+  if (CAMPOS_MANUALES.some((f) => f.campo === campo)) return 'manuales'
+  return null
+}
+
 // Devuelve una ficha nueva con el campo actualizado (no muta la original).
+// El valor editado se publica SIEMPRE en la sección del catálogo que le
+// corresponde: con el contrato v1.15.0 el ORCID del asesor es un campo
+// extraído, así que aunque llegue en `manuales` (contrato anterior) su valor
+// editado se publica en `extraidos`.
 export const establecerValor = (ficha, campo, valor) => {
   const base = { extraidos: [], manuales: [], ...ficha }
-  const secciones = ['extraidos', 'manuales']
-  for (const seccion of secciones) {
+  const seccionCatalogo = seccionDeCampo(campo)
+  for (const seccion of ['extraidos', 'manuales']) {
     const items = Array.isArray(base[seccion]) ? base[seccion] : []
     const indice = items.findIndex((c) => c?.campo === campo)
-    if (indice >= 0) {
-      const copia = items.map((c, i) => (i === indice ? { ...c, valor } : c))
-      return { ...base, [seccion]: copia }
+    if (indice < 0) continue
+    const actual = { ...items[indice], valor }
+    if (seccionCatalogo && seccionCatalogo !== seccion) {
+      // El campo cambió de sección (p. ej. el ORCID): se traslada con su valor.
+      const otras = items.filter((c) => c?.campo !== campo)
+      const destino = { ...base, [seccionCatalogo]: [...(base[seccionCatalogo] || []), actual] }
+      destino[seccion] = otras
+      return destino
     }
+    return { ...base, [seccion]: items.map((c, i) => (i === indice ? actual : c)) }
   }
-  // El servidor puede no traer un campo (ficha sin ese dato): se agrega.
-  return { ...base, manuales: [...(base.manuales || []), { campo, valor }] }
+  // El servidor puede no traer un campo (ficha sin ese dato): se agrega en la
+  // sección que le toca según el catálogo.
+  const seccion = seccionCatalogo ?? 'manuales'
+  return { ...base, [seccion]: [...(base[seccion] || []), { campo, valor }] }
 }
 
 // Autores detectados: lista (o texto con saltos de línea) → arreglo limpio.
@@ -192,6 +220,9 @@ export const interpretarSondeo = (status, cuerpo, tramite = {}) => {
 // Comprobación de los datos que el servidor exige (contrato v1.7): título,
 // autores y las listas alineadas por autor. Es una ayuda de pantalla; la
 // respuesta 422 del backend sigue siendo la autoridad.
+//
+// El ORCID del asesor NO entra aquí: con el contrato v1.15.0 es un campo
+// extraído y no bloquea «Preparar depósito».
 export const faltantesDe = (ficha) => {
   const faltantes = []
   if (!tituloDe(ficha)) faltantes.push('Falta el título del trabajo.')
@@ -209,6 +240,121 @@ export const faltantesDe = (ficha) => {
     }
   }
   return faltantes
+}
+
+// ── Resguardo local de la ficha editada ───────────────────────────────
+// La ficha editada no debe perderse si el operador recarga la página a
+// mitad del trámite. Tres reglas (Arreglos.txt v9, Parte 3):
+//  - versión: un resguardo de una versión anterior de la pantalla NO se
+//    restaura (trae el ORCID en `manuales` y la pantalla nueva lo ignoraría
+//    en silencio);
+//  - identidad: el resguardo pertenece a un documento concreto; se identifica
+//    por el CONTENIDO del archivo (hash), no por su nombre: dos archivos con
+//    el mismo nombre no pueden compartir matrícula y DNI (F1);
+//  - caducidad: el resguardo caduca (mismo TTL que el buzón: 1 hora) y, al
+//    restaurarlo, se verifica que sea del documento actual (F5).
+export const VERSION_RESGUARDO = 2
+export const CLAVE_RESGUARDO = 'vb-ficha-deposito'
+export const CADUCIDAD_RESGUARDO_MS = 60 * 60 * 1000
+
+// Identidad del documento: hash del contenido cuando está disponible; si no,
+// se recurre a nombre + tamaño (menos precisa, pero nunca mezcla documentos
+// de tamaños distintos).
+export const identidadDeArchivo = (archivo) => {
+  if (!archivo) return 'sin-archivo'
+  const hash = archivo.hash ?? ''
+  if (hash) return `hash:${hash}`
+  return `archivo:${archivo.nombre ?? ''}|${archivo.tamano ?? ''}`
+}
+
+export const guardarResguardo = (almacen, identidad, ficha, ahoraMs = Date.now()) => {
+  try {
+    almacen.setItem(
+      CLAVE_RESGUARDO,
+      JSON.stringify({ version: VERSION_RESGUARDO, identidad, creado: ahoraMs, ficha })
+    )
+    return true
+  } catch {
+    // Sin localStorage (modo privado, cuota llena): la ficha sigue en memoria.
+    return false
+  }
+}
+
+// Devuelve { ficha, motivo }. `motivo` explica por qué NO se restauró:
+// 'version' | 'identidad' | 'caducado' | 'ilegible'.
+export const leerResguardo = (almacen, identidad, ahoraMs = Date.now()) => {
+  let guardado = null
+  try {
+    const crudo = almacen.getItem(CLAVE_RESGUARDO)
+    if (!crudo) return { ficha: null, motivo: null }
+    guardado = JSON.parse(crudo)
+  } catch {
+    return { ficha: null, motivo: 'ilegible' }
+  }
+  if (!guardado) return { ficha: null, motivo: null }
+  if (guardado.version !== VERSION_RESGUARDO) return { ficha: null, motivo: 'version' }
+  if (guardado.identidad !== identidad) return { ficha: null, motivo: 'identidad' }
+  const creado = Number(guardado.creado)
+  if (!Number.isFinite(creado) || ahoraMs - creado > CADUCIDAD_RESGUARDO_MS) {
+    return { ficha: null, motivo: 'caducado' }
+  }
+  return { ficha: guardado.ficha ?? null, motivo: null }
+}
+
+export const borrarResguardo = (almacen) => {
+  try {
+    almacen.removeItem(CLAVE_RESGUARDO)
+  } catch {
+    // sin localStorage no hay resguardo que borrar
+  }
+}
+
+// Explicación para el operador cuando el resguardo no se restauró.
+export const mensajeDeDescarte = (motivo) => {
+  switch (motivo) {
+    case 'version':
+      return 'El resguardo guardado por la versión anterior de la pantalla no se restauró.'
+    case 'identidad':
+      return 'El resguardo guardado pertenecía a otro documento: se descartó.'
+    case 'caducado':
+      return 'El resguardo guardado había caducado: se descartó.'
+    case 'ilegible':
+      return 'El resguardo guardado estaba dañado: se descartó.'
+    default:
+      return null
+  }
+}
+
+// ── Configuración de papeleo (contrato propuesto, pendiente de Int1) ───
+// El nombre del responsable se usa en la columna FIRMA del registro y la
+// plantilla oficial Modelo B la usa la API para generar las constancias.
+// Estos helpers implementan el contrato propuesto `GET/POST /papeleo-config`
+// (documentado en docs/HANDOVER_FRONTEND_FICHA_DEPOSITO.md); mientras la API
+// no lo exponga, la pantalla degrada con un aviso y no rompe el trámite.
+export const ESTADO_PAPELEO = {
+  desconocido: 'desconocido',
+  listo: 'listo',
+  incompleto: 'incompleto',
+  noSoportado: 'no-soportado',
+}
+
+// Traduce la respuesta del servidor a un estado visible para el operador.
+export const estadoPapeleoDe = (respuesta) => {
+  if (!respuesta) return { estado: ESTADO_PAPELEO.desconocido, problemas: [] }
+  const nombre = (respuesta.nombre_responsable ?? '').trim()
+  const plantilla = Boolean(respuesta.plantilla_configurada)
+  const problemas = []
+  if (!nombre) problemas.push('Falta el nombre del responsable (columna FIRMA del registro).')
+  if (!plantilla) problemas.push('Falta la plantilla oficial Modelo B (.docx).')
+  const estado = problemas.length === 0 ? ESTADO_PAPELEO.listo : ESTADO_PAPELEO.incompleto
+  return {
+    estado,
+    problemas,
+    nombre,
+    plantilla,
+    plantillaNombre: respuesta.plantilla_nombre ?? null,
+    detalle: respuesta.detalle ?? null,
+  }
 }
 
 // Fecha y hora (DD/MM/AA y HH:MM, 24 h) a partir del ISO 8601 del clic
@@ -370,4 +516,74 @@ export const generarFilaRegistro = async (apiUrl, cuerpo, formato = 'json', toke
   const porDefecto = `registro_vistobueno.${formato}`
   dispararDescarga(blob, nombreDeDescarga(res, porDefecto))
   return []
+}
+
+// ── Configuración de papeleo (contrato propuesto, pendiente de Int1) ───
+// GET /papeleo-config → { nombre_responsable, plantilla_configurada,
+// plantilla_nombre, detalle }. Un 404 significa que el servidor todavía no
+// expone el endpoint: la pantalla lo dice y sigue funcionando.
+export const consultarPapeleo = async (apiUrl, token = '') => {
+  const res = await fetch(`${apiUrl}/papeleo-config`, { headers: cabecerasBuzon(token) })
+  if (res.status === 404) {
+    return {
+      estado: ESTADO_PAPELEO.noSoportado,
+      problemas: [],
+      detalle:
+        'Este servidor todavía no expone la configuración de papeleo: el nombre del responsable y la ' +
+        'plantilla se configuran en el servidor.',
+    }
+  }
+  if (!res.ok) {
+    const detalle = await detalleDe(res)
+    throw new Error(detalle ?? `El servidor no pudo informar la configuración de papeleo (HTTP ${res.status}).`)
+  }
+  let cuerpo = null
+  try {
+    cuerpo = await res.json()
+  } catch {
+    cuerpo = null
+  }
+  return estadoPapeleoDe(cuerpo)
+}
+
+// POST /papeleo-config (JSON) → guarda el nombre del responsable.
+export const guardarNombreResponsable = async (apiUrl, nombre, token = '') => {
+  const res = await fetch(`${apiUrl}/papeleo-config`, {
+    method: 'POST',
+    headers: cabecerasBuzon(token, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ nombre_responsable: nombre ?? '' }),
+  })
+  if (!res.ok) {
+    const detalle = await detalleDe(res)
+    throw new Error(detalle ?? `El servidor no pudo guardar el nombre del responsable (HTTP ${res.status}).`)
+  }
+  let cuerpo = null
+  try {
+    cuerpo = await res.json()
+  } catch {
+    cuerpo = null
+  }
+  return estadoPapeleoDe(cuerpo)
+}
+
+// POST /papeleo-config/plantilla (multipart) → sube la plantilla Modelo B.
+export const subirPlantillaPapeleo = async (apiUrl, archivo, token = '') => {
+  const form = new FormData()
+  form.append('plantilla', archivo)
+  const res = await fetch(`${apiUrl}/papeleo-config/plantilla`, {
+    method: 'POST',
+    headers: cabecerasBuzon(token),
+    body: form,
+  })
+  if (!res.ok) {
+    const detalle = await detalleDe(res)
+    throw new Error(detalle ?? `El servidor no pudo guardar la plantilla (HTTP ${res.status}).`)
+  }
+  let cuerpo = null
+  try {
+    cuerpo = await res.json()
+  } catch {
+    cuerpo = null
+  }
+  return estadoPapeleoDe(cuerpo)
 }

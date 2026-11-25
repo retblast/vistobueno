@@ -6,19 +6,29 @@ import {
   CAMPO_AUTORES,
   CAMPO_DNI_AUTOR,
   CAMPO_MATRICULA,
+  CAMPO_ORCID_ASESOR,
   CAMPO_TITULO,
+  CAMPOS_EXTRAIDOS,
+  CAMPOS_MANUALES,
+  ESTADO_PAPELEO,
   autoresDe,
   cabecerasBuzon,
   construirCuerpoConstancia,
   construirCuerpoFilaRegistro,
   debeMostrarFicha,
+  borrarResguardo,
   establecerValor,
+  estadoPapeleoDe,
   faltantesDe,
   formatearTimestamp,
   generarFilaRegistro,
+  guardarResguardo,
+  identidadDeArchivo,
   interpretarSondeo,
+  leerResguardo,
   listaDe,
   normalizar,
+  mensajeDeDescarte,
   planDeDescargas,
   publicarFicha,
   sondearDeposito,
@@ -388,5 +398,143 @@ describe('cabecerasBuzon', () => {
     } finally {
       globalThis.fetch = fetchOriginal
     }
+  })
+})
+
+// ── Parte 2 de Arreglos.txt v9: el ORCID del asesor pasa a campo extraído ─
+// El motor lo detecta en la carátula: el operador solo lo verifica.
+describe('ORCID del asesor (contrato v1.15.0)', () => {
+  it('es un campo extraído y deja de ser manual', () => {
+    expect(CAMPOS_EXTRAIDOS.some((c) => c.campo === CAMPO_ORCID_ASESOR)).toBe(true)
+    expect(CAMPOS_MANUALES.some((c) => c.campo === CAMPO_ORCID_ASESOR)).toBe(false)
+  })
+
+  it('el campo extraído trae el aviso de revisión', () => {
+    const campo = CAMPOS_EXTRAIDOS.find((c) => c.campo === CAMPO_ORCID_ASESOR)
+    expect(campo.aviso).toMatch(/asesor/i)
+    expect(campo.avisoSinDetectar).toMatch(/no se detect[óo]/i)
+  })
+
+  it('el valor editado se publica en extraidos, no en manuales', () => {
+    const ficha = fichaCon(
+      [{ campo: CAMPO_ORCID_ASESOR, valor: '0000-0002-1825-0097', detectado: true }],
+      []
+    )
+    const editada = establecerValor(ficha, CAMPO_ORCID_ASESOR, '0000-0000-0000-0000')
+    expect(valorDe(editada, CAMPO_ORCID_ASESOR)).toBe('0000-0000-0000-0000')
+    expect(editada.extraidos.some((c) => c.campo === CAMPO_ORCID_ASESOR)).toBe(true)
+    expect(editada.manuales.some((c) => c.campo === CAMPO_ORCID_ASESOR)).toBe(false)
+  })
+
+  it('si llega en manuales (contrato anterior) al editarlo pasa a extraidos', () => {
+    const ficha = fichaCon([], [{ campo: CAMPO_ORCID_ASESOR, valor: null }])
+    const editada = establecerValor(ficha, CAMPO_ORCID_ASESOR, '0000-0001-2345-6789')
+    expect(editada.extraidos.some((c) => c.campo === CAMPO_ORCID_ASESOR)).toBe(true)
+    expect(editada.manuales.some((c) => c.campo === CAMPO_ORCID_ASESOR)).toBe(false)
+  })
+
+  it('no bloquea «Preparar depósito» (no entra en faltantesDe)', () => {
+    const ficha = fichaCon(
+      [
+        { campo: CAMPO_TITULO, valor: 'Una tesis', detectado: true },
+        { campo: CAMPO_AUTORES, valor: ['Ana Pérez'], detectado: true },
+      ],
+      [
+        { campo: CAMPO_MATRICULA, valor: ['20201234'] },
+        { campo: CAMPO_DNI_AUTOR, valor: ['70112233'] },
+      ]
+    )
+    expect(faltantesDe(ficha)).toEqual([])
+  })
+})
+
+// ── Parte 3 de Arreglos.txt v9: resguardo versionado, por contenido y con
+// caducidad (F1 y F5).
+describe('resguardo local de la ficha', () => {
+  const almacenFalso = () => {
+    const datos = new Map()
+    return {
+      getItem: (clave) => (datos.has(clave) ? datos.get(clave) : null),
+      setItem: (clave, valor) => datos.set(clave, valor),
+      removeItem: (clave) => datos.delete(clave),
+      datos,
+    }
+  }
+
+  it('la identidad se calcula por contenido (hash), no por nombre', () => {
+    expect(identidadDeArchivo({ nombre: 'tesis.docx', tamano: 100, hash: 'abc' })).toBe('hash:abc')
+    // Dos archivos con el mismo nombre pero distinto contenido son distintos.
+    expect(identidadDeArchivo({ nombre: 'tesis.docx', tamano: 100, hash: 'abc' })).not.toBe(
+      identidadDeArchivo({ nombre: 'tesis.docx', tamano: 100, hash: 'xyz' })
+    )
+  })
+
+  it('sin hash cae al nombre y el tamaño (nunca mezcla documentos distintos)', () => {
+    expect(identidadDeArchivo({ nombre: 'tesis.docx', tamano: 100 })).toBe('archivo:tesis.docx|100')
+    expect(identidadDeArchivo({ nombre: 'tesis.docx', tamano: 100 })).not.toBe(
+      identidadDeArchivo({ nombre: 'tesis.docx', tamano: 200 })
+    )
+  })
+
+  it('guarda y restaura el resguardo del mismo documento', () => {
+    const almacen = almacenFalso()
+    const ficha = fichaCon([{ campo: CAMPO_TITULO, valor: 'Una tesis' }])
+    guardarResguardo(almacen, 'hash:abc', ficha, 1000)
+    const lectura = leerResguardo(almacen, 'hash:abc', 2000)
+    expect(lectura.motivo).toBeNull()
+    expect(lectura.ficha).toEqual(ficha)
+  })
+
+  it('un resguardo de la versión anterior no se restaura', () => {
+    const almacen = almacenFalso()
+    almacen.setItem('vb-ficha-deposito', JSON.stringify({ clave: 'tesis.docx', ficha: { extraidos: [] } }))
+    const lectura = leerResguardo(almacen, 'hash:abc', 1000)
+    expect(lectura.ficha).toBeNull()
+    expect(lectura.motivo).toBe('version')
+    expect(mensajeDeDescarte(lectura.motivo)).toMatch(/versión anterior/i)
+  })
+
+  it('un resguardo de otro documento no se restaura (F1)', () => {
+    const almacen = almacenFalso()
+    guardarResguardo(almacen, 'hash:abc', fichaCon([]), 1000)
+    const lectura = leerResguardo(almacen, 'hash:otro', 2000)
+    expect(lectura.ficha).toBeNull()
+    expect(lectura.motivo).toBe('identidad')
+  })
+
+  it('un resguardo caducado no se restaura (F5)', () => {
+    const almacen = almacenFalso()
+    guardarResguardo(almacen, 'hash:abc', fichaCon([]), 1000)
+    const lectura = leerResguardo(almacen, 'hash:abc', 1000 + 60 * 60 * 1000 + 1)
+    expect(lectura.ficha).toBeNull()
+    expect(lectura.motivo).toBe('caducado')
+  })
+
+  it('borrar el resguardo lo elimina', () => {
+    const almacen = almacenFalso()
+    guardarResguardo(almacen, 'hash:abc', fichaCon([]), 1000)
+    borrarResguardo(almacen)
+    expect(almacen.getItem('vb-ficha-deposito')).toBeNull()
+  })
+})
+
+// ── Configuración de papeleo (contrato propuesto, pendiente de Int1) ───
+describe('estado de la configuración de papeleo', () => {
+  it('con nombre y plantilla → listo', () => {
+    const estado = estadoPapeleoDe({ nombre_responsable: 'Lic. Biblioteca FECyC', plantilla_configurada: true })
+    expect(estado.estado).toBe(ESTADO_PAPELEO.listo)
+    expect(estado.problemas).toEqual([])
+  })
+
+  it('sin nombre → dice qué falta', () => {
+    const estado = estadoPapeleoDe({ nombre_responsable: '', plantilla_configurada: true })
+    expect(estado.estado).toBe(ESTADO_PAPELEO.incompleto)
+    expect(estado.problemas.join(' ')).toMatch(/nombre del responsable/i)
+  })
+
+  it('sin plantilla → dice qué falta', () => {
+    const estado = estadoPapeleoDe({ nombre_responsable: 'Lic. Biblioteca FECyC', plantilla_configurada: false })
+    expect(estado.estado).toBe(ESTADO_PAPELEO.incompleto)
+    expect(estado.problemas.join(' ')).toMatch(/Modelo B/i)
   })
 })

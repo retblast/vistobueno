@@ -66,7 +66,7 @@ Cada regla es una función pura: recibe el documento normalizado y el parámetro
 
 - Si todos los `RuleResult` con `severity="error"` pasan → luz verde.
 - Si no → reporte agrupado por categoría (márgenes, tipografía, estructura, citas, etc.), con opción de vista simple (cartel) o detallada.
-- Por cada `RuleResult` fallido, genera un bloque "cómo preguntar a la IA" con el prompt armado y la referencia a la directiva aplicable. La etiqueta distingue la procedencia declarada (cita literal, paráfrasis, localizador, plantilla institucional, calidad técnica, matriz interna o norma institucional); el origen es interno del motor y no se expone en la API.
+- Por cada `RuleResult` fallido, genera un bloque "cómo preguntar a la IA" con el prompt armado y referencia textual a la directiva del reglamento correspondiente.
 
 ## Generación del esquema de reglas a partir del reglamento oficial (tiempo de diseño)
 
@@ -103,7 +103,7 @@ Las 32 reglas con mecanismo verificable fueron evaluadas end-to-end contra las 5
 Ambos reglamentos en PDF escaneado estaban pendientes de OCR (ver README anterior y anotaciones obsoletas del YAML). Ya se les extrajo texto con el script `scripts/ocr_pdfs.py` (motor híbrido PyMuPDF + tesseract), y el resultado quedó en `recursos/ocr/*.txt`:
 
 - `RCU-N-274-2022-UNT.txt` — Reglamento N° 007-2022-UNT/URA (Reglamento General de Otorgamiento de Grados Académicos y Títulos Profesionales). Es un reglamento de **procedimientos administrativos** de graduación/titulación, no de formato DOCX. Su único aporte a la validación es el **Anexo 5** (esquemas de proyecto/informe de investigación y de artículo científico), que se registró como **no determinista** (ver `unt_format_rules_schema.yaml` → `no_deterministas`).
-- `RCU-N-220-2022-UNT-LINEAS DE INVESTIGACION.txt` — catálogo de líneas de investigación (Tablas 1, 2 y 3: consolidadas, por consolidar y emergentes). La hipótesis previa de estructura **"código - nombre" quedó descartada**: las líneas van por número correlativo + nombre, sin código alfanumérico. La lista oficial alimenta la nueva regla `caratula_linea_investigacion`, que valida que la línea declarada en la carátula sea una de las aprobadas por el RCU-220. Desde 2026-11-26 la misma regla exige además letras mayúsculas y minúsculas en el valor de la línea (manual, párr. 181), y `alineacion_caratula_todos_elementos` comprueba el centrado de su etiqueta y su valor; `caratula_ciudad_pais_negrita` mide la línea de ciudad real con el mismo patrón mixto.
+- `RCU-N-220-2022-UNT-LINEAS DE INVESTIGACION.txt` — catálogo de líneas de investigación (Tablas 1, 2 y 3: consolidadas, por consolidar y emergentes). La hipótesis previa de estructura **"código - nombre" quedó descartada**: las líneas van por número correlativo + nombre, sin código alfanumérico. La lista oficial alimenta la nueva regla `caratula_linea_investigacion`, que valida que la línea declarada en la carátula sea una de las aprobadas por el RCU-220.
 
 ## Motor de reglas (re-arquitecturado — reemplaza al prototipo `eval_checks2.py`)
 
@@ -111,7 +111,7 @@ Ambos reglamentos en PDF escaneado estaban pendientes de OCR (ver README anterio
 > - `unt_format_rules_schema.yaml` — formato **legacy** (checks con
 >   `mecanismo_verificable`). Es la fuente histórica (Semana 2); la API ya no lo
 >   carga.
-> - `reglas_unt.yaml` — formato **DSL** (autómatas/analizadores), **54 reglas**:
+> - `reglas_unt.yaml` — formato **DSL** (autómatas/analizadores), **49 reglas**:
 >   las 32 legacy migradas (F1) + 9 reglas antes no-deterministas mecanizadas
 >   a mano en la F3 (tokenizer + analizadores de conteo/lista/hipervínculo)
 >   + `indice_paginas_separadas` (paginación real por `w:lastRenderedPageBreak`)
@@ -155,7 +155,6 @@ tests/
   test_f2_automatas.py      # Tests F2: tokenizer, PDA, automata_pila
   test_f3_mecanizacion.py   # Tests F3: reglas no deterministas
   test_f4_ingenieria.py     # Tests F4: linter, cache, traza
-  test_t2_linter.py         # Tests T2: endurecimiento del linter (pruebas "antes" y nuevos controles)
   test_paridad_formatos.py  # Paridad legacy vs DSL
   test_propiedad.py         # Tests de propiedad (factory + mutaciones)
   test_exportador.py        # Tests de exportación a Markdown/PDF
@@ -173,7 +172,7 @@ scripts/
   migrar_legacy_a_dsl.py          # Migra YAML legacy → DSL
   ocr_pdfs.py                     # OCR de reglamentos escaneados
 
-reglas_unt.yaml            # Reglas en formato DSL (54 reglas) - lo carga la API
+reglas_unt.yaml            # Reglas en formato DSL (49 reglas) - lo carga la API
 reglas_unt_pendientes.yaml # 5 estructuras implementadas y sin probar (no lo carga la API)
 reglas_dsl_ejemplo.yaml    # Ejemplo de reglas DSL
 ```
@@ -182,19 +181,13 @@ reglas_dsl_ejemplo.yaml    # Ejemplo de reglas DSL
 
 ### Cómo correrlo
 
-En Windows 10/11, el camino soportado es **WSL2 + Nix**. La guía completa
-—incluido el camino nativo sin Nix para levantar la API— está en
-[`docs/INSTALACION.md`](docs/INSTALACION.md). El acceso directo opcional
-para abrir la SPA desde el escritorio se crea con
-`tools/launcher/crear_acceso_directo.ps1` (ver §3.7 de la guía).
-
 ```bash
 nix develop   # entorno con todas las dependencias
 
 # Requisito de versión: Python 3.14 o superior. El motor y los scripts usan
 # la sintaxis `except Tipo, Tipo:` sin paréntesis (PEP 758), que solo es
 # válida desde Python 3.14. El flake y la CI ya fijan esa versión; si
-# ejecutas el paquete fuera de Nix, usa Python 3.14+.
+# ejecutás el paquete fuera de Nix, usá Python 3.14+.
 
 # tests (vía nix run — recomendado)
 nix run .#test -- tests/ -v
@@ -206,21 +199,17 @@ pytest tests/ -v
 nix run .#serve -- validator.api:app --reload
 # Swagger UI: http://localhost:8000/docs
 
-# API (directo). --no-proxy-headers: un X-Forwarded-For no puede
-# falsificar el peer y saltar el control de loopback.
-uvicorn validator.api:app --reload --no-proxy-headers
+# API (directo)
+uvicorn validator.api:app --reload
 
-# validar un DOCX desde CLI (mismo YAML que usa la API)
-python -m validator.cli tesis.docx reglas_unt.yaml
+# validar un DOCX desde CLI
+python -m validator.cli tesis.docx unt_format_rules_schema.yaml
 
 # solo errores bloqueantes
-python -m validator.cli tesis.docx reglas_unt.yaml --severity error
+python -m validator.cli tesis.docx unt_format_rules_schema.yaml --severity error
 
 # reporte completo en JSON (incluye "como_preguntar_a_una_ia")
-python -m validator.cli tesis.docx reglas_unt.yaml --json
-
-# `unt_format_rules_schema.yaml` es el esquema legacy: sirve para comparar
-# con la versión histórica, pero NO reproduce lo que responde la API.
+python -m validator.cli tesis.docx unt_format_rules_schema.yaml --json
 
 # exportar el reporte a Markdown o PDF (para la bitácora/entrega)
 python -m validator.cli tesis.docx reglas_unt.yaml --formato markdown --salida reporte.md
@@ -246,14 +235,11 @@ pytest tests/ --cov=validator --cov-report=term-missing
 nix flake check
 ```
 
-La suite termina **en verde** (referencia en CI sobre `5dda06d`, sin
-`recursos/`: `1083 passed, 9 skipped`; los `skipped` son tests que
-necesitan esas carpetas, no fallos; ya no quedan `xfail` de la ficha) e
-incluye los **tests de propiedad** (F6): un factory
+La suite (**547 tests**) incluye los **tests de propiedad** (F6): un factory
 determinista de DOCX (`tests/docx_factory.py`, descompuesto en
 `tests/_xml_constants.py`, `tests/_docx_builder.py` y `tests/_mutations.py`;
 este último **sincroniza sus mutaciones con `reglas_unt.yaml` al importar`)
-genera un documento "bueno" (44 de 54 evaluadas; las 10 reglas de otros tipos
+genera un documento "bueno" (43 de 49 evaluadas; las 6 reglas de otros tipos
 —las 2 estructuras alternativas, los mínimos de referencias/anexos de
 cualitativo y revisión, y la carátula del Proyecto— no le aplican, porque el
 documento es un plan cuantitativo) y 49
@@ -262,9 +248,7 @@ mutaciones de una sola propiedad
 su regla. Sobre eso, las **mejoras de ingeniería F4** agregaron: un **linter
 del DSL** (`validator/dsl_check.py`) que valida la configuración al cargar
 (regex inválida, comparaciones sin `esperado`, estados inalcanzables,
-ciclos épsilon, **XPath no evaluable**, **claves de regla desconocidas**,
-secciones mal escritas y **centinelas de tipo** `sin_determinar` /
-`contradictorio`), **cache de consultas XPath** por documento y la
+ciclos épsilon), **cache de consultas XPath** por documento y la
 **traza del autómata** (`ruta_estados` / `ultima_ruta`).
 
 ## Stack técnico
@@ -286,10 +270,9 @@ El frontend llama a `POST /validar` con `API_BASE_URL = import.meta.env.VITE_API
 |---------|----------------------|
 | **`npm run dev`** (desarrollo) | Proxy de Vite en `vite.config.js` enruta `/validar` → `http://localhost:8000`. El default `VITE_API_URL=''` (mismo origen) funciona sin configurar nada. |
 | **`npm run preview` / build estático** | **No existe el proxy de Vite.** Hay que: (1) definir `VITE_API_URL` en tiempo de build hacia el origen de la API, o (2) servir el build detrás de un **reverse proxy** (nginx, Caddy, etc.) que enroute `/validar` al backend FastAPI. |
-| **Build servido por FastAPI** | Si existe `frontend/dist/index.html` al arrancar, la API monta la SPA en `/` y comparte origen con `/validar`. Es el modo del lanzador de Windows (`docs/INSTALACION.md` §3.7). |
 | **Build con API en otro origen** | `VITE_API_URL=https://api.tudominio.com npm run build` (o variable en CI). Ver `frontend/.env.example`. |
 
-Con `VITE_API_URL` vacío, el build funciona si la SPA se sirve desde la misma API (**Build servido por FastAPI**) o desde un reverse proxy. En un despliegue estático sin proxy, las llamadas a `/validar` fallan con error de red y el UI muestra el error real con opción de reintentar. El reporte mock solo existe en desarrollo (`import.meta.env.DEV`); en producción nunca sustituye un fallo del backend. Errores HTTP con cuerpo JSON (`detail`) se muestran al usuario y tampoco se sustituyen por mocks.
+Mientras `VITE_API_URL` quede vacío en un despliegue **sin** proxy/reverse proxy, las llamadas a `/validar` fallarán con error de red y el UI entrará en modo demo (reporte mock avisado). Errores HTTP del backend **con** cuerpo JSON (`detail`) se muestran al usuario y **no** se sustituyen por mocks.
 
 ## Operación en la biblioteca (flujo de ficha de depósito)
 
@@ -308,31 +291,17 @@ El flujo completo es:
    equivocada (por ejemplo, el asesor vacío o la línea de ciudad en vez
    del año) para que el operador las teclee.
 2. En la pantalla de ficha el operador corrige los valores y completa los
-   campos manuales (matrícula, DNI, ORCID).
-3. "Preparar depósito" publica la ficha en el **buzón** (una ranura en
-   memoria, "última gana"). El trámite tiene dos ventanas: 1 hora para el
-   **autorrelleno** (`VISTOBUENO_TTL_AUTORRELLENO_SEG`) y 24 horas de
-   **retención** del trámite completo (`VISTOBUENO_TTL_TRAMITE_SEG`).
-   Vencer el autorrelleno no borra la ficha: el trámite sigue en
-   `GET /tramite`.
+   campos manuales (matrícula y DNIs). El ORCID del asesor llega
+   **detectado** desde la carátula (contrato v1.15.0): el operador solo lo
+   verifica (puede ser el de un autor) y no bloquea el depósito.
+3. "Preparar depósito" publica la ficha en el **buzón** (una ranura, TTL
+   de 1 hora).
 4. En la pestaña de DSpace, el botón del userscript rellena el formulario
    oficial con los metadatos de la ficha.
 5. El **encargado adjunta el `.docx`** en ese formulario (el userscript no
    toca el selector de archivos).
-6. El clic en **Depositar** queda registrado como hora del envío. No
-   prueba que el ítem exista.
-7. En la página del ítem (`/items/<uuid>`), el userscript muestra un panel
-   de confirmación con el handle, el título y los autores observados. El
-   operador lo revisa y pulsa **"Confirmar depósito archivado"**: esa
-   atestación explícita es lo que habilita el papeleo. Si el título o los
-   autores no coinciden con la ficha, el panel bloquea la confirmación y
-   ofrece reportar la inconsistencia.
-8. La SPA arma la constancia y la fila del registro con el estado canónico
-   del servidor (ficha, handle y hora confirmados).
-
-> El estado "archivado" es una **atestación del operador**, no un estado
-> verificado por el servidor: la API no consulta DSpace. El click en
-> "Depositar" y la confirmación son dos hechos distintos.
+6. El userscript reporta el handle del ítem al buzón; la SPA arma la
+   constancia y la fila del registro.
 
 > El camino REST automático (`POST /validar` con `depositar=true`) queda
 > **deprecado** desde la decisión del 2026-10-28: ya no abre ninguna
@@ -353,126 +322,52 @@ El flujo completo es:
   - `VISTOBUENO_PLANTILLA_CONSTANCIA` — opcional, si la plantilla vive
     fuera de `recursos/`.
   - `VISTOBUENO_RATE_LIMIT_MAX` / `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` —
-    opcionales. Por defecto rige un cupo adaptativo por CPU (2 s de
-    trabajo por minuto, medido en cada equipo). Al definir
-    `VISTOBUENO_RATE_LIMIT_MAX` vuelve la ventana fija por IP
-    (`0` la desactiva).
-  - `VISTOBUENO_HOST` / `VISTOBUENO_HOSTS` — bind y hosts admitidos.
-    Por defecto `127.0.0.1` y solo loopback/`localhost`; para exponer la
-    API hay que definir `VISTOBUENO_HOST`, un token y el host del peer.
-  - `VISTOBUENO_API_TOKEN` — opcional. Si se define, toda la API exige
-    el header `X-VistoBueno-Token` a los peers remotos. Solo hace falta
-    si la API se expone fuera de la máquina del operador.
-  - `VISTOBUENO_RATE_LIMIT_CPU_SEG` /
-    `VISTOBUENO_RATE_LIMIT_PAPELES_CPU_SEG` — opcionales. Presupuestos de
-    CPU por ventana (validación y papeleo). `0` desactiva el cupo.
+    límite de peticiones de `POST /validar` (default 60 por 60 s, por IP;
+    `0` lo desactiva). `POST /validar` recompila el DSL en cada request:
+    el límite protege el CPU de la máquina.
+  - `VISTOBUENO_API_TOKEN` — opcional. Si se define, los endpoints del
+    buzón exigen además el header `X-VistoBueno-Token` con ese valor.
+    Solo hace falta si la API se expone fuera de la máquina del operador.
 - Userscript en Tampermonkey: crear un script nuevo y pegar el contenido
   de `tools/dspace-fill/dist/vistobueno-dspace-fill.user.js`. El script
   solo se conecta a `localhost` (`@connect localhost`) y **no necesita
-  token**: siempre habla con `127.0.0.1`. Desde la versión 1.1.0 declara
-  `@updateURL`/`@downloadURL`: Tampermonkey ofrece la actualización sola.
-  Si el script se pegó a mano en una versión anterior, hay que pegarlo de
-  nuevo (ver `docs/HANDOVER_DESPLIEGUE_MAQUINA_OPERADOR.md`).
+  token**: siempre habla con `127.0.0.1`.
 
-### Control de acceso (toda la API)
+### Control de acceso (buzón de ficha)
 
-La API maneja datos personales (DNI, ORCID, resumen), documentos
-oficiales (constancias) y trabajo de CPU (validación). Por eso **todos
-los endpoints rechazan con `403` toda petición que no venga de la
-máquina local** (`127.0.0.0/8` o `::1`; auditoría 2026-10-26, AUD-09):
-sin ese control, un `curl` desde otro equipo de la red podía validar,
-leer la ficha o generar constancias. La SPA y el userscript corren en la
-misma máquina, así que el flujo normal no cambia.
+El buzón travela datos personales del estudiante (DNI, ORCID, resumen) y su
+ranura es de "última gana". Por eso los cuatro endpoints del buzón
+**rechazan con `403` toda petición que no venga de `127.0.0.1`/`::1`**
+(auditoría 2026-10-26, AUD-09): sin ese control, un `curl` desde otro
+equipo de la red podía leer la ficha o pisarla mientras el operador
+trabajaba. La SPA y el userscript corren en la misma máquina, así que el
+flujo normal no cambia.
 
-Además, se rechaza con `400` cualquier petición cuyo header `Host` no
-sea `127.0.0.1`, `localhost` o `::1` (se ignora el puerto). Ese chequeo
-cierra el **DNS rebinding** en todos los navegadores. `VISTOBUENO_HOSTS`
-suma dominios propios si la API vive detrás de un reverse proxy local;
-`*` desactiva el chequeo (no recomendado). El procedimiento de prueba
-está en `docs/HANDOVER_DESPLIEGUE_MAQUINA_OPERADOR.md`.
-
-Si algún día la API se expone fuera de la máquina (`VISTOBUENO_HOST` con
-un bind no-loopback o un reverse proxy en otro host), el peer remoto
-necesita **las dos cosas**:
-
-1. `VISTOBUENO_API_TOKEN` definido, y el header `X-VistoBueno-Token` en
-   cada petición (comparación en tiempo constante).
-2. Su dirección o dominio en `VISTOBUENO_HOSTS`, para que el chequeo del
-   `Host` lo acepte.
-
-El chequeo del `Host` corre antes que el del token: un peer con token
-válido pero `Host` no listado recibe `400`, no `200`. El loopback no
-necesita ni el header ni la lista.
-
-`python -m validator.api` arranca con `proxy_headers=False` y la app
-`nix run .#serve` agrega `--no-proxy-headers`: un `X-Forwarded-For`
-falso no puede reescribir el peer y saltar el control.
+Si algún día la API se expone fuera de la máquina (bind a `0.0.0.0` o un
+reverse proxy en otro host), define `VISTOBUENO_API_TOKEN` y haz que el
+cliente envíe el header `X-VistoBueno-Token`. Con token configurado, un
+peer remoto entra **solo** si el header coincide (comparación en tiempo
+constante). El loopback no necesita el header: la SPA y el userscript
+hablan con `127.0.0.1` y el flujo local no se rompe por definir el token.
 
 ### Límite de peticiones de validación
 
-`POST /validar` usa un **cupo adaptativo por CPU**: acumula los segundos
-reales de trabajo de cada validación y los libera a razón de `2` s por
-minuto. Una petición entra si la deuda está por debajo del presupuesto;
-si no, responde `429` con `Retry-After`. El mismo presupuesto rinde ~33
-validaciones seguidas en un equipo de 60 ms y ~8 en uno de 250 ms: se
-ajusta solo, sin calibrar por hardware.
+`POST /validar` tiene un límite por IP: `60` peticiones por `60` segundos
+por defecto (`429` con `Retry-After` cuando se excede). Se ajusta con
+`VISTOBUENO_RATE_LIMIT_MAX` y `VISTOBUENO_RATE_LIMIT_VENTANA_SEG`, y
+`0` lo desactiva.
 
-El coste que se cobra es **CPU del hilo que validó**, no la latencia: con
-varias peticiones a la vez, la espera no cuenta como trabajo.
-
-`POST /constancia` y `POST /fila-registro` tienen su propio cupo (1 s por
-minuto), porque generar DOCX/XLSX es más caro que validar. Se sube con
-`VISTOBUENO_RATE_LIMIT_PAPELES_CPU_SEG` y se desactiva con `0`: es la
-salida de emergencia para el operador que necesita papelar sin cortes.
-
-Se puede volver al límite anterior de ventana fija por IP definiendo
-`VISTOBUENO_RATE_LIMIT_MAX` (peticiones por IP y ventana; `0` lo
-desactiva), con `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` para la ventana. En
-ese modo el cupo de CPU no se cobra. En el despliegue local **el límite
-es por máquina, no por persona**: todos los clientes locales comparten
-`127.0.0.1` y, por lo tanto, el mismo cupo. Para una sesión de validación
-por lotes, por ejemplo:
+En el despliegue local **el límite es por máquina, no por persona**: todos
+los clientes locales comparten `127.0.0.1` y, por lo tanto, el mismo
+cubo. Para una sesión de validación por lotes (una clase entera en una
+tanda), sube el límite, por ejemplo:
 
 ```bash
 VISTOBUENO_RATE_LIMIT_MAX=300 nix run .#serve -- validator.api:app --reload
 ```
 
-Ese modo legacy cubre `POST /validar`, no el papeleo: para un lote que
-también genera constancias, sube el cupo de CPU en vez de usar el modo
-legacy:
-
-```bash
-VISTOBUENO_RATE_LIMIT_CPU_SEG=20 \
-VISTOBUENO_RATE_LIMIT_PAPELES_CPU_SEG=20 \
-  nix run .#serve -- validator.api:app --reload
-```
-
 El límite real de la red sigue siendo del reverse proxy: este control
 protege el CPU del motor, no la red.
-
-### Ejemplos de demostración (material de la actividad 14)
-
-Hay un par de documentos de ejemplo **reproducibles** —uno conforme y
-otro que incumple el formato— con las respuestas del validador
-versionadas:
-
-| Artefacto | Qué es |
-|-----------|--------|
-| `docs/ejemplos/doc_bueno.docx` | Documento conforme: `POST /validar` devuelve semáforo verde, 0 fallos |
-| `docs/ejemplos/doc_malo.docx` | Documento con incumplimientos: semáforo rojo, 4 errores y 1 warning |
-| `docs/ejemplos/respuesta_doc_bueno.json` · `respuesta_doc_malo.json` | Las dos respuestas, tal cual |
-| `docs/ejemplos/GUIA_EJEMPLOS.md` | Qué se revisó en cada documento y qué resultado produce |
-| `scripts/ejemplo_bueno_malo.py` | Generador del par (misma fábrica determinista que los tests) |
-| `docs/REGISTRO_DOCUMENTOS_SEDE.md` | Propuesta de estructura para registrar los documentos que entregue la sede en el piloto: campos, estados, regla de privacidad y criterio de cierre |
-| `docs/PILOTO_OPERADOR.md` | Kit del piloto: precondiciones, checklist de 11 pasos contra la instancia real, limitaciones conocidas, tabla de hallazgos y reversión |
-| `docs/PLAN_LOTES_PRE_PILOTO.md` | Plan de trabajo previo al piloto por lotes, con el estado de cada uno y su compuerta |
-
-El par es sintético: no hay datos de personas ni tesis reales, y se
-regenera en cualquier máquina:
-
-```
-nix develop --command python3 scripts/ejemplo_bueno_malo.py
-```
 
 ### Ensayo general (sin tocar la instancia real)
 
@@ -483,64 +378,38 @@ nix run .#test-ficha-deposito
 ```
 
 Valida el doc bueno del factory, publica la ficha, corre el userscript
-real contra el mock de DSpace, confirma el depósito con la atestación del
-operador en la página del ítem y genera constancia + registro
-descargables. Salida esperada: "✅ FLUJO COMPLETO OK". La evidencia
-(logs, archivos generados) queda en un tmp que el propio comando imprime.
-
-Los dos comandos de ensayo (`nix run .#test-ficha-deposito` y `nix run
-.#test-local`) levantan su propia API y su propio dev server, así que
-necesitan puertos libres. Antes de arrancar, comprueban que lo estén y
-**se detienen con un mensaje claro si no lo están**: nunca se reaprovechan
-una API ajena por error. Para correrlos junto a otra instancia, se eligen
-otros puertos:
-
-```
-VISTOBUENO_API_PUERTO=8020 VISTOBUENO_MOCK_PUERTO=8021 nix run .#test-ficha-deposito
-VISTOBUENO_API_PUERTO=8020 VISTOBUENO_FRONTEND_PUERTO=5174 nix run .#test-local
-```
+real contra el mock de DSpace, verifica el handle en el buzón y genera
+constancia + registro descargables. Salida esperada: "✅ FLUJO COMPLETO
+OK". La evidencia (logs, archivos generados) queda en un tmp que el
+propio comando imprime.
 
 Manual, para recorrerlo con calma: `nix run .#serve --
 validator.api:app --port 8000` en una terminal, `nix run .#mock-dspace`
 en otra (mock de las páginas de DSpace en `http://127.0.0.1:8080`) y el
-checklist de 11 pasos de `tools/dspace-fill/dev/mock-dspace/README.md`.
+checklist de 10 pasos de `tools/dspace-fill/dev/mock-dspace/README.md`.
 El mock imita el DOM del formulario oficial; los comportamientos del
 Angular real se validan en el piloto (borrador descartable, con el
-operador presente). El kit del piloto está en `docs/PILOTO_OPERADOR.md`.
+operador presente).
 
-### Flujo real (contrato v1.14.0)
+### Flujo real (contrato v1.7.0)
 
 1. Validar el DOCX: con semáforo verde, la respuesta trae la ficha
    (`ficha_deposito`) con los valores detectados.
-2. El operador revisa la ficha, completa los manuales (matrícula, DNIs,
-   ORCID) y la publica al buzón (`POST /ficha-pendiente`). La API
-   devuelve `tramite_id`, `revision`, `autofill_hasta` y `retenido_hasta`;
-   la SPA conserva el `tramite_id` y la revisión para distinguir el
-   trámite en vuelo.
+2. El operador revisa la ficha, completa los manuales (matrícula y DNIs;
+   el ORCID del asesor llega detectado y solo se verifica) y la publica al
+   buzón (`POST /ficha-pendiente`).
 3. En DSpace, el userscript pre-llena el formulario (toast con el
    resumen: lleno / a mano / sin dato) y corrige el nivel de acceso
-   ("Acceso abierto"). Las filas repetibles se agregan y se quitan con
-   los controles del propio widget de DSpace.
+   ("Acceso abierto").
 4. El operador arrastra el .docx, marca "Confirmo la licencia" y pulsa
-   Depositar; el clic queda registrado como timestamp (hora de Perú).
-5. En la página del ítem (`/items/<uuid>`), el panel del userscript
-   muestra el handle, el título y los autores observados. El operador
-   pulsa **"Confirmar depósito archivado"** y el userscript envía
-   `POST /deposito` con `atestacion: "operador"`, la `revision_esperada`
-   y la hora del clic. Sin esa atestación, la API responde `422`.
-6. Con `tramite_id` + ficha + handle + timestamp:
-   `POST /fila-registro` (filas TSV para pegar en el XLSX oficial — la
-   app JAMÁS escribe el registro) y `POST /constancia` (una descarga por
-   autor). La API comprueba que el depósito esté **confirmado y vigente**,
-   que la ficha sea exactamente la canónica y que no haya una
-   inconsistencia pendiente; el papeleo usa esos valores canónicos. Con
-   `?formato=tsv | csv | xlsx`, `/fila-registro` devuelve el archivo
-   descargable directo.
-
-Nota de cambio (2026-11-23): el motor ya captura el ORCID del asesor desde
-la carátula (`renati.advisor.orcid` en `reporte["ficha"]`). En esta versión
-la API todavía lo trata como campo manual: su publicación como dato extraído
-llega en el siguiente PR del reparto ORCID.
+   Depositar; el clic queda registrado como timestamp.
+5. Al abrir el ítem, el userscript reporta el handle al buzón
+   (`POST /deposito`).
+6. Con la ficha + handle + timestamp: `POST /fila-registro` (filas TSV
+   para pegar en el XLSX oficial — la app JAMÁS escribe el registro) y
+   `POST /constancia` (una descarga por autor). Con `?formato=tsv |
+   csv | xlsx`, `/fila-registro` devuelve el archivo descargable
+   directo.
 
 Nota de seguridad operativa: los `.har` exportados del navegador traen
 cookies, tokens y cuerpos POST completos (incluso con el export
@@ -560,10 +429,9 @@ el reporte. **Nunca toca el semáforo** ni produce `RuleResult`. Funcionalidades
 
 **Implementado (motor, rama `semana8-modulo-ia`)**: `validator/llm.py`
 (`LLMClient` + `OllamaClient` + `StubLLM`) y `validator/asistente.py` (Funcionalidad 2:
-`explicar_y_priorizar`), con tests sin red ni GPU. Los endpoints
-`GET /asistente/estado` y `POST /asistente/explicar` están implementados
-en `validator/api.py` (contrato en `docs/HANDOVER_API_IA.md`).
-**Pendiente**: los botones del frontend (contrato en `docs/HANDOVER_API_IA.md`).
+`explicar_y_priorizar`), con tests sin red ni GPU. **Pendiente**: el *wiring* de
+los endpoints `GET /asistente/estado` y `POST /asistente/explicar` en la API y
+los botones del frontend (contrato en `docs/HANDOVER_API_IA.md`).
 
 Configuración: `OLLAMA_URL` (habilita el módulo), `OLLAMA_MODEL` (por defecto
 `qwen2.5:3b`; en GPU `qwen2.5:7b`) y `OLLAMA_TIMEOUT` (segundos). Sin
@@ -580,6 +448,6 @@ Configuración: `OLLAMA_URL` (habilita el módulo), `OLLAMA_MODEL` (por defecto
 
 ## Estado actual
 
-Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba. La auditoría de comportamiento del 2026-10-26 encontró que las 5 plantillas oficiales fallan hoy por `palabras_clave_minimo` (rojo deliberado, decisión del 2026-11-08) y que los tests no replican su estructura real: el estado abierto y su criterio de aceptación están en `docs/HANDOVER_AUDITORIA_2026-10-26.md`. Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista.
+Motor de reglas de producción implementado y probado end-to-end (extractor + checks + engine + filtro de severidad + generador de prompts), validado contra un DOCX de prueba y contra las 5 plantillas oficiales (27/32 mecanizadas PASS). Los dos RCU escaneados fueron leídos vía OCR (2026-09-02) y quedaron reflejados en el YAML: la lista de líneas de investigación del RCU-220 alimenta la regla `caratula_linea_investigacion` y el aporte del RCU-274 (Anexo 5) se registró como no determinista.
 
-**API FastAPI** implementada (`POST /validar`) con validación de entrada, manejo de errores, DTOs Pydantic y suite de tests de contrato (ver `docs/CONTRATO_API.md`). **Frontend React** integrado con el backend (`Upload.jsx`, `Report.jsx`, proxy de desarrollo y manejo de errores HTTP), con campo opcional de correo del estudiante y **opt-in de notificación por correo** (casilla `notificar` + badge de estado `notificacion` en el reporte, 6 estados incluido `deshabilitado` con nota de configuración para administradores), **depósito en el repositorio institucional DSpace deprecado** (decisión 2026-10-28: la app no escribe en la API de DSpace; el campo `depositar` se conserva pero ya no abre ninguna conexión — decisión vigente en el contrato v1.14.0, ver `docs/CONTRATO_API.md` y `docs/DSPACE_API.md`), **ficha de depósito y buzón de una ranura** (contrato v1.14.0: objeto `ficha_deposito` en la respuesta solo con semáforo verde —valores detectados del DOCX vía el diseño 17 + campos manuales del operador— y endpoints `POST/GET /ficha-pendiente` con trámite, revisión y dos ventanas —1 h de autorrelleno y 24 h de retención del trámite— · `GET /tramite` con la ficha canónica · `POST /deposito` que exige la atestación explícita del operador (`atestacion: "operador"`) y la `revision_esperada` · `POST /ficha-pendiente/reconciliar` y `POST /ficha-pendiente/inconsistencia`; el userscript 1.2.0 pre-llena el formulario oficial de DSpace, registra la hora del clic en Depositar y pide al operador confirmar el ítem en la página `/items/<uuid>`; plan congelado en `docs/PLAN_FICHA_DEPOSITO.md`), **constancia de depósito y fila de registro** (endpoints `POST /constancia` —Modelo B oficial lleno, una constancia por autor, MERGEFIELD reemplazados por texto plano— y `POST /fila-registro` —filas TSV en el orden de columnas del registro de la biblioteca; el XLSX oficial jamás se escribe desde la app), **pantalla de ficha de depósito en la SPA** (`FichaDeposito.jsx`: datos extraídos editables + matrícula y DNI alineados por autor, resguardo en `localStorage`, «Preparar depósito» al buzón, panel de espera con sondeo de `GET /deposito`, cotejo del título reportado contra la ficha —nunca se usa un handle a ciegas— y descargas de la constancia por autor, del paquete `.zip` y de la fila del registro en `.tsv`/`.csv`/`.xlsx`), **zona de carga con estados explícitos** (vacío, seleccionado, inválido, procesando y error de servidor) y **botón principal «Validar documento» siempre visible a todo el ancho** (deshabilitado con ayuda contextual si no hay archivo válido), **prompt único en «Cómo preguntar a una IA»** que junta todos los prompts en una sola instrucción copiable, **límite de error con pantalla de recuperación** (un fallo de render muestra un aviso anunciado con `role="alert"`, con el foco en el encabezado y salida a la pantalla de carga, en vez de una pantalla en blanco) y **envío del formulario con Enter** (el card de carga es un `<form noValidate>`; con el formulario completo, Enter valida el documento y, si falta el archivo o el correo es inválido, lleva el foco al campo pendiente), primeros **tests automatizados del frontend con vitest** (`npm test`) y **tests de componente con jsdom y `@testing-library/react`** (límite de error, envío con Enter, toggle de tema, detalle completo de una regla fallida y el flujo completo de la pantalla de ficha de depósito), mejoras de usabilidad IHC, auditoría UX integral (C1–C41: modo oscuro persistente, `aria-live` con debounce acertado a la vista, contraste AA (`--ambar` corregido en dark + `color-scheme`), barra de cumplimiento calculada solo sobre las reglas evaluadas (contrato v1.5: las no aplicables al tipo de documento detectado no se listan como cumplidas), metadatos del archivo y del tipo de documento en el encabezado del reporte, y búsqueda de reglas del wireframe —la búsqueda filtra también los prompts de IA—, ESLint configurado cubriendo `.js`/`.jsx`, favicon, mock de demo **solo en desarrollo** (en el build de producción, si el backend no responde se muestra el error real, nunca un reporte de ejemplo — decisión AUD-18 del 2026-10-28), re-elección del mismo archivo con retorno de foco, y script E2E del flujo completo versionado en `scripts/e2e_flujo_completo.sh`, 11 verificaciones) y mockups de las pantallas de carga y reporte (`mockups/`). **Motor DSL** consolidado (F1–F6): 49 reglas mecanizadas (incluye paginación real `indice_paginas_separadas`, ubicación por página, encabezados/pies, notas al pie, control de cambios, e índice de contenidos con `indice_apunta_secciones`/`indice_numeracion_jerarquica`), linter, cache XPath, traza de autómata y tests de propiedad con factory determinista de DOCX. **Calidad de ingeniería** (ruff, mypy, coverage, pre-commit, CI con Nix: tests del backend y build, lint y tests del frontend en cada push/PR) y **exportación del reporte a Markdown/PDF** implementada en la CLI (tareas 15 y 16 del `docs/PLAN_BACKLOG_FUTURO.md`); la API sigue devolviendo **solo JSON** y `formato` no se expone en `POST /validar` (decisión del 2026-11-08: si se retoma, va en un `POST /reporte` aparte). **Módulo de IA (asistente del encargado)** iniciado: cliente LLM local (`validator/llm.py`, con `StubLLM` para CI) y la Funcionalidad 2 de explicación/priorización (`validator/asistente.py`), advisory y sin tocar el semáforo; falta el *wiring* de la API (`docs/HANDOVER_API_IA.md`) y los botones del frontend. **Userscript del formulario de depósito** (`tools/dspace-fill/`): núcleo puro testeado en node con jsdom, artefacto instalable en `dist/` (el CI verifica el drift) y ensayo general con `nix run .#mock-dspace` (mock local de las páginas de DSpace con checklist de 11 pasos).
+**API FastAPI** implementada (`POST /validar`) con validación de entrada, manejo de errores, DTOs Pydantic y suite de tests de contrato (ver `docs/CONTRATO_API.md`). **Frontend React** integrado con el backend (`Upload.jsx`, `Report.jsx`, proxy de desarrollo y manejo de errores HTTP), con campo opcional de correo del estudiante y **opt-in de notificación por correo** (casilla `notificar` + badge de estado `notificacion` en el reporte, 6 estados incluido `deshabilitado` con nota de configuración para administradores), **depósito en el repositorio institucional DSpace deprecado** (decisión 2026-10-28: la app no escribe en la API de DSpace; el campo `depositar` se conserva pero ya no abre ninguna conexión — contrato v1.8.0, ver `docs/CONTRATO_API.md` y `docs/DSPACE_API.md`), **ficha de depósito y buzón de una ranura** (contrato v1.7.0: objeto `ficha_deposito` en la respuesta solo con semáforo verde —valores detectados del DOCX vía el diseño 17 + campos manuales del operador— y endpoints `POST/GET /ficha-pendiente` · `POST/GET /deposito` con TTL de 1 hora para el userscript que pre-llena el formulario oficial de DSpace; plan congelado en `docs/PLAN_FICHA_DEPOSITO.md`), **constancia de depósito y fila de registro** (endpoints `POST /constancia` —Modelo B oficial lleno, una constancia por autor, MERGEFIELD reemplazados por texto plano— y `POST /fila-registro` —filas TSV en el orden de columnas del registro de la biblioteca; el XLSX oficial jamás se escribe desde la app), **pantalla de ficha de depósito en la SPA** (`FichaDeposito.jsx`: datos extraídos editables —incluido el ORCID del asesor, que llega detectado desde la carátula y solo se verifica (contrato v1.15.0)— + matrícula y DNI alineados por autor, resguardo en `localStorage` **versionado, identificado por el contenido del archivo y con caducidad de 1 h**, sección de **configuración de papeleo** (nombre del responsable para la columna FIRMA del registro y plantilla oficial Modelo B, con el estado visible y qué corregir cuando falta algo), «Preparar depósito» al buzón, panel de espera con sondeo de `GET /deposito`, cotejo del título reportado contra la ficha —nunca se usa un handle a ciegas— y descargas de la constancia por autor, del paquete `.zip` y de la fila del registro en `.tsv`/`.csv`/`.xlsx`), **zona de carga con estados explícitos** (vacío, seleccionado, inválido, procesando y error de servidor), **espera del navegador de 2 minutos** (con una tesis real la validación tarda más de 30 s; abortar la espera no cancela el trabajo del servidor) y **manejo del 429 por límite de peticiones** (se lee la cabecera `Retry-After`, se muestra la espera real y la hora exacta de reintento, el botón queda deshabilitado hasta entonces, el reintento es siempre manual y el archivo y el correo ya escritos se conservan) y **botón principal «Validar documento» siempre visible a todo el ancho** (deshabilitado con ayuda contextual si no hay archivo válido), **prompt único en «Cómo preguntar a una IA»** que junta todos los prompts en una sola instrucción copiable, **límite de error con pantalla de recuperación** (un fallo de render muestra un aviso anunciado con `role="alert"`, con el foco en el encabezado y salida a la pantalla de carga, en vez de una pantalla en blanco) y **envío del formulario con Enter** (el card de carga es un `<form noValidate>`; con el formulario completo, Enter valida el documento y, si falta el archivo o el correo es inválido, lleva el foco al campo pendiente), primeros **tests automatizados del frontend con vitest** (`npm test`) y **tests de componente con jsdom y `@testing-library/react`** (límite de error, envío con Enter y toggle de tema), mejoras de usabilidad IHC, auditoría UX integral (C1–C41: modo oscuro persistente, `aria-live` con debounce acertado a la vista, contraste AA (`--ambar` corregido en dark + `color-scheme`), barra de cumplimiento calculada solo sobre las reglas evaluadas (contrato v1.5: las no aplicables al tipo de documento detectado no se listan como cumplidas), metadatos del archivo y del tipo de documento en el encabezado del reporte, y búsqueda de reglas del wireframe —la búsqueda filtra también los prompts de IA—, ESLint configurado cubriendo `.js`/`.jsx`, favicon, mock de demo **solo en desarrollo** (en el build de producción, si el backend no responde se muestra el error real, nunca un reporte de ejemplo — decisión AUD-18 del 2026-10-28), re-elección del mismo archivo con retorno de foco, y script E2E del flujo completo versionado en `scripts/e2e_flujo_completo.sh`, 11 verificaciones) y mockups de las pantallas de carga y reporte (`mockups/`). **Motor DSL** consolidado (F1–F6): 49 reglas mecanizadas (incluye paginación real `indice_paginas_separadas`, ubicación por página, encabezados/pies, notas al pie, control de cambios, e índice de contenidos con `indice_apunta_secciones`/`indice_numeracion_jerarquica`), linter, cache XPath, traza de autómata y tests de propiedad con factory determinista de DOCX. **Calidad de ingeniería** (ruff, mypy, coverage, pre-commit, CI con Nix: tests del backend y build, lint y tests del frontend en cada push/PR) y **exportación del reporte a Markdown/PDF** implementadas (tareas 15 y 16 del `docs/PLAN_BACKLOG_FUTURO.md`). **Módulo de IA (asistente del encargado)** iniciado: cliente LLM local (`validator/llm.py`, con `StubLLM` para CI) y la Funcionalidad 2 de explicación/priorización (`validator/asistente.py`), advisory y sin tocar el semáforo; falta el *wiring* de la API (`docs/HANDOVER_API_IA.md`) y los botones del frontend. **Userscript del formulario de depósito** (`tools/dspace-fill/`): núcleo puro testeado en node con jsdom, artefacto instalable en `dist/` (el CI verifica el drift) y ensayo general con `nix run .#mock-dspace` (mock local de las páginas de DSpace con checklist de 10 pasos).
