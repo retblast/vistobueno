@@ -185,11 +185,11 @@ reglas_dsl_ejemplo.yaml    # Ejemplo de reglas DSL
 
 ### Cómo correrlo
 
-En Windows 10/11, el camino soportado es **WSL2 + Nix**. La guía completa
-—incluido el camino nativo sin Nix para levantar la API— está en
-[`docs/INSTALACION.md`](docs/INSTALACION.md). El acceso directo opcional
-para abrir la SPA desde el escritorio se crea con
-`tools/launcher/crear_acceso_directo.ps1` (ver §3.7 de la guía).
+En Windows 11, instala Ubuntu en WSL2 y sigue la
+[guía para la biblioteca](docs/INSTALACION.md#3-windows-11-con-ubuntu-en-wsl2).
+La guía explica cómo crear el acceso directo, copiar el Modelo B que ya
+tiene el operador y guardar la firma. También incluye un camino nativo
+para comprobaciones técnicas.
 
 ```bash
 nix develop   # entorno con todas las dependencias
@@ -344,15 +344,16 @@ El flujo completo es:
 
 ### Requisitos
 
-- Plantillas oficiales en `recursos/` (no versionadas): la del Modelo B
-  de la constancia (`TESIS DIGITAL MODELO B-2026.docx`) y las de tesis
-  para las pruebas.
+- Usa la copia oficial del Modelo B que ya tiene el operador. Colócala en
+  `recursos/TESIS DIGITAL MODELO B-2026.docx`. Esta carpeta queda fuera de Git.
+  Las plantillas de tesis se usan en pruebas técnicas.
 - **Un solo worker**: el buzón de ficha vive en la memoria del proceso.
   Con varios workers, la ficha se publica en uno y se lee en otro → `404`
   silencioso. `uvicorn` sin `--workers` ya cumple (el default es 1).
 - Variables de entorno:
-  - `VISTOBUENO_FIRMA` — nombre del responsable (columna FIRMA del
-    registro y la constancia). Obligatoria para el papeleo.
+  - `VISTOBUENO_FIRMA` — nombre del responsable para la columna **FIRMA**
+    del registro. La API lo exige para generar el registro y la constancia.
+    El lanzador puede leerlo desde `recursos/firma.txt` (ver [§3.5](docs/INSTALACION.md#35-preparar-la-constancia-y-el-registro)).
   - `VISTOBUENO_PLANTILLA_CONSTANCIA` — opcional, si la plantilla vive
     fuera de `recursos/`.
   - `VISTOBUENO_RATE_LIMIT_MAX` / `VISTOBUENO_RATE_LIMIT_VENTANA_SEG` —

@@ -23,6 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIST = REPO_ROOT / "frontend" / "dist"
+LOCAL_SIGNATURE = REPO_ROOT / "recursos" / "firma.txt"
 PROC_VERSION = Path("/proc/sys/kernel/osrelease")
 WAIT_TIMEOUT = 30.0
 
@@ -78,6 +79,18 @@ def build_available(dist_dir: Path | None = None) -> bool:
     return (dist_dir / "index.html").is_file()
 
 
+def load_local_signature(path: Path) -> None:
+    """Usa la firma guardada para el acceso directo si el entorno no la define."""
+    if os.environ.get("VISTOBUENO_FIRMA", "").strip():
+        return
+    try:
+        signature = path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError:
+        return
+    if signature:
+        os.environ["VISTOBUENO_FIRMA"] = signature
+
+
 def _open_when_ready(url: str, *, windows: bool) -> None:
     if wait_for_server(f"{url}docs"):
         open_browser(url, windows=windows)
@@ -104,8 +117,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if not build_available():
         print("No se encontró frontend/dist/index.html.")
-        print("Construye la SPA con:")
-        print("  cd frontend && npm ci && npm run build")
+        print("Construye la pantalla según docs/INSTALACION.md (§3.4 o §4.3).")
+        return 1
+
+    try:
+        load_local_signature(LOCAL_SIGNATURE)
+    except OSError, UnicodeDecodeError:
+        print("No se pudo leer recursos/firma.txt. Revisa el archivo y guárdalo como UTF-8.")
         return 1
 
     # El script vive en scripts/: agrega la raíz para que uvicorn importe

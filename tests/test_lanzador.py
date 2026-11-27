@@ -1,6 +1,7 @@
 """Tests del lanzador de escritorio (WSL + SPA)."""
 
 import http.server
+import os
 import socket
 import threading
 
@@ -93,3 +94,25 @@ def test_main_sin_build(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(lanzar_app, "FRONTEND_DIST", tmp_path)
     assert lanzar_app.main(["--sin-navegador"]) == 1
     assert "frontend/dist/index.html" in capsys.readouterr().out
+
+
+def test_cargar_firma_local_acepta_utf8_de_windows(monkeypatch, tmp_path):
+    monkeypatch.setenv("VISTOBUENO_FIRMA", "")
+    archivo = tmp_path / "firma.txt"
+    archivo.write_bytes("\ufeffMaría Torres\r\n".encode("utf-8"))
+    lanzar_app.load_local_signature(archivo)
+    assert os.environ["VISTOBUENO_FIRMA"] == "María Torres"
+
+
+def test_cargar_firma_local_respeta_el_entorno(monkeypatch, tmp_path):
+    monkeypatch.setenv("VISTOBUENO_FIRMA", "Firma configurada")
+    archivo = tmp_path / "firma.txt"
+    archivo.write_text("Firma local", encoding="utf-8")
+    lanzar_app.load_local_signature(archivo)
+    assert os.environ["VISTOBUENO_FIRMA"] == "Firma configurada"
+
+
+def test_cargar_firma_local_es_opcional(monkeypatch, tmp_path):
+    monkeypatch.delenv("VISTOBUENO_FIRMA", raising=False)
+    lanzar_app.load_local_signature(tmp_path / "firma.txt")
+    assert "VISTOBUENO_FIRMA" not in os.environ
