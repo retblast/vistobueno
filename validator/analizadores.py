@@ -376,7 +376,15 @@ class AnalizadorRegex(Analizador):
 
     `coincidencia`: `todos` (todos los nodos deben matchear, por defecto),
     `alguno` (al menos uno), `ninguno` (ninguno).
+
+    `unidad`: `run` (por defecto) mide cada `w:t` por separado, como el
+    motor legacy; `nodo` reúne con `text_of()` todo el texto del nodo
+    seleccionado. Se usa cuando la propiedad es del bloque completo (p. ej.
+    que el nombre del autor tenga mayúsculas y minúsculas) y Word lo parte
+    en varios runs.
     """
+
+    _UNIDADES = ("run", "nodo")
 
     def analizar(self, extracted: ExtractedDocx) -> tuple[bool, str]:
         parte = self.config.get("parte", "document")
@@ -384,9 +392,20 @@ class AnalizadorRegex(Analizador):
         patron = self.config.get("patron", "")
         coincidencia = self.config.get("coincidencia", "todos")
         ignore_case = self.config.get("ignore_case", False)
+        unidad = self.config.get("unidad", "run")
+        if unidad not in self._UNIDADES:
+            raise ConfigurationError(
+                f"patron_texto: 'unidad' inválida '{unidad}' (admitidas: {self._UNIDADES})"
+            )
 
         nodes = self._nodos(extracted, parte, contexto)
-        textos = [t.text for n in nodes for t in n.iter(W + "t") if t.text]
+        if unidad == "nodo":
+            # Un párrafo puede traer runs vacíos: no cuenta como texto, pero
+            # tampoco exime a los demás nodos seleccionados.
+            completos = [text_of(n) for n in nodes]
+            textos = [texto for texto in completos if texto]
+        else:
+            textos = [t.text for n in nodes for t in n.iter(W + "t") if t.text]
         if not textos:
             return False, "sin nodos w:t que evaluar"
 

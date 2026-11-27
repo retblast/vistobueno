@@ -515,6 +515,12 @@ reglas:
 # incluso dentro del cuerpo, p. ej. OPERACIONALIZACIÓN) producían falsos
 # positivos (handover issue #2). La política queda resuelta: se acepta la
 # rotación estándar de Word; no se exige uniformidad fuera del cuerpo.
+#
+# RN-04 (2026-11-26): la comparación sigue siendo EXACTA (1418 twips). El
+# detalle añade los twips crudos cuando dos valores distintos redondean al
+# mismo centímetro (1417 y 1418 → 2.50 cm), para no decir «2.50 cm
+# encontrado; 2.50 cm esperado» en una regla en rojo. La tolerancia de 1
+# twip queda pendiente de decisión de biblioteca.
 - id: margen_superior
   tipo: atributo_xml
   descripcion: Margen superior del documento
@@ -815,20 +821,34 @@ reglas:
   ubicacion: Carátula, especificaciones (párr. 179)
   fuente: MANUAL REVISADO TERCERA VERSION OBSERVACIONES 11-07-2025.docx
   cita: '"Apellidos y Nombres del autor(a/es/as): Centrado, con letras mayúsculas."'
+  # RN-02: el bloque de autores puede traer varios nombres separados por su
+  # ORCID. Se miden TODOS los párrafos hasta «ASESOR(A):», sin las líneas
+  # ORCID. Además de la palabra `orcid`, se descartan los párrafos que empiezan
+  # con '(': el manual y `caratula_orcid` admiten el código entre paréntesis
+  # sin etiqueta, p. ej. `(0000-0002-1694-233X)`, cuya X es válida (ISO 7064).
+  # La negrita es por run (`all_eq` sobre todos ellos) y la capitalidad se
+  # decide sobre el NOMBRE COMPLETO, para que un nombre partido en runs no se
+  # lea como «todo en mayúsculas». LÍMITE: si el ORCID va PEGADO al nombre en
+  # el mismo párrafo, se descarta ese párrafo entero; `ficha_autores` ya lo
+  # resuelve con `filtro`/`quitar_sufijo`, pero estos dos analizadores aún no
+  # tienen ese recorte (seguimiento del PR #134). Se mantiene el criterio
+  # EVALUADO de arriba: mayúsculas y minúsculas, sin cambiar la convención
+  # hasta que biblioteca resuelva la discrepancia con el manual.
   formato_efectivo:
     parte: document
     contexto: caratula
     sujeto: run
-    parrafo_xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
-      'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]
+    parrafo_xpath: >-
+      //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[normalize-space(.) != ''][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'orcid'))][not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor'))][not(preceding-sibling::w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')])][not(starts-with(normalize-space(.), '('))]
     propiedad: w:b
     comparacion: all_eq
     esperado: '0'
   patron_texto:
     parte: document
     contexto: caratula
-    xpath: //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ',
-      'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[1]//w:t
+    unidad: nodo
+    xpath: >-
+      //w:body/w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'autor')][1]/following-sibling::w:p[normalize-space(.) != ''][not(contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'orcid'))][not(starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor'))][not(preceding-sibling::w:p[starts-with(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'), 'asesor')])][not(starts-with(normalize-space(.), '('))]
     patron: '^((.*[a-záéíóúñ].*)|[^A-ZÁÉÍÓÚÑa-záéíóúñ]*)$'
     comparacion: fullmatch
     coincidencia: todos
@@ -915,11 +935,15 @@ reglas:
     RCU-N°220-2022/UNT)"; manual, párr. 181: "Línea de investigación, con letras mayúsculas y minúsculas
     (tamaño de letra, 12 puntos)."'
   origen_cita: norma_institucional
+  # RN-03: el catálogo comprueba el CONTENIDO del párrafo de valor completo.
+  # Con `//w:t` se comparaba cada run por separado, así que una línea válida
+  # partida en varios runs daba falso rojo. La tipografía mixta (REQ-24) se
+  # sigue midiendo run por run en `patron_texto`, más abajo.
   lista_texto:
     parte: document
-    contexto: todos
+    contexto: caratula
     xpath: //w:body/w:p[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑÜ', 'abcdefghijklmnopqrstuvwxyzáéíóúñü'),
-      'línea de investigación')][1]/following-sibling::w:p[1]//w:t
+      'línea de investigación')][1]/following-sibling::w:p[1]
     lista:
     - alimentos y bebidas
     - arqueología

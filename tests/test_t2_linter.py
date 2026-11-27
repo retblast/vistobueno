@@ -746,6 +746,46 @@ def test_imagen_con_clave_desconocida_se_detecta():
     assert any("tolerancia" in h for h in hallazgos)
 
 
+# patron_texto: claves y unidad (RN-02 / revisión del PR #134)
+# ---------------------------------------------------------------------------
+
+
+def _regla_patron(**config) -> dict:
+    """Regla mínima de `patron_texto` para probar el linter."""
+    base = {
+        "id": "patron_x",
+        "tipo": "patron_texto",
+        "severidad": "error",
+        "descripcion": "patrón de prueba",
+    }
+    cfg = {
+        "parte": "document",
+        "xpath": "//w:body/w:p",
+        "patron": "^[A-Z]+$",
+        "comparacion": "fullmatch",
+    }
+    cfg.update(config)
+    return {**base, "patron_texto": cfg}
+
+
+def test_patron_texto_con_clave_desconocida_se_detecta():
+    """Un typo en `unidad` caería en `run` en silencio (revisión PR #134)."""
+    hallazgos = _hallazgos(_regla_patron(unidade="nodo"))
+    assert any("unidade" in h for h in hallazgos)
+
+
+def test_patron_texto_con_claves_validas_no_produce_hallazgo():
+    hallazgos = _hallazgos(
+        _regla_patron(
+            contexto="caratula",
+            coincidencia="todos",
+            ignore_case=False,
+            unidad="nodo",
+        )
+    )
+    assert hallazgos == []
+
+
 # M8/VA-16: sub-configuración `validar_orcid` de `hipervinculo_texto`
 # ---------------------------------------------------------------------------
 

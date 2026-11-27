@@ -317,6 +317,43 @@ def _lint_conteo_nodos(config: dict, hallazgos: list[str], rule_id: str) -> None
         )
 
 
+# `patron_texto` mide `run` por defecto (semántica legacy). `nodo` reúne el
+# texto completo del nodo para propiedades del bloque, como el nombre del
+# autor partido en varios runs (RN-02). Un typo caería en `run` en silencio.
+_UNIDADES_REGEX = frozenset({"run", "nodo"})
+
+# Claves que entiende `patron_texto`. Un error de tecleo en `unidad`
+# (`unidade: nodo`) pasaba desapercibido: el analizador seguía midiendo por
+# run y la regla daba verde/rojo por el motivo equivocado (revisión PR #134).
+_CLAVES_PATRON_TEXTO = frozenset(
+    {
+        "parte",
+        "contexto",
+        "xpath",
+        "patron",
+        "comparacion",
+        "coincidencia",
+        "ignore_case",
+        "unidad",
+    }
+)
+
+
+def _lint_patron_texto(config: dict, hallazgos: list[str], rule_id: str) -> None:
+    desconocidas = sorted(set(config) - _CLAVES_PATRON_TEXTO)
+    if desconocidas:
+        hallazgos.append(
+            f"[{rule_id}] patron_texto: claves desconocidas {desconocidas} "
+            f"(válidas: {sorted(_CLAVES_PATRON_TEXTO)})"
+        )
+    unidad = config.get("unidad", "run")
+    if unidad not in _UNIDADES_REGEX:
+        hallazgos.append(
+            f"[{rule_id}] patron_texto: 'unidad' inválida '{unidad}' "
+            f"(admitidas: {sorted(_UNIDADES_REGEX)})"
+        )
+
+
 # Claves que entiende `validar_orcid` dentro de `hipervinculo_texto`. Un typo
 # desactivaría una comprobación en silencio (p. ej. `por_persona` mal escrito
 # deja el ORCID por persona sin validar), así que se revisa al cargar el DSL.
@@ -1073,6 +1110,8 @@ def linter(rules_data: dict) -> list[str]:
                 _escanear_regex(c, hallazgos, rule_id, seccion)
                 if seccion in ("atributo_xml", "presencia_xml"):
                     _lint_xml(c, hallazgos, rule_id, seccion)
+                elif seccion == "patron_texto":
+                    _lint_patron_texto(c, hallazgos, rule_id)
                 elif seccion == "formato_efectivo":
                     _lint_formato(c, hallazgos, rule_id)
                 elif seccion == "imagen":

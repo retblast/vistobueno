@@ -20,7 +20,10 @@ Reglas del formato:
   detalle que dice "0 incumplen" en una regla que falla es un bug).
 - El valor esperado y la tolerancia van al final.
 - Cuando el valor tiene unidades conocidas (puntos, centímetros), se
-  muestran en la unidad que entiende el estudiante, no en twips.
+  muestran en la unidad que entiende el estudiante, no en twips. Si dos
+  valores distintos redondean al mismo texto en cm (RN-04: 1417 y 1418
+  twips son «2.50 cm»), se añade el valor OOXML crudo para que el detalle
+  no contradiga al semáforo.
 
 Cada motor pasa sus propios datos; este módulo solo compara y formatea.
 """
@@ -52,6 +55,41 @@ def _valor(valor: object, unidad: str, factor: float) -> str:
     if unidad == "pt":
         return f"{numero:g} pt"
     return f"{numero:.2f} cm"
+
+
+def _valor_con_crudo(valor: object, esperado: object, unidad: str, factor: float) -> str:
+    """Muestra los twips cuando el redondeo a cm oculta un desvío real (RN-04).
+
+    1417 y 1418 twips se imprimen ambos como «2.50 cm». Sin el valor crudo,
+    una regla en rojo decía «2.50 cm encontrado; 2.50 cm esperado». Solo se
+    añade el sufijo cuando el texto convertido COLISIONA con el esperado y
+    los valores OOXML son distintos: un 567 twips (1.00 cm) se sigue
+    mostrando como desvío real en centímetros.
+    """
+    legible = _valor(valor, unidad, factor)
+    if (
+        unidad == "cm"
+        and str(valor) != str(esperado)
+        and legible == _valor(esperado, unidad, factor)
+    ):
+        return f"{valor} twips ({legible})"
+    return legible
+
+
+def _esperado_con_crudo(
+    esperado: object,
+    incumplimientos: list[tuple[int, object, int | None]],
+    unidad: str,
+    factor: float,
+) -> str:
+    """El esperado lleva twips si algún incumplimiento colisiona al redondear."""
+    legible = _valor(esperado, unidad, factor)
+    if unidad == "cm" and any(
+        str(val) != str(esperado) and _valor(val, unidad, factor) == legible
+        for _, val, _ in incumplimientos
+    ):
+        return f"{esperado} twips ({legible})"
+    return legible
 
 
 def _elemento_del_xpath(xpath: str) -> str:
@@ -180,13 +218,13 @@ def detalle_xml_atributo(
         detalle = f"{atributo}: {len(valores)} valores evaluados, {len(incumplimientos)} incumplen"
         if incumplimientos:
             items = [
-                f"#{pos}={_valor(val, unidad, factor)}{_pagina(pag)}"
+                f"#{pos}={_valor_con_crudo(val, esperado, unidad, factor)}{_pagina(pag)}"
                 for pos, val, pag in incumplimientos
             ]
             detalle += f": {_incidencias(items)}"
     if tolerancia is not None:
         detalle += f"; tolerancia ±{_valor(tolerancia, unidad, factor)}"
-    detalle += f"; esperado={_valor(esperado, unidad, factor)}"
+    detalle += f"; esperado={_esperado_con_crudo(esperado, incumplimientos, unidad, factor)}"
     return detalle
 
 

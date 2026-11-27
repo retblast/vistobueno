@@ -457,6 +457,66 @@ no aprobada 4/5, plantillas 2 o 4 errores con 9 advertencias.
 https://github.com/retblast/vistobueno/actions/runs/45620297259 y aviso a
 retblast en https://github.com/retblast/vistobueno/pull/128#issuecomment-7163377535.
 
+### 2026-11-26 — RN-03, RN-02 y RN-04: primera tanda de la revisión de retblast
+
+Se abre `rn-primera-tanda` sobre `upstream/master` `75aae02` (incluye los PR
+#131 y #132) con tres commits atómicos, **sin merge**:
+
+- `c4acf1e` (RN-03): el catálogo de líneas de investigación se coteja con el
+  párrafo completo dentro de la carátula, no con cada `w:t`. La comprobación
+  de letras mixtas se mide run por run. Nueva regresión
+  `tests/test_rn03_linea_investigacion.py` (4 casos).
+- `9e81cbe` (RN-02): `AnalizadorRegex` gana `unidad: run | nodo` (defecto
+  `run`), validada por el linter y documentada en `docs/DSL.md`. La regla de
+  autores cubre todos los nombres hasta el asesor, excluye ORCID, mide
+  negrita por run y capitalidad por nombre completo. El usuario confirmó
+  mantener el criterio `EVALUADO` de mayúsculas y minúsculas. Nueva regresión
+  `tests/test_rn02_autores_bloque.py` (6 casos).
+- `24f5950` (RN-04): el detalle muestra twips crudos solo cuando el redondeo
+  a cm colisiona (1417 frente a 1418 → «2.50 cm»), sin tocar la comparación
+  exacta ni aplicar `tolerancia: 1`. Nueva regresión
+  `tests/test_rn04_diagnostico_margen.py` (3 casos).
+
+**Documentación:** matriz REQ-06/07/08/09 a `CERRADO`, REQ-25 a `CERRADO`,
+REQ-20 queda `DECIDIDO` con la cobertura de RN-02 y la decisión de biblioteca
+pendiente; handover de ficha §9 con el detalle de los tres cierres; README y
+`docs/DSL.md` actualizados en los commits de cada regla.
+
+**Verificación:** corro el corpus real después de CADA cambio (dos tesis y
+cinco plantillas, sin PII en el repo). Siempre: aprobada verde `0/5`, no
+aprobada rojo `4/5`, EDUCACIÓN INICIAL rojo `2/9`, otras cuatro plantillas
+rojo `4/9`, 54 evaluadas; sin cambio de semáforo. Suite completa final
+`1276 passed, 14 skipped` más el fallo preexistente de WeasyPrint 70 (CI usa
+69). Enfocadas de RN-04 con regresiones: 57 pasadas. `ruff check`,
+`ruff format --check`, `mypy` y el escáner de secretos limpios en las rutas
+que revisa CI. Golden de `docs/ejemplos/` sin regenerar: ningún documento
+versionado cambió de salida.
+
+**Pendiente:** RN-01 (verificación visual en Word), RN-10 (frontend/API),
+RN-11 a RN-14 (decisión de biblioteca) y la tolerancia de 1 twip de RN-04.
+
+### 2026-11-26 — Seguimiento de la revisión de retblast (PR #134)
+
+Retblast revisó la tanda: CI verde, `1277 passed, 14 skipped` en su entorno y
+corpus sin cambios. Pidió un ajuste antes de integrar y dos menores:
+
+- `3445fce`: los dos XPath del bloque de autores descartan también los ORCID
+  desnudos entre paréntesis, sin depender de la palabra `orcid`. Dos tests
+  nuevos en `tests/test_rn02_autores_bloque.py` (ORCID terminado en `X`
+  ignorado; segundo autor en negrita sigue fallando). Queda documentado el
+  límite del ORCID pegado al nombre en el mismo párrafo.
+- `233a416`: el linter del DSL rechaza claves desconocidas en `patron_texto`
+  (p. ej. `unidade: nodo`), con dos tests en `tests/test_t2_linter.py` y nota
+  en `docs/DSL.md`.
+- Matriz: REQ-06/07/08/09 bajan a `DECIDIDO` mientras biblioteca decide la
+  tolerancia de 1 twip.
+
+El corte del bloque cuando falta la etiqueta del asesor queda como
+seguimiento, según la recomendación de retblast. Corpus repetido tras cada
+cambio: las siete cifras y los semáforos siguen idénticos. Suite final
+`1280 passed, 14 skipped` con el mismo fallo preexistente; `ruff`, `mypy` y
+el escáner de secretos limpios en las rutas de CI.
+
 ---
 
 ## Evidencias
@@ -486,6 +546,10 @@ retblast en https://github.com/retblast/vistobueno/pull/128#issuecomment-7163377
 | RI-08 | PR #128: `tests/test_ri08_caratula_tamano.py`, `reglas_unt.yaml` (cinco bloques a 12 pt), handover de ficha §9 y matriz REQ-24/26/27 |
 | RI-09 | `tests/test_reglas_activas.py`, README (CLI con `reglas_unt.yaml`), `AGENTS.md` (54 reglas) y plan de Semana 12 restaurado |
 | REQ-24/REQ-26 | `tests/test_req24_26_caratula_mixtas_centrado.py`, `reglas_unt.yaml` (patrón mixto, `[last()]`, centrado de línea), matriz y handover de ficha §9 |
+| RN-03 | `c4acf1e`, `tests/test_rn03_linea_investigacion.py`, `reglas_unt.yaml` (catálogo por párrafo en carátula) |
+| RN-02 | `9e81cbe`, `tests/test_rn02_autores_bloque.py`, `unidad: nodo` en `AnalizadorRegex`, `docs/DSL.md` |
+| RN-04 | `24f5950`, `tests/test_rn04_diagnostico_margen.py`, `validator/detalle.py`, handover de ficha §9 y matriz REQ-06/07/08/09 |
+| Revisión PR #134 | `3445fce` (ORCID desnudo), `233a416` (claves de `patron_texto`), handover de ficha §9 y matriz REQ-06/07/08/09 a `DECIDIDO` |
 
 ---
 
