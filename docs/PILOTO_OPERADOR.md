@@ -61,11 +61,11 @@ la sede.
 | API de validación | Listo | Contrato v1.14.0 |
 | Pantalla de ficha de depósito | Listo | Verificada contra la API real el 2026-11-04 |
 | Buzón de una ranura | Listo | "Última gana", un solo worker; 1 h de autorrelleno y 24 h de retención del trámite |
-| Userscript de relleno | Listo | Versión 1.2.0 (protocolo 2), `@connect localhost` |
+| Userscript de relleno | Listo | Protocolo 2, `@connect localhost` |
 | Mock de DSpace | Listo | Para ensayo sin tocar la instancia real |
-| Constancia (Modelo B) y fila del registro | Listo | Requiere `VISTOBUENO_FIRMA` y la plantilla oficial |
+| Constancia (Modelo B) y fila del registro | Listo | Requiere la firma y la plantilla oficial que ya tiene el operador |
 | Hallazgos AUD-24 a AUD-27 del motor | **Cerrados** | PR #75: autores completos, asesora, año de portada y palabras clave limpias; ver §7 |
-| Pruebas automatizadas | En verde, sin `xfail` | Referencia en un clon sin `recursos/` ni `frontend/dist`: `879 passed, 4 skipped` (los `skipped` no son fallos) |
+| Pruebas automatizadas | En verde, sin `xfail` | `pytest tests/ -q` en un clon sin `recursos/` ni `frontend/dist`: los `skipped` son esperados y no son fallos |
 
 ---
 
@@ -80,8 +80,8 @@ resuelve o se pospone el piloto; no se improvisa durante el ensayo.
 | 2 | La API responde en `/docs` | `curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/docs` → **200** |
 | 3 | Un `Host` ajeno se rechaza | `curl -s -o /dev/null -w "%{http_code}\n" -H "Host: atacante.example" http://127.0.0.1:8000/docs` → **400** |
 | 4 | La plantilla del Modelo B está en `recursos/` | Existe `recursos/TESIS DIGITAL MODELO B-2026.docx`, o `VISTOBUENO_PLANTILLA_CONSTANCIA` apunta a ella |
-| 5 | `VISTOBUENO_FIRMA` está definida | `curl` a `POST /constancia` con una ficha de prueba no devuelve **500** |
-| 6 | El userscript está instalado en Tampermonkey en su versión actual | Tampermonkey muestra **1.2.0** en la lista de scripts. La 1.1.0 habla el protocolo 1: no es compatible con el contrato v1.14.0 |
+| 5 | Se configuró la firma según [§3.5](INSTALACION.md#35-preparar-la-constancia-y-el-registro) | Una constancia de prueba se descarga y la fila del registro muestra el nombre en **FIRMA** |
+| 6 | El userscript está instalado en Tampermonkey en su versión actual | La versión de Tampermonkey coincide con `@version` del archivo de la entrega en `tools/dspace-fill/dist/` |
 | 7 | La SPA está levantada y apuntando a la API local | La pantalla de carga abre y el botón de subir documento responde |
 | 8 | Hay un documento de prueba aprobado | Una tesis real del operador o `docs/ejemplos/doc_bueno.docx`. **Nunca** una plantilla oficial vacía |
 | 9 | El navegador no tiene una ficha de una sesión anterior | La clave `vb-ficha-deposito` de `localStorage` está limpia |
@@ -94,7 +94,7 @@ resuelve o se pospone el piloto; no se improvisa durante el ensayo.
 
 ## 5. Checklist de ejecución
 
-Cada paso tiene una comprobación objective. Un paso no se da por bueno
+Cada paso tiene una comprobación objetiva. Un paso no se da por bueno
 porque "parece que funcionó": se marca con la evidencia.
 
 ### Paso 1 — Confirmar la API
@@ -186,8 +186,9 @@ Comprobación por terminal:
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/deposito
 ```
 
-**Esperado:** `404`. Si devuelve `200`, el userscript instalado es el
-antiguo (1.1.0): hay que actualizarlo a la versión 1.2.0.
+**Esperado:** `404` para un trámite nuevo. Si devuelve `200` para el
+trámite actual antes de confirmarlo, pausa la prueba y revisa la versión
+del userscript instalada y el estado del trámite.
 
 ### Paso 9 — Confirmar el ítem archivado
 
@@ -228,9 +229,9 @@ La API usa la ficha publicada y el depósito vigente del servidor. Si la
 solicitud no coincide con ese estado, responde **409**: prepare y
 deposite de nuevo en lugar de editar el timestamp o el handle.
 
-> Si la API responde **500**, casi siempre es que falta `VISTOBUENO_FIRMA`
-> o la plantilla del Modelo B. El mensaje en el `detail` nombra cuál de
-> las dos.
+> Si la API responde **500**, casi siempre es que falta la firma
+> (`VISTOBUENO_FIRMA` o `recursos/firma.txt` con el lanzador) o la
+> plantilla del Modelo B. El mensaje en el `detail` nombra cuál de las dos.
 
 ### Paso 11 — Generar la fila del registro
 
@@ -418,10 +419,9 @@ Para la sesión necesitamos:
 
 1. Un documento de prueba en formato `.docx` (una tesis o un borrador
    descartable). No hace falta que sea una tesis definitiva.
-2. Acceso a la máquina donde se film's la instalación, o la posibilidad
+2. Acceso a la máquina donde se hizo la instalación, o la posibilidad
    de entrar a ella ese día.
-3. La plantilla del Modelo B de la constancia, si la biblioteca ya tiene
-   una copia vigente.
+3. La copia vigente del Modelo B que ya tiene el operador.
 
 La sesión no altera el registro oficial de la biblioteca ni publica
 ítems definitivos: el depósito de prueba se hace sobre un borrador

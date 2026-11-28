@@ -4,7 +4,7 @@ Guía para instalar y verificar VistoBueno en la PC de la biblioteca.
 Complementa `README.md`, `docs/CONTRATO_API.md` y el handover de la
 auditoría 2026-10-26.
 
-> Los pasos de instalación de la máquina (Linux, macOS y Windows 10/11 con
+> Los pasos de instalación de la máquina (Linux, macOS y Windows 11 con
 > WSL2) están en [`docs/INSTALACION.md`](INSTALACION.md). Este documento
 > cubre la configuración y la verificación de seguridad del despliegue.
 
@@ -29,11 +29,11 @@ misma máquina. El control se apoya en tres capas:
 
 | Paso | Acción | Verificación |
 |------|--------|--------------|
-| 1 | Arrancar con `nix run .#serve -- validator.api:app` (sin `--host 0.0.0.0`) | `ss -ltnp` muestra `127.0.0.1:8000` |
-| 2 | No pasar `--proxy-headers` | la app `serve` ya agrega `--no-proxy-headers` |
+| 1 | Arrancar con el [lanzador](INSTALACION.md#37-crear-el-acceso-directo) | `ss -ltnp` muestra `127.0.0.1:8000` |
+| 2 | No pasar `--proxy-headers` | el lanzador deshabilita las cabeceras de proxy |
 | 3 | Un solo worker | no agregar `--workers` |
 | 4 | Firewall: bloquear el puerto 8000 desde la red | `curl` desde otro equipo → conexión rechazada |
-| 5 | Definir `VISTOBUENO_FIRMA` (y `VISTOBUENO_PLANTILLA_CONSTANCIA` si la plantilla no está en `recursos/`) | el papeleo de prueba genera la constancia |
+| 5 | Copiar el Modelo B oficial que ya tiene el operador y guardar la firma según [§3.5](INSTALACION.md#35-preparar-la-constancia-y-el-registro) | el papeleo de prueba genera la constancia y la fila del registro con la firma |
 | 6 | Solo si se expone: `VISTOBUENO_API_TOKEN` + `VISTOBUENO_HOST` + el host del peer en `VISTOBUENO_HOSTS` | peer remoto sin token → `403`; con token y host listado → `200`; con token pero host no listado → `400` |
 
 Verificación local:
