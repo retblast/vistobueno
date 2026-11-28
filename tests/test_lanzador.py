@@ -116,3 +116,22 @@ def test_cargar_firma_local_es_opcional(monkeypatch, tmp_path):
     monkeypatch.delenv("VISTOBUENO_FIRMA", raising=False)
     lanzar_app.load_local_signature(tmp_path / "firma.txt")
     assert "VISTOBUENO_FIRMA" not in os.environ
+
+
+def test_cargar_firma_local_usa_la_primera_linea(monkeypatch, tmp_path):
+    monkeypatch.setenv("VISTOBUENO_FIRMA", "")
+    archivo = tmp_path / "firma.txt"
+    archivo.write_text("\n  \nMaría Torres\nSegunda línea\n", encoding="utf-8")
+    lanzar_app.load_local_signature(archivo)
+    assert os.environ["VISTOBUENO_FIRMA"] == "María Torres"
+
+
+def test_main_firma_invalida(monkeypatch, tmp_path, capsys):
+    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
+    firma = tmp_path / "firma.txt"
+    firma.write_bytes(b"\xff\xfe")
+    monkeypatch.setattr(lanzar_app, "FRONTEND_DIST", tmp_path)
+    monkeypatch.setattr(lanzar_app, "LOCAL_SIGNATURE", firma)
+    monkeypatch.setenv("VISTOBUENO_FIRMA", "")
+    assert lanzar_app.main(["--sin-navegador"]) == 1
+    assert "firma.txt" in capsys.readouterr().out

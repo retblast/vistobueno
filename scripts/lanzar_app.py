@@ -80,15 +80,16 @@ def build_available(dist_dir: Path | None = None) -> bool:
 
 
 def load_local_signature(path: Path) -> None:
-    """Usa la firma guardada para el acceso directo si el entorno no la define."""
+    """Usa la primera línea de la firma guardada si el entorno no la define."""
     if os.environ.get("VISTOBUENO_FIRMA", "").strip():
         return
     try:
-        signature = path.read_text(encoding="utf-8-sig").strip()
+        text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return
-    if signature:
-        os.environ["VISTOBUENO_FIRMA"] = signature
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if lines:
+        os.environ["VISTOBUENO_FIRMA"] = lines[0]
 
 
 def _open_when_ready(url: str, *, windows: bool) -> None:
