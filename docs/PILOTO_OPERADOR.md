@@ -65,7 +65,7 @@ la sede.
 | Mock de DSpace | Listo | Para ensayo sin tocar la instancia real |
 | Constancia (Modelo B) y fila del registro | Listo | Requiere la firma y la plantilla oficial que ya tiene el operador |
 | Hallazgos AUD-24 a AUD-27 del motor | **Cerrados** | PR #75: autores completos, asesora, año de portada y palabras clave limpias; ver §7 |
-| Pruebas automatizadas | En verde, sin `xfail` | Referencia en un clon sin `recursos/` ni `frontend/dist`: `879 passed, 4 skipped` (los `skipped` no son fallos) |
+| Pruebas automatizadas | En verde, sin `xfail` | `pytest tests/ -q` en un clon sin `recursos/` ni `frontend/dist`: los `skipped` son esperados y no son fallos |
 
 ---
 
@@ -229,9 +229,9 @@ La API usa la ficha publicada y el depósito vigente del servidor. Si la
 solicitud no coincide con ese estado, responde **409**: prepare y
 deposite de nuevo en lugar de editar el timestamp o el handle.
 
-> Si la API responde **500**, casi siempre es que falta `VISTOBUENO_FIRMA`
-> o la plantilla del Modelo B. El mensaje en el `detail` nombra cuál de
-> las dos.
+> Si la API responde **500**, casi siempre es que falta la firma
+> (`VISTOBUENO_FIRMA` o `recursos/firma.txt` con el lanzador) o la
+> plantilla del Modelo B. El mensaje en el `detail` nombra cuál de las dos.
 
 ### Paso 11 — Generar la fila del registro
 

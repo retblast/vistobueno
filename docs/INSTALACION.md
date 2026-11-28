@@ -32,7 +32,7 @@ El flake fija Python 3.14 y Node LTS. No instales esas versiones a mano en
 el camino soportado.
 
 `recursos/` queda fuera de Git. La constancia requiere la plantilla oficial
-Modelo B que ya tiene biblioteca. `frontend/dist` se genera al construir
+Modelo B que ya tiene la biblioteca. `frontend/dist` se genera al construir
 la pantalla. Algunas pruebas técnicas se omiten si faltan esos archivos.
 
 ## 2. Linux y macOS (camino soportado)
@@ -172,7 +172,9 @@ wsl -l -v
 La fila **Ubuntu** debe mostrar **2** en la columna **VERSION**. Si muestra
 **1**, TI puede convertir esa instalación con `wsl --set-version Ubuntu 2`.
 Si Ubuntu contiene trabajo previo, haz una copia antes de convertirlo.
-Si no aparece **Ubuntu**, revisa la instalación antes de continuar.
+Anota el nombre exacto de la distro. El acceso directo usa `Ubuntu`; si la
+fila muestra otro nombre (por ejemplo, `Ubuntu-24.04`), cambia el valor de
+`DISTRO` en `VistoBueno.bat` por ese nombre.
 [Guía oficial de WSL](https://learn.microsoft.com/es-es/windows/wsl/install)
 
 ### 3.2 Instalar Nix
@@ -230,10 +232,9 @@ Repite este paso cuando instales una nueva versión del proyecto.
 
 ### 3.5 Preparar la constancia y el registro
 
-Modelo B es la plantilla oficial que creó el operador de biblioteca. El
-operador ya tiene su copia. Usa esa versión o la copia oficial que confirme
-la biblioteca. El archivo disponible en la carpeta local `recursos/` del
-equipo de desarrollo queda fuera de Git y de una clonación nueva.
+Modelo B es la plantilla oficial que ya tiene el operador de la biblioteca.
+Usa esa copia o la que confirme la biblioteca. La carpeta `recursos/` no se
+versiona: una clonación nueva no trae la plantilla.
 
 En **Ubuntu**, abre la carpeta local de la instalación en el Explorador de
 archivos:
@@ -302,8 +303,9 @@ En el **Explorador de Windows**:
    `http://localhost:8000/`. Si abriste una instancia de prueba en otra
    ventana, detenla con **Ctrl+C** antes de abrir el acceso directo.
 
-El acceso directo inicia **Ubuntu** y espera el proyecto en
-`~/vistobueno`. Después de actualizar, vuelve a copiar el `.bat` desde la
+El acceso directo inicia la distro configurada en `VistoBueno.bat` (por
+defecto, **Ubuntu**) y espera el proyecto en `~/vistobueno`. Después de
+actualizar, vuelve a copiar el `.bat` desde la
 versión instalada si el archivo cambió y reconstruye la pantalla (§3.4).
 Para iniciar a mano y ver si hay un error, ejecuta en **Ubuntu**:
 
@@ -315,6 +317,15 @@ nix --extra-experimental-features 'nix-command flakes' develop --command python3
 Mientras el comando esté abierto, entra a `http://localhost:8000/` desde
 **Windows**. Mantén el puerto 8000: el complemento de DSpace lo usa.
 [Red de WSL y acceso desde Windows](https://learn.microsoft.com/es-es/windows/wsl/networking)
+
+> Opcional: `tools/launcher/crear_acceso_directo.ps1` crea el acceso
+> directo con el icono `vistobueno.ico`. Requiere permitir la ejecución
+> del script en PowerShell; el método manual de arriba no lo necesita.
+
+> **Seguridad**: no expongas el puerto 8000 a la red ni uses
+> `VISTOBUENO_HOST=0.0.0.0`. La API maneja datos personales y por diseño
+> escucha solo en loopback. Para acceso desde otro equipo, usa el token y
+> `VISTOBUENO_HOSTS` (ver el handover de despliegue).
 
 ### 3.8 Primera prueba en el equipo de la biblioteca
 
@@ -416,6 +427,10 @@ esta máquina. Para usar el lanzador, prepara la plantilla y el archivo
 `recursos/firma.txt` como en §3.5, dentro de la carpeta del proyecto en
 Windows. La comprobación final es la misma que en §3.8.
 
+Si solo necesitas la API (sin la SPA), ejecuta
+`.\.venv\Scripts\python.exe -m validator.api` y abre
+`http://127.0.0.1:8000/docs`.
+
 ### 4.4 PDF en Windows (opcional)
 
 WeasyPrint necesita Pango. Instala el runtime GTK3 para Windows (por
@@ -463,7 +478,7 @@ con el repositorio de la UNT durante la prueba de §3.8.
 | `403` desde el navegador en WSL | La conexión no llega como local | Usa `http://localhost:8000/`. Pide a TI que revise el acceso local de WSL si persiste. |
 | `skipped` en la suite | Faltan `recursos/` y/o `frontend/dist` | Es esperado; ver §2.3 |
 | El lanzador indica que falta la pantalla | Falta `frontend/dist/index.html` | Ejecuta el paso §3.4 y vuelve a abrir el acceso directo. |
-| El acceso directo no inicia | Ubuntu no está disponible, Nix no se carga o falta el proyecto | Comprueba §3.1 a §3.4. Usa el arranque manual de §3.7 para ver el mensaje. |
+| El acceso directo no inicia | La distro `Ubuntu` no está disponible, Nix no se carga o falta el proyecto | Comprueba §3.1 a §3.4. Si tu distro tiene otro nombre, ajústalo en `VistoBueno.bat`. Usa el arranque manual de §3.7 para ver el mensaje. |
 | Constancia o registro no disponible | Falta la plantilla o el nombre de FIRMA | Revisa §3.5 y vuelve a abrir el acceso directo. |
 | La página no abre tras iniciar Ubuntu | El servicio no está listo o WSL no reenvía el puerto | Comprueba el mensaje del lanzador. Si Ubuntu tampoco inicia y no hay trámites abiertos, TI puede reiniciar WSL con `wsl --shutdown` desde PowerShell. Conserva el puerto 8000 y el acceso local. |
 | `ZoneInfoNotFoundError` al iniciar en Windows nativo | Falta `tzdata` | Repite la instalación de dependencias de §4.2. |
@@ -478,3 +493,21 @@ con el repositorio de la UNT durante la prueba de §3.8.
 - `docs/PILOTO_OPERADOR.md` — kit del piloto y checklist de 11 pasos.
 - `docs/CONTRATO_API.md` — contrato de la API.
 - `AGENTS.md` — convenciones de trabajo.
+
+## Apéndice A — Checklist de puesta en marcha (actividad 4)
+
+Usa esta lista para el hito de instalación de la actividad 4.
+
+- [ ] `nix develop` entra sin errores (o el venv nativo arranca).
+- [ ] `cd frontend && npm ci && npm run build && npm test` → build y tests
+      en verde. Esto deja `frontend/dist`, que la suite usa.
+- [ ] `nix run .#test -- tests/ -q` → verde, sin `xfail`. Con `recursos/`
+      los `skipped` se reducen (ver §2.3).
+- [ ] `nix run .#serve -- validator.api:app` → `/docs` responde `200` en
+      `127.0.0.1:8000`.
+- [ ] `Host: atacante.example` → `400`.
+- [ ] `docs/ejemplos/doc_bueno.docx` → verde; `doc_malo.docx` → rojo
+      (4 errores, 1 warning).
+- [ ] `nix run .#test-ficha-deposito` → `✅ FLUJO COMPLETO OK` (opcional).
+- [ ] Anotar versiones: `nix --version`, `python3 --version`,
+      `node --version`, `git rev-parse --short HEAD`.
